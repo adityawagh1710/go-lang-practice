@@ -1,0 +1,59 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go build artifacts
+/bin/
+/build/
+/dist/
+
+# Go workspace (optional, if using GOPATH mode)
+/pkg/
+
+# Dependency directories (rare now, but safe)
+vendor/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE / Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment files
+.env
+.env.local
+
+# Coverage files
+coverage.out
+*.coverprofile
+
+# Go test cache (optional)
+*.test
+
+# Temporary files
+tmp/
+temp/
+
+# Go module cache (usually outside project, but safe)
+go.sum.backup
+
+# Debug
+__debug_bin
+
+# Air (live reload tool)
+.air/
+
+# Docker overrides
+docker-compose.override.yml
