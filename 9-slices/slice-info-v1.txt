@@ -1,0 +1,226 @@
+=========================================
+GO SLICES - COMPLETE NOTES
+=========================================
+1. INTRODUCTION ⭐
+-----------------------------------------
+Slice is a dynamic, flexible view over an array.
+
+- Most used data structure in Go
+- Built on top of arrays
+- Dynamic size
+- Reference type (not value type)
+
+Syntax:
+var slice []type
+
+Example:
+var nums []int
+
+-----------------------------------------
+2. DECLARATION & INITIALIZATION
+-----------------------------------------
+
+(A) Empty slice
+var nums []int
+
+(B) Using literal
+nums := []int{1, 2, 3, 4}
+
+(C) Using make()
+nums := make([]int, 3)       // length = 3
+nums := make([]int, 3, 5)   // length = 3, capacity = 5
+
+-----------------------------------------
+3. LENGTH & CAPACITY ⭐
+-----------------------------------------
+
+len(slice) → number of elements
+cap(slice) → total capacity
+
+Example:
+nums := make([]int, 3, 5)
+
+fmt.Println(len(nums)) // 3
+fmt.Println(cap(nums)) // 5
+
+-----------------------------------------
+4. ACCESS & UPDATE
+-----------------------------------------
+
+nums := []int{10, 20, 30}
+
+fmt.Println(nums[0]) // 10
+
+nums[1] = 50
+fmt.Println(nums)    // [10 50 30]
+
+-----------------------------------------
+5. APPEND FUNCTION ⭐
+-----------------------------------------
+
+Used to add elements.
+
+nums := []int{1, 2}
+nums = append(nums, 3, 4)
+
+fmt.Println(nums) // [1 2 3 4]
+
+NOTE:
+- append may create new underlying array
+- always reassign result
+
+-----------------------------------------
+6. SLICE FROM ARRAY / SLICE
+-----------------------------------------
+
+arr := [5]int{1, 2, 3, 4, 5}
+
+slice := arr[1:4]  // index 1 to 3
+
+fmt.Println(slice) // [2 3 4]
+
+-----------------------------------------
+7. DEFAULT SLICE BEHAVIOR
+-----------------------------------------
+
+nums := []int{1, 2, 3, 4}
+
+nums[1:3]  // [2 3]
+nums[:2]   // [1 2]
+nums[2:]   // [3 4]
+nums[:]    // full slice
+
+-----------------------------------------
+8. COPY FUNCTION
+-----------------------------------------
+
+To copy slices safely.
+
+src := []int{1, 2, 3}
+dest := make([]int, len(src))
+
+copy(dest, src)
+
+-----------------------------------------
+9. SLICE IS REFERENCE TYPE ⭐
+-----------------------------------------
+
+Changes affect original data.
+
+nums := []int{1, 2, 3}
+newNums := nums
+
+newNums[0] = 100
+
+fmt.Println(nums) // [100 2 3]
+
+-----------------------------------------
+10. NIL SLICE
+-----------------------------------------
+
+var nums []int
+
+fmt.Println(nums == nil) // true
+fmt.Println(len(nums))   // 0
+
+-----------------------------------------
+11. MULTI-DIMENSIONAL SLICES
+-----------------------------------------
+
+matrix := [][]int{
+    {1, 2},
+    {3, 4},
+}
+
+fmt.Println(matrix[0][1]) // 2
+
+-----------------------------------------
+12. COMMON ERRORS
+-----------------------------------------
+
+1. Not reassigning append:
+append(nums, 5)  // ❌
+
+2. Index out of range:
+nums[10]  // ❌
+
+3. Confusing len vs cap
+
+-----------------------------------------
+REAL-WORLD EXAMPLES
+-----------------------------------------
+
+1. API data handling
+var users []User
+
+2. Dynamic list
+cart := []string{}
+
+cart = append(cart, "item1")
+
+3. Reading file lines
+var lines []string
+
+-----------------------------------------
+INTERVIEW QUESTIONS ⭐
+-----------------------------------------
+
+1. Difference between array and slice?
+   → Array fixed, slice dynamic
+
+2. What is length vs capacity?
+   → len = elements, cap = total space
+
+3. Is slice passed by value or reference?
+   → Reference-like behavior
+
+4. What does append do internally?
+   → May create new array
+
+5. What is nil slice?
+   → Uninitialized slice
+
+6. Why append returns new slice?
+   → Underlying array may change
+
+7. What is copy() used for?
+   → Deep copy of slice
+
+-----------------------------------------
+ADVANCED EXAMPLE
+-----------------------------------------
+
+package main
+
+import "fmt"
+
+func main() {
+    nums := []int{1, 2, 3}
+
+    nums = append(nums, 4, 5)
+
+    for i, v := range nums {
+        fmt.Println(i, v)
+    }
+}
+
+-----------------------------------------
+BEST PRACTICES
+-----------------------------------------
+
+- Always use slices instead of arrays
+- Reassign append result
+- Use copy() when needed
+- Avoid unnecessary large slices
+
+-----------------------------------------
+SUMMARY
+-----------------------------------------
+
+- Slice is dynamic and flexible
+- Built on array
+- Reference type behavior
+- Most used in Go
+- append() is key operation
+
+=========================================
