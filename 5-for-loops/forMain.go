@@ -19,4 +19,22 @@ func main ()  {
 	for i := 0; i < 3; i++ {
 		fmt.Println(i)
 	}
+
+	// For loop break 
+	for i := 0; i <= 6; i++ {
+		// break also possible
+
+		// continue
+
+		if i == 2 {
+			continue
+		}
+
+		fmt.Println(i)
+	}
+
+	// Range
+	// for i := range 3 {
+	// 	fmt.Println(i)
+	// }
 }

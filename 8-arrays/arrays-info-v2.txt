@@ -1,0 +1,769 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  GO ARRAYS
+  
+  SECTION 1 — WHAT IS AN ARRAY IN GO?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  An array in Go is a FIXED-SIZE, ORDERED collection of elements of the SAME TYPE.
+  The size is part of the TYPE itself.
+
+  KEY CHARACTERISTICS:
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  • Fixed length — set at compile time, cannot change             │
+  │  • Zero-indexed (like Java)                                      │
+  │  • Size is part of the type: [3]int ≠ [4]int                    │
+  │  • VALUE TYPE — copying an array copies all its data             │
+  │  • Stored in contiguous memory                                   │
+  │  • Default value = zero value of element type                    │
+  └──────────────────────────────────────────────────────────────────┘
+
+  ⚠️  JAVA VS GO COMPARISON:
+  ┌─────────────────────────────────────┬────────────────────────────────────────┐
+  │  Java                               │  Go                                    │
+  ├─────────────────────────────────────┼────────────────────────────────────────┤
+  │  int[] arr = new int[5];            │  var arr [5]int                        │
+  │  Arrays are reference types         │  Arrays are VALUE types                │
+  │  Arrays passed by reference         │  Arrays passed by COPY                 │
+  │  length via arr.length              │  length via len(arr)                   │
+  │  Arrays can be null                 │  Arrays can never be nil               │
+  │  ArrayList for dynamic sizing       │  Slice for dynamic sizing              │
+  └─────────────────────────────────────┴────────────────────────────────────────┘
+
+  NOTE: In real Go code, SLICES are used far more than arrays.
+        But understanding arrays is essential because slices are built on arrays.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 2 — DECLARATION & INITIALIZATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ── 2.1 Zero-value Declaration ──────────────────────────────────────────────────
+
+    var arr [5]int
+    // Output: [0 0 0 0 0]   — all ints default to 0
+
+    var names [3]string
+    // Output: [  ]          — all strings default to ""
+
+    var flags [4]bool
+    // Output: [false false false false]
+
+
+  ── 2.2 Array Literal ───────────────────────────────────────────────────────────
+
+    // Provide values at declaration
+    scores := [5]int{10, 20, 30, 40, 50}
+    fmt.Println(scores)  // [10 20 30 40 50]
+
+    // Partial initialization — rest are zero values
+    partial := [5]int{10, 20}
+    fmt.Println(partial) // [10 20 0 0 0]
+
+
+  ── 2.3 Ellipsis Syntax (...) ───────────────────────────────────────────────────
+
+    // Let Go count the size for you
+    cities := [...]string{"Delhi", "Mumbai", "Pune"}
+    fmt.Println(len(cities)) // 3
+    fmt.Println(cities)      // [Delhi Mumbai Pune]
+
+
+  ── 2.4 Indexed Initialization ──────────────────────────────────────────────────
+
+    // Set specific indices only
+    sparse := [10]int{0: 100, 5: 500, 9: 900}
+    fmt.Println(sparse)
+    // [100 0 0 0 0 500 0 0 0 900]
+
+    // With ..., size = highest index + 1
+    auto := [...]int{2: 200, 4: 400}
+    fmt.Println(len(auto)) // 5
+    fmt.Println(auto)      // [0 0 200 0 400]
+
+
+  ── 2.5 Multi-Dimensional Arrays ────────────────────────────────────────────────
+
+    // 2D array: 3 rows, 4 columns
+    var matrix [3][4]int
+
+    // 2D literal
+    grid := [2][3]int{
+        {1, 2, 3},
+        {4, 5, 6},
+    }
+    fmt.Println(grid[0][1]) // 2   (row 0, col 1)
+    fmt.Println(grid[1][2]) // 6   (row 1, col 2)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 3 — ACCESSING & MODIFYING ELEMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    arr := [5]int{10, 20, 30, 40, 50}
+
+    // Read
+    fmt.Println(arr[0])  // 10
+    fmt.Println(arr[4])  // 50
+
+    // Modify
+    arr[2] = 99
+    fmt.Println(arr)     // [10 20 99 40 50]
+
+    // Length
+    fmt.Println(len(arr)) // 5
+
+    // ⚠️  Out-of-bounds causes RUNTIME PANIC (not compile error)
+    // fmt.Println(arr[10])  → panic: runtime error: index out of range [10]
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 4 — ITERATING OVER ARRAYS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    fruits := [4]string{"Apple", "Banana", "Cherry", "Date"}
+
+  ── 4.1 Classic for loop ────────────────────────────────────────────────────────
+
+    for i := 0; i < len(fruits); i++ {
+        fmt.Printf("Index %d: %s\n", i, fruits[i])
+    }
+
+
+  ── 4.2 for-range loop (preferred) ─────────────────────────────────────────────
+
+    for index, value := range fruits {
+        fmt.Printf("Index %d: %s\n", index, value)
+    }
+
+    // Ignore index using blank identifier _
+    for _, fruit := range fruits {
+        fmt.Println(fruit)
+    }
+
+    // Ignore value — only index
+    for i := range fruits {
+        fmt.Println(i)
+    }
+
+
+  ── 4.3 Iterating 2D Array ──────────────────────────────────────────────────────
+
+    matrix := [2][3]int{{1, 2, 3}, {4, 5, 6}}
+
+    for i, row := range matrix {
+        for j, val := range row {
+            fmt.Printf("[%d][%d] = %d\n", i, j, val)
+        }
+    }
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 5 — ARRAYS ARE VALUE TYPES (Critical Concept)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  !! THIS IS THE MOST IMPORTANT DIFFERENCE FROM JAVA !!
+
+  In Java, arrays are reference types — assigning copies the reference.
+  In Go, arrays are VALUE types — assigning creates a FULL COPY of all data.
+
+  ── 5.1 Array Copy Behavior ─────────────────────────────────────────────────────
+
+    original := [3]int{1, 2, 3}
+    copied := original         // Full copy, NOT a reference
+
+    copied[0] = 999
+
+    fmt.Println(original) // [1 2 3]   — unchanged!
+    fmt.Println(copied)   // [999 2 3]
+
+    // ↑ In Java, changing copied[0] would also change original[0]
+    // ↑ In Go, they are completely independent
+
+
+  ── 5.2 Arrays Passed to Functions Are Copied ───────────────────────────────────
+
+    func modifyArray(arr [3]int) {
+        arr[0] = 999  // modifies the LOCAL copy only
+    }
+
+    func main() {
+        data := [3]int{1, 2, 3}
+        modifyArray(data)
+        fmt.Println(data) // [1 2 3] — original unchanged!
+    }
+
+
+  ── 5.3 Pass by Pointer to Modify Original ──────────────────────────────────────
+
+    func modifyArrayPtr(arr *[3]int) {
+        arr[0] = 999  // modifies original via pointer
+    }
+
+    func main() {
+        data := [3]int{1, 2, 3}
+        modifyArrayPtr(&data)
+        fmt.Println(data) // [999 2 3] — original IS changed
+    }
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 6 — ARRAY COMPARISON
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Go arrays support == and != comparison if element type is comparable.
+  Java does NOT support == for content comparison (use Arrays.equals()).
+
+    a := [3]int{1, 2, 3}
+    b := [3]int{1, 2, 3}
+    c := [3]int{9, 9, 9}
+
+    fmt.Println(a == b)  // true  — element-by-element comparison
+    fmt.Println(a == c)  // false
+    fmt.Println(a != c)  // true
+
+    // Type must match — [3]int and [4]int cannot be compared (compile error)
+    // d := [4]int{1, 2, 3, 4}
+    // fmt.Println(a == d)  // compile error: mismatched types
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 7 — ARRAYS & SLICES RELATIONSHIP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  A SLICE is a VIEW into an underlying array.
+  Slice = { pointer to array, length, capacity }
+
+  ── 7.1 Creating a Slice from an Array ──────────────────────────────────────────
+
+    arr := [6]int{10, 20, 30, 40, 50, 60}
+
+    // slice syntax: arr[low:high]  → includes low, excludes high
+    s1 := arr[1:4]           // [20 30 40]   indices 1,2,3
+    s2 := arr[:3]            // [10 20 30]   from start to index 2
+    s3 := arr[3:]            // [40 50 60]   from index 3 to end
+    s4 := arr[:]             // [10 20 30 40 50 60] — full array
+
+    fmt.Println(s1)          // [20 30 40]
+    fmt.Println(len(s1))     // 3
+    fmt.Println(cap(s1))     // 5  (from index 1 to end of array)
+
+
+  ── 7.2 Modifying Slice Modifies Underlying Array ────────────────────────────────
+
+    arr := [5]int{1, 2, 3, 4, 5}
+    s := arr[1:4]  // [2 3 4]
+
+    s[0] = 99      // modifies arr[1]
+
+    fmt.Println(s)   // [99 3 4]
+    fmt.Println(arr) // [1 99 3 4 5]  ← original array changed!
+
+    // This is different from array-to-array copy behavior!
+    // Slices share the underlying array.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 8 — PRACTICAL EXAMPLES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ── Example 1: Sum of Array Elements ────────────────────────────────────────────
+
+    package main
+
+    import "fmt"
+
+    func main() {
+        numbers := [5]int{10, 20, 30, 40, 50}
+        sum := 0
+        for _, v := range numbers {
+            sum += v
+        }
+        fmt.Println("Sum:", sum) // Sum: 150
+    }
+
+
+  ── Example 2: Find Max Element ─────────────────────────────────────────────────
+
+    package main
+
+    import "fmt"
+
+    func findMax(arr [5]int) int {
+        max := arr[0]
+        for _, v := range arr {
+            if v > max {
+                max = v
+            }
+        }
+        return max
+    }
+
+    func main() {
+        nums := [5]int{3, 87, 42, 19, 65}
+        fmt.Println("Max:", findMax(nums)) // Max: 87
+    }
+
+
+  ── Example 3: Reverse an Array ─────────────────────────────────────────────────
+
+    package main
+
+    import "fmt"
+
+    func reverseArray(arr *[5]int) {
+        for i, j := 0, len(arr)-1; i < j; i, j = i+1, j-1 {
+            arr[i], arr[j] = arr[j], arr[i]  // Go swap (no temp variable needed!)
+        }
+    }
+
+    func main() {
+        data := [5]int{1, 2, 3, 4, 5}
+        reverseArray(&data)
+        fmt.Println(data) // [5 4 3 2 1]
+    }
+
+
+  ── Example 4: Check if Array Contains a Value ──────────────────────────────────
+
+    package main
+
+    import "fmt"
+
+    func contains(arr [5]string, target string) bool {
+        for _, v := range arr {
+            if v == target {
+                return true
+            }
+        }
+        return false
+    }
+
+    func main() {
+        cities := [5]string{"Delhi", "Mumbai", "Pune", "Chennai", "Kolkata"}
+        fmt.Println(contains(cities, "Pune"))    // true
+        fmt.Println(contains(cities, "Nagpur"))  // false
+    }
+
+
+  ── Example 5: Matrix Multiplication (2D Arrays) ────────────────────────────────
+
+    package main
+
+    import "fmt"
+
+    func main() {
+        a := [2][2]int{{1, 2}, {3, 4}}
+        b := [2][2]int{{5, 6}, {7, 8}}
+        var result [2][2]int
+
+        for i := 0; i < 2; i++ {
+            for j := 0; j < 2; j++ {
+                for k := 0; k < 2; k++ {
+                    result[i][j] += a[i][k] * b[k][j]
+                }
+            }
+        }
+
+        fmt.Println(result)
+        // [[19 22] [43 50]]
+    }
+
+
+  ── Example 6: Count Occurrences ────────────────────────────────────────────────
+
+    package main
+
+    import "fmt"
+
+    func main() {
+        grades := [8]string{"A", "B", "A", "C", "A", "B", "A", "C"}
+        count := [...]string{"A", "B", "C"}
+
+        for _, grade := range count {
+            freq := 0
+            for _, g := range grades {
+                if g == grade {
+                    freq++
+                }
+            }
+            fmt.Printf("%s: %d times\n", grade, freq)
+        }
+        // A: 4 times
+        // B: 2 times
+        // C: 2 times
+    }
+
+
+  ── Example 7: Passing Array to Function & Using Pointer ────────────────────────
+
+    package main
+
+    import "fmt"
+
+    // This works on a COPY — original unchanged
+    func doubleAllCopy(arr [4]int) [4]int {
+        for i := range arr {
+            arr[i] *= 2
+        }
+        return arr
+    }
+
+    // This works on ORIGINAL via pointer
+    func doubleAllInPlace(arr *[4]int) {
+        for i := range arr {
+            arr[i] *= 2
+        }
+    }
+
+    func main() {
+        nums := [4]int{1, 2, 3, 4}
+
+        result := doubleAllCopy(nums)
+        fmt.Println("Copy result:", result) // [2 4 6 8]
+        fmt.Println("Original:  ", nums)   // [1 2 3 4]  unchanged
+
+        doubleAllInPlace(&nums)
+        fmt.Println("After in-place:", nums) // [2 4 6 8]  changed
+    }
+
+
+  ── Example 8: Array as Map Key (unique to Go!) ──────────────────────────────────
+
+    package main
+
+    import "fmt"
+
+    func main() {
+        // Arrays are comparable, so they can be used as map keys!
+        // (Slices CANNOT be used as map keys)
+
+        type Point [2]int
+        visited := map[Point]bool{}
+
+        visited[Point{1, 2}] = true
+        visited[Point{3, 4}] = true
+
+        fmt.Println(visited[Point{1, 2}]) // true
+        fmt.Println(visited[Point{5, 6}]) // false
+    }
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 9 — COMMON PITFALLS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ❌  PITFALL 1: Thinking array copy is a reference
+      a := [3]int{1, 2, 3}
+      b := a
+      b[0] = 999
+      // a is still [1 2 3] — b is a SEPARATE copy
+
+  ❌  PITFALL 2: Type mismatch — [3]int and [4]int are different types
+      var a [3]int
+      var b [4]int
+      // a = b  → compile error
+
+  ❌  PITFALL 3: Passing large arrays to functions (expensive copy)
+      // For large arrays, pass a pointer or use a slice instead
+
+  ❌  PITFALL 4: Out-of-bounds — panics at runtime, not compile time
+      arr := [3]int{1, 2, 3}
+      // arr[5]  → panic at runtime
+
+  ❌  PITFALL 5: Expecting nil — arrays cannot be nil
+      var arr [3]int
+      // arr == nil  → compile error: arrays are never nil
+
+  ✅  BEST PRACTICE: Use slices for most work; use arrays when:
+      • Fixed size is semantically meaningful (e.g., RGB [3]byte, UUID [16]byte)
+      • You want value semantics (copy on assign)
+      • You want to use it as a map key
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 10 — INTERVIEW QUESTIONS & ANSWERS (25 Questions)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q1. What is an array in Go? How is it different from Java arrays?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: A Go array is a fixed-size, ordered sequence of elements of the same type.
+     Unlike Java:
+     - Size is part of the TYPE in Go: [3]int ≠ [4]int
+     - Go arrays are VALUE types (copied on assignment); Java arrays are reference types
+     - Go arrays cannot be nil; Java arrays can be null
+     - Go arrays support == comparison; Java requires Arrays.equals()
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q2. What is the zero value of an array in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Each element is set to the zero value of its element type.
+     - var arr [3]int     → [0 0 0]
+     - var arr [3]string  → ["" "" ""]
+     - var arr [3]bool    → [false false false]
+     - var arr [3]*int    → [nil nil nil]
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q3. What does [...]int{1, 2, 3} mean?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: The ... (ellipsis) tells the compiler to count the elements and set the
+     array size automatically. [...]int{1, 2, 3} is equivalent to [3]int{1, 2, 3}.
+     The size is determined at compile time, not runtime.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q4. Are Go arrays passed by value or by reference to functions?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: By VALUE. A complete copy of the array is made when passed to a function.
+     Modifying the parameter inside the function does NOT affect the original.
+     To modify the original, pass a pointer: func modify(arr *[5]int) { ... }
+     and call it with: modify(&myArr)
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q5. Can you compare two arrays in Go using ==?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Yes, if:
+     1. Both arrays are the same type (same size AND same element type)
+     2. The element type is comparable (int, string, bool, struct with comparable fields)
+     The == compares element-by-element. [3]int{1,2,3} == [3]int{1,2,3} → true
+     You CANNOT compare [3]int and [4]int — it's a compile-time error.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q6. What is the difference between an array and a slice in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A:
+     Array:
+     - Fixed size, part of the type
+     - Value type (copied on assignment)
+     - Cannot be nil
+     - Comparable with ==
+     - Rarely used directly in practice
+
+     Slice:
+     - Dynamic size
+     - Reference type (header with pointer, length, capacity)
+     - CAN be nil
+     - NOT comparable with ==
+     - Used in almost all real Go code
+     - Built on top of an underlying array
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q7. What happens when you slice an array: arr[1:4]?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: It creates a SLICE that references elements at indices 1, 2, 3 of the array
+     (low inclusive, high exclusive). The slice shares the underlying array's memory.
+     Modifying the slice will modify the original array. The slice has:
+     - len = high - low = 3
+     - cap = len(arr) - low = (total elements from index 1 to end)
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q8. Can an array be used as a map key in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Yes! Because arrays are value types and comparable, they can be used as map keys.
+     Example: map[[2]int]string{ {1,2}: "point A" }
+     Slices CANNOT be used as map keys because they are not comparable.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q9. How do you iterate over an array in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Two ways:
+     1. Classic for loop:
+        for i := 0; i < len(arr); i++ { fmt.Println(arr[i]) }
+
+     2. for-range loop (preferred):
+        for index, value := range arr { fmt.Println(index, value) }
+
+     Use _ to discard index or value:
+        for _, value := range arr { ... }  // value only
+        for index := range arr { ... }     // index only
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q10. What is the output of this code?
+       a := [3]int{1, 2, 3}
+       b := a
+       b[0] = 100
+       fmt.Println(a[0])
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Output: 1
+     Because b := a creates a full copy. Modifying b does not affect a.
+     If a were a slice, the answer would be 100 (shared backing array).
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q11. How do you declare a 2D array in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: var matrix [3][4]int    — 3 rows, 4 columns, all zeros
+     Or with a literal:
+     grid := [2][3]int{ {1,2,3}, {4,5,6} }
+     Access: grid[row][col]  e.g., grid[1][2] → 6
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q12. Why is [3]int a different type from [4]int in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: In Go, the size is part of the array's type. This enables:
+     - Compile-time size guarantees (no runtime bounds ambiguity for fixed structures)
+     - Arrays to be comparable with ==
+     - Arrays to be value types with predictable memory layout
+     This is unlike Java where int[] of any size is the same type.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q13. What happens if you access an out-of-bounds index in a Go array?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: If the index is a constant, Go detects it at COMPILE time → compile error.
+     If the index is a variable, Go detects it at RUNTIME → panic:
+     "runtime error: index out of range [N] with length M"
+     Go does not silently return 0 or null like some languages.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q14. Can an array be nil in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: No. Arrays are value types and always have a value — they are never nil.
+     var arr [5]int creates an array initialized with all zeros, not nil.
+     Only reference types (slices, maps, channels, pointers, interfaces, functions)
+     can be nil in Go.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q15. What is indexed initialization of an array?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: You can initialize specific indices only:
+     arr := [10]int{0: 100, 5: 500, 9: 900}
+     All unspecified indices get zero value.
+     With ellipsis: [...]int{4: 99} creates a [5]int with arr[4]=99, rest=0.
+     Size = highest index + 1.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q16. What is the performance implication of passing a large array to a function?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Passing an array creates a full COPY of all its data. For large arrays
+     (e.g., [1000000]int), this is very expensive in terms of both time and memory.
+     Solutions:
+     1. Pass a pointer to the array: func f(arr *[1000000]int)
+     2. Use a slice instead: func f(s []int) — slices pass a small 3-field header
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q17. How can you convert an array to a slice?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Use the slice expression:
+     arr := [5]int{1, 2, 3, 4, 5}
+     s := arr[:]        // slice of entire array
+     s2 := arr[1:3]     // slice of elements at index 1 and 2
+     The slice references the original array — mutations are shared.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q18. What is the output?
+       arr := [5]int{1, 2, 3, 4, 5}
+       s := arr[1:3]
+       s[0] = 99
+       fmt.Println(arr)
+  ──────────────────────────────────────────────────────────────────────────────
+  A: [1 99 3 4 5]
+     s[0] maps to arr[1]. Modifying a slice element modifies the backing array.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q19. What is the swap idiom in Go? How does it relate to array operations?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Go supports multiple assignment, so swapping is done without a temp variable:
+     arr[i], arr[j] = arr[j], arr[i]
+     Both right-hand sides are evaluated before any assignment occurs.
+     This is the idiomatic way to swap elements (e.g., in reversal, sorting).
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q20. Can you use slices of arrays as function parameters for flexibility?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Yes, and this is the RECOMMENDED pattern. Instead of:
+     func process(arr [5]int) { ... }   // only works with [5]int
+
+     Use:
+     func process(s []int) { ... }      // works with slice of any length
+
+     Call with: process(arr[:])  to pass the whole array as a slice.
+     This is why most Go standard library functions take []T, not [N]T.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q21. How is memory laid out for arrays in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Arrays are stored in CONTIGUOUS memory. A [5]int with 8-byte ints
+     occupies exactly 40 bytes in a single block. This gives:
+     - Excellent cache locality
+     - O(1) random access by index (computed as: base_address + index * element_size)
+     - Predictable memory footprint at compile time
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q22. What are practical use cases for arrays (not slices) in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Arrays are preferred when:
+     1. Fixed size has semantic meaning: [3]float64 for (x,y,z), [16]byte for UUID
+     2. Used as map keys: map[[2]int]string for coordinate grids
+     3. You want copy-on-assign semantics to prevent accidental mutation
+     4. Cryptographic/hashing APIs (e.g., [32]byte for SHA-256 output)
+     5. Small, fixed-size data that benefits from stack allocation
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q23. What is the difference between len() and cap() for arrays vs slices?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: For ARRAYS:
+     - len(arr) = number of elements = fixed size
+     - cap(arr) = same as len(arr) (arrays have no extra capacity)
+
+     For SLICES:
+     - len(s) = number of elements currently in the slice
+     - cap(s) = total elements available from slice's start to end of backing array
+     - cap >= len always; cap can be larger if slice was created from a larger array
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q24. How do you copy one array to another safely?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: For arrays, simple assignment is a safe copy:
+     a := [3]int{1, 2, 3}
+     b := a  // independent copy, safe
+
+     For slices, use the built-in copy():
+     src := []int{1, 2, 3}
+     dst := make([]int, len(src))
+     copy(dst, src)  // copies min(len(dst), len(src)) elements
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q25. Write a function to find duplicate elements in an array.
+  ──────────────────────────────────────────────────────────────────────────────
+  A:
+     package main
+
+     import "fmt"
+
+     func findDuplicates(arr [8]int) []int {
+         seen := make(map[int]bool)
+         duplicates := []int{}
+         for _, v := range arr {
+             if seen[v] {
+                 duplicates = append(duplicates, v)
+             } else {
+                 seen[v] = true
+             }
+         }
+         return duplicates
+     }
+
+     func main() {
+         data := [8]int{1, 2, 3, 2, 4, 3, 5, 1}
+         fmt.Println(findDuplicates(data)) // [2 3 1]
+     }
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  QUICK REFERENCE CHEAT SHEET
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  DECLARE        var arr [5]int
+  LITERAL        arr := [3]int{1, 2, 3}
+  ELLIPSIS       arr := [...]int{1, 2, 3}
+  INDEXED        arr := [10]int{0: 10, 9: 90}
+  2D             var matrix [3][4]int
+  ACCESS         arr[i]
+  MODIFY         arr[i] = value
+  LENGTH         len(arr)
+  ITERATE        for i, v := range arr { }
+  COPY           b := a           (full independent copy)
+  POINTER        func f(a *[5]int)  called with f(&arr)
+  TO SLICE       s := arr[:]      (shares backing array)
+  COMPARE        a == b           (same type only)
+  MAP KEY        map[[2]int]bool  (arrays are comparable)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

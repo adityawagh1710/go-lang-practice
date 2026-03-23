@@ -1,0 +1,225 @@
+=========================================
+GO ARRAYS
+=========================================
+
+1. INTRODUCTION
+-----------------------------------------
+Array is a collection of elements of the same type.
+
+- Fixed size
+- Indexed (0-based)
+- Stored in contiguous memory
+
+Syntax:
+var arr [size]type
+
+Example:
+var nums [4]int
+
+-----------------------------------------
+
+2. DECLARATION & INITIALIZATION
+-----------------------------------------
+
+(A) Default Declaration
+var nums [4]int
+fmt.Println(nums)   // [0 0 0 0]
+
+(B) With Values
+nums := [4]int{1, 2, 3, 4}
+
+(C) Let compiler decide size
+nums := [...]int{1, 2, 3}
+
+-----------------------------------------
+
+3. ACCESS & UPDATE
+-----------------------------------------
+
+nums := [4]int{10, 20, 30, 40}
+
+fmt.Println(nums[0])   // 10
+
+nums[1] = 50
+fmt.Println(nums)      // [10 50 30 40]
+
+-----------------------------------------
+
+4. ARRAY LENGTH
+-----------------------------------------
+
+nums := [4]int{1, 2, 3, 4}
+
+fmt.Println(len(nums))   // 4
+
+-----------------------------------------
+
+5. ITERATING ARRAYS
+-----------------------------------------
+
+(A) Using for loop
+for i := 0; i < len(nums); i++ {
+    fmt.Println(nums[i])
+}
+
+(B) Using range
+for index, value := range nums {
+    fmt.Println(index, value)
+}
+
+-----------------------------------------
+
+6. MULTI-DIMENSIONAL ARRAYS
+-----------------------------------------
+
+2D Array:
+matrix := [2][2]int{
+    {1, 2},
+    {3, 4},
+}
+
+fmt.Println(matrix[0][1])   // 2
+
+-----------------------------------------
+
+7. ARRAY IS VALUE TYPE ⭐
+-----------------------------------------
+
+Arrays are copied when passed.
+
+Example:
+func change(arr [3]int) {
+    arr[0] = 100
+}
+
+nums := [3]int{1, 2, 3}
+change(nums)
+
+fmt.Println(nums) // [1 2 3] (no change)
+
+-----------------------------------------
+
+8. ARRAY COMPARISON
+-----------------------------------------
+
+Arrays can be compared if same type.
+
+a := [3]int{1, 2, 3}
+b := [3]int{1, 2, 3}
+
+fmt.Println(a == b) // true
+
+-----------------------------------------
+
+9. ARRAY VS SLICE
+-----------------------------------------
+
+Array:
+- Fixed size
+- Value type
+
+Slice:
+- Dynamic size
+- Reference type
+
+Example:
+arr := [3]int{1, 2, 3}
+slice := []int{1, 2, 3}
+
+-----------------------------------------
+
+10. COMMON ERRORS
+-----------------------------------------
+
+1. Size mismatch:
+[3]int ≠ [4]int
+
+2. Redeclaration:
+var arr [3]int
+arr := [3]int{1,2,3} // ❌
+
+3. Type mismatch:
+[4]int ≠ [2][2]int
+
+-----------------------------------------
+
+REAL-WORLD EXAMPLES
+-----------------------------------------
+
+1. Fixed-size buffer
+var buffer [1024]byte
+
+2. Matrix operations
+var matrix [3][3]int
+
+3. Lookup tables
+var days [7]string
+
+-----------------------------------------
+
+INTERVIEW QUESTIONS
+-----------------------------------------
+
+1. Are arrays dynamic in Go?
+   → No, fixed size
+
+2. Are arrays passed by value or reference?
+   → Value (copy)
+
+3. Can arrays be compared?
+   → Yes, if same type
+
+4. Difference between array and slice?
+   → Array = fixed, Slice = dynamic
+
+5. What is [...] in array declaration?
+   → Compiler infers size
+
+6. Why slices are preferred over arrays?
+   → Flexibility and usability
+
+7. Can we change array size?
+   → No
+
+-----------------------------------------
+
+BEST PRACTICES
+-----------------------------------------
+
+- Use arrays only when size is fixed
+- Prefer slices in real-world apps
+- Avoid unnecessary copying of large arrays
+- Use range loop for readability
+
+-----------------------------------------
+
+ADVANCED EXAMPLE
+-----------------------------------------
+
+package main
+
+import "fmt"
+
+func main() {
+    nums := [5]int{1, 2, 3, 4, 5}
+
+    sum := 0
+    for _, v := range nums {
+        sum += v
+    }
+
+    fmt.Println("Sum:", sum)
+}
+
+-----------------------------------------
+
+SUMMARY
+-----------------------------------------
+
+- Arrays are fixed-size collections
+- Type includes size
+- Passed by value
+- Rarely used directly in production
+- Slices are preferred
+
+=========================================
