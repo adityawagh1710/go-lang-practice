@@ -1,0 +1,258 @@
+GOLANG (Go) BASIC NOTES
+========================
+Created: 2026
+
+1. Introduction to Go
+---------------------
+- Go is an open-source programming language developed by Google (2009).
+- Statically typed, compiled, and designed for simplicity, speed, and concurrency.
+- Key features:
+  - Fast compilation to a single binary (easy deployment).
+  - Built-in concurrency: goroutines (lightweight threads) and channels.
+  - Garbage collection.
+  - Strong standard library.
+  - Excellent for web servers, microservices, CLI tools, cloud-native apps.
+- Official site: https://go.dev
+
+2. Hello World Program
+----------------------
+package main
+
+import "fmt"
+
+func main() {
+    fmt.Println("Hello, World!")
+}
+
+- Run: `go run filename.go`
+
+- Build: `go build filename.go` → produces executable.
+
+- Package main: Every Go program needs to be part of a package. The primary package is unique since it informs Go that the program is executable.
+
+- Import "fmt": The fmt package provides functions for formatted input and output. It is used here to print text to the screen.
+
+- func: It is used to define a function in Golang.
+
+- main: The main function is the entry point of a Go program. It is the main function of the program.
+
+- Println (): The Println () method is available in the fmt package. It is used to print the string ("Hello World") on the screen.
+
+3. Package Structure
+--------------------
+- Every Go file starts with `package <name>`
+- `package main` → executable program (must have `main()` function).
+- Imports: `import "fmt"` or multiple: import ("fmt" "math")
+- Files in same directory share the package name.
+
+4. Variables and Constants
+--------------------------
+- Declaration:
+  var name string = "Golang"
+  var age int = 25
+
+- Short declaration (inside functions): name := "Golang"
+
+- Constants:
+  const Pi = 3.14
+  const (
+      Red = iota   // 0
+      Green        // 1
+      Blue         // 2
+  )
+
+- Data Types:
+  - bool, string
+  - int, int8, int16, int32, int64
+  - uint, uint8...
+  - float32, float64
+  - complex64, complex128
+  - byte (alias for uint8), rune (alias for int32)
+
+5. Control Structures
+---------------------
+if condition {
+    // code
+} else if {
+} else {
+}
+
+switch day {
+case 1:
+    fmt.Println("Monday")
+default:
+    fmt.Println("Other")
+}
+
+for i := 0; i < 5; i++ {
+    fmt.Println(i)
+}
+
+// Range loop
+for index, value := range slice {
+    // ...
+}
+
+// Infinite loop with break
+for {
+    // ...
+    break
+}
+
+6. Functions
+------------
+func add(a, b int) int {
+    return a + b
+}
+
+// Multiple return values
+func swap(a, b int) (int, int) {
+    return b, a
+}
+
+// Named return
+func split(sum int) (x, y int) {
+    x = sum * 4 / 9
+    y = sum - x
+    return
+}
+
+7. Arrays, Slices, and Maps
+---------------------------
+Array (fixed size):
+var a [5]int
+a[0] = 10
+
+Slice (dynamic):
+s := []int{1, 2, 3}
+s = append(s, 4)
+
+Map (key-value):
+m := make(map[string]int)
+m["one"] = 1
+delete(m, "one")
+
+8. Structs and Pointers
+-----------------------
+type Person struct {
+    Name string
+    Age  int
+}
+
+p := Person{Name: "Alice", Age: 30}
+p2 := &p  // pointer
+
+// Methods
+func (p Person) Greet() {
+    fmt.Println("Hello", p.Name)
+}
+
+9. Concurrency Basics
+---------------------
+Goroutine:
+go func() {
+    fmt.Println("Running concurrently")
+}()
+
+Channel:
+ch := make(chan int)
+ch <- 42          // send
+val := <-ch       // receive
+
+Buffered channel: make(chan int, 10)
+
+10. Error Handling
+------------------
+result, err := someFunction()
+if err != nil {
+    // handle error
+}
+
+11. Defer, Panic, Recover
+-------------------------
+defer fmt.Println("This runs at the end")  // LIFO order
+
+panic("Something went wrong")  // stops execution
+
+// Recover in deferred function
+defer func() {
+    if r := recover(); r != nil {
+        fmt.Println("Recovered:", r)
+    }
+}()
+
+Useful Commands
+---------------
+go mod init <module-name>     // Initialize module
+go run .                      // Run current package
+go build                      // Build executable
+go test                       // Run tests
+go fmt                        // Format code
+go vet                        // Check for errors
+go get <package>              // Install external package
+
+Best Practices
+--------------
+- Use short variable names when scope is small.
+- Export names with capital letter.
+- Prefer channels over shared memory for concurrency.
+- Keep functions small and focused.
+- Always check errors.
+
+==========================
+GOLANG INTERVIEW QUESTIONS
+==========================
+
+Basic Level
+-----------
+1. What is Go (Golang) and why was it created?
+2. What is the difference between `var` and `:=` for declaring variables?
+3. Explain the difference between arrays and slices in Go.
+4. What are goroutines? How are they different from OS threads?
+5. What is a channel in Go? Why do we use it?
+6. Can a Go function return multiple values? Give an example.
+7. What is the purpose of the `defer` keyword?
+8. Explain `make()` vs `new()` in Go.
+9. What are maps in Go? How do you delete a key from a map?
+10. What happens if you send to a closed channel?
+
+Intermediate Level
+------------------
+11. How does Go handle concurrency? Explain goroutines + channels.
+12. What is a WaitGroup and how is it used?
+13. Explain pointers in Go. When should you use them?
+14. What are structs? How do you define methods on structs?
+15. What is an interface in Go? How is it different from other languages?
+16. How does error handling work in Go? (error interface)
+17. What is the difference between `panic` and `error`?
+18. Explain how slices work internally (backing array, length, capacity).
+19. What is embedding in structs?
+20. How do you handle JSON marshaling/unmarshaling in Go?
+
+Advanced Level
+--------------
+21. Explain the difference between value and pointer receivers for methods.
+22. How does the Go scheduler work with goroutines?
+23. What is a select statement? Give a use case.
+24. How can you avoid deadlock in channels?
+25. What are race conditions? How does Go detect them (`go run -race`)?
+26. Explain context package and its use in cancellation.
+27. What are the advantages of Go modules?
+28. How does garbage collection work in Go?
+29. What is the blank identifier `_` used for?
+30. How would you implement a worker pool using goroutines and channels?
+
+Bonus / Tricky
+--------------
+- Why can't constants be computed at runtime in Go?
+- What is the zero value for different types?
+- Can you have a nil map? What happens if you write to it?
+- Difference between `for range` over slice vs map.
+- How to recover from panic in a goroutine?
+
+Common Answers (Quick Reference)
+--------------------------------
+- Goroutine: Lightweight, user-space thread managed by Go runtime. Thousands can run efficiently.
+- Channel: Typed conduit for sending/receiving values between goroutines. Prevents race conditions by communicating instead of sharing memory.
+- Error handling: Functions return `(value, error)`. Always check the error.
+- Slices: Dynamic view into an array. `append` may reallocate if capacity is exceeded.

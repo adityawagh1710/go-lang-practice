@@ -1,0 +1,1581 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 1 — WHAT IS GO?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Go (also called Golang) is an open-source, statically typed, compiled language
+  created at Google in 2007 by Robert Griesemer, Rob Pike, and Ken Thompson.
+  Released publicly in 2009. Current stable version: Go 1.21+
+
+  DESIGN GOALS:
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  • Fast compilation (as quick as scripting languages)            │
+  │  • Simple, readable syntax (fewer keywords than Java/C++)        │
+  │  • Built-in concurrency (goroutines, channels)                   │
+  │  • Garbage collected (like Java, unlike C/C++)                   │
+  │  • Statically typed with type inference                          │
+  │  • Single binary deployment (no JVM/runtime needed)              │
+  │  • Strong standard library                                       │
+  └──────────────────────────────────────────────────────────────────┘
+
+  ⚠️  GO vs JAVA — HIGH-LEVEL COMPARISON:
+  ┌───────────────────────────────────┬────────────────────────────────────────┐
+  │  Java                             │  Go                                    │
+  ├───────────────────────────────────┼────────────────────────────────────────┤
+  │  Object-oriented (classes)        │  Procedural + structs + interfaces     │
+  │  Inheritance (extends)            │  Composition only (no inheritance)     │
+  │  Checked + unchecked exceptions   │  Error as return value (no exceptions) │
+  │  JVM bytecode (needs runtime)     │  Compiled to native binary             │
+  │  Verbose (getters/setters/etc.)   │  Concise (minimal boilerplate)         │
+  │  Generics (since Java 5)          │  Generics (since Go 1.18)              │
+  │  Threads (expensive)              │  Goroutines (lightweight, ~2KB)        │
+  │  Maven / Gradle                   │  Go Modules (built-in)                 │
+  │  ~50 keywords                     │  25 keywords                           │
+  └───────────────────────────────────┴────────────────────────────────────────┘
+
+  GO's 25 KEYWORDS (learn them — nothing else is reserved):
+  break      default     func        interface   select
+  case       defer       go          map         struct
+  chan       else        goto        package     switch
+  const      fallthrough if          range       type
+  continue   for         import      return      var
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 2 — PROGRAM STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Every Go program must have:
+  1. A package declaration
+  2. Import statements (if needed)
+  3. A main() function (for executable programs)
+
+  ── Minimal Hello World ─────────────────────────────────────────────────────────
+
+    package main          // ← every executable must be in package "main"
+
+    import "fmt"          // ← import the fmt package (like Java's System.out)
+
+    func main() {         // ← entry point (no args, no return value)
+        fmt.Println("Hello, World!")
+    }
+
+  ── Multiple imports ────────────────────────────────────────────────────────────
+
+    import (
+        "fmt"
+        "math"
+        "strings"
+        "os"
+    )
+
+  ── Running and Building ─────────────────────────────────────────────────────────
+
+    go run main.go          // compile + run (development)
+    go build -o myapp .     // compile to binary
+    go test ./...           // run all tests
+    go fmt ./...            // auto-format code (mandatory style)
+    go vet ./...            // static analysis
+    go mod init mymodule    // initialise Go module (like Maven pom.xml)
+    go get package@version  // add dependency
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 3 — VARIABLES & CONSTANTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ── 3.1 Variable Declaration ────────────────────────────────────────────────────
+
+    // Full declaration with type
+    var age int = 25
+    var name string = "Alice"
+    var active bool = true
+
+    // Type inferred from value
+    var score = 100          // Go infers int
+    var pi = 3.14            // Go infers float64
+    var greeting = "Hello"  // Go infers string
+
+    // Short variable declaration (inside functions only)
+    x := 42                 // most common style
+    msg := "Go is awesome"
+    flag := false
+
+    // Multiple variables
+    var a, b, c int = 1, 2, 3
+    x, y := 10, 20
+
+    // Block declaration
+    var (
+        firstName string = "John"
+        lastName  string = "Doe"
+        age       int    = 30
+    )
+
+
+  ── 3.2 Zero Values (default when not initialized) ──────────────────────────────
+
+    var i int       // 0
+    var f float64   // 0.0
+    var b bool      // false
+    var s string    // ""  (empty string)
+    var p *int      // nil
+    var sl []int    // nil
+    var m map[string]int  // nil
+
+    // ⚠️  Unlike Java, Go NEVER has uninitialized variables — zero value is always set
+
+
+  ── 3.3 Constants ───────────────────────────────────────────────────────────────
+
+    const Pi = 3.14159
+    const AppName = "MyApp"
+    const MaxRetries = 3
+
+    // Typed constant
+    const MaxSize int = 100
+
+    // Block of constants
+    const (
+        StatusOK    = 200
+        StatusNotFound = 404
+        StatusError = 500
+    )
+
+    // ⚠️  Constants must be assigned at compile time
+    // const now = time.Now()  → compile error (runtime value)
+
+
+  ── 3.4 iota — Auto-incrementing Constants ──────────────────────────────────────
+
+    // iota resets to 0 in each const block and increments by 1
+    const (
+        Sunday = iota    // 0
+        Monday           // 1
+        Tuesday          // 2
+        Wednesday        // 3
+        Thursday         // 4
+        Friday           // 5
+        Saturday         // 6
+    )
+
+    // With expressions
+    const (
+        KB = 1 << (10 * (iota + 1))  // 1 << 10 = 1024
+        MB                            // 1 << 20 = 1048576
+        GB                            // 1 << 30 = 1073741824
+        TB                            // 1 << 40
+    )
+
+    fmt.Println(KB, MB, GB)  // 1024 1048576 1073741824
+
+    // Skip a value with blank identifier
+    const (
+        _  = iota  // skip 0
+        One        // 1
+        Two        // 2
+        Three      // 3
+    )
+
+
+  ── 3.5 Type Conversions ────────────────────────────────────────────────────────
+
+    // Go is STRICTLY typed — no implicit conversions (unlike Java's widening)
+    var i int = 42
+    var f float64 = float64(i)   // explicit conversion required
+    var u uint = uint(f)
+
+    // string ↔ int
+    import "strconv"
+    s := strconv.Itoa(42)           // int → string: "42"
+    n, err := strconv.Atoi("42")    // string → int: 42, nil
+    if err != nil { /* handle */ }
+
+    // int ↔ byte/rune
+    var b byte = 'A'
+    fmt.Println(int(b))             // 65
+    fmt.Println(string(rune(65)))   // "A"
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 4 — DATA TYPES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ── 4.1 Integer Types ───────────────────────────────────────────────────────────
+
+    int8    // -128 to 127
+    int16   // -32768 to 32767
+    int32   // -2147483648 to 2147483647  (also: rune — Unicode code point)
+    int64   // -9223372036854775808 to 9223372036854775807
+
+    uint8   // 0 to 255  (also: byte)
+    uint16  // 0 to 65535
+    uint32  // 0 to 4294967295
+    uint64  // 0 to 18446744073709551615
+
+    int     // platform-dependent: 32-bit on 32-bit OS, 64-bit on 64-bit OS
+    uint    // same but unsigned
+
+    // ✅  Use int for most cases unless you need a specific size
+
+
+  ── 4.2 Float Types ─────────────────────────────────────────────────────────────
+
+    float32  // ~7 decimal digits of precision  (like Java float)
+    float64  // ~15 decimal digits of precision (like Java double — DEFAULT)
+
+    var x float64 = 3.14159265358979
+    // ✅  Always use float64 unless memory is a serious constraint
+
+
+  ── 4.3 Boolean ─────────────────────────────────────────────────────────────────
+
+    var flag bool = true
+    active := false
+    // ⚠️  No int-to-bool coercion: if (1) {} is invalid in Go
+
+
+  ── 4.4 String ──────────────────────────────────────────────────────────────────
+
+    // Strings are IMMUTABLE sequences of bytes (UTF-8 encoded)
+    s := "Hello, World!"
+    fmt.Println(len(s))          // 13 (byte count, not rune count!)
+    fmt.Println(s[0])            // 72 (byte value of 'H')
+    fmt.Println(string(s[0]))    // "H"
+
+    // Multi-line string (raw string literal — backticks)
+    raw := `This is
+    a multi-line
+    string`
+
+    // String concatenation
+    full := "Hello" + ", " + "Go!"
+
+    // Strings are immutable — s[0] = 'h' is a compile error
+    // To modify: convert to []byte or []rune
+
+
+  ── 4.5 byte and rune ───────────────────────────────────────────────────────────
+
+    // byte  = alias for uint8  → stores ASCII / raw byte value
+    // rune  = alias for int32  → stores Unicode code point
+
+    var b byte = 'A'     // 65
+    var r rune = '界'    // Unicode code point
+
+    // Iterating string by rune (correct for Unicode):
+    for i, r := range "Hello,界" {
+        fmt.Printf("index %d: %c (%d)\n", i, r, r)
+    }
+
+
+  ── 4.6 Pointer Types ───────────────────────────────────────────────────────────
+
+    // Pointers hold the memory address of a variable
+    x := 42
+    p := &x            // p is *int, holds address of x
+    fmt.Println(*p)    // 42  (dereference)
+    *p = 100
+    fmt.Println(x)     // 100  (x changed via pointer)
+
+    // new() — allocates memory, returns pointer
+    p2 := new(int)     // *int pointing to a 0-valued int
+    *p2 = 55
+    fmt.Println(*p2)   // 55
+
+    // ⚠️  Go has NO pointer arithmetic (unlike C) — safer than C, simpler than Java
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 5 — OPERATORS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Arithmetic:   +   -   *   /   %
+  Comparison:   ==  !=  <   >   <=  >=
+  Logical:      &&  ||  !
+  Bitwise:      &   |   ^   <<  >>  &^  (AND NOT)
+  Assignment:   =   :=  +=  -=  *=  /=  %=  &=  |=  ^=  <<=  >>=
+  Address:      &   (address of)    *  (dereference)
+  Channel:      <-  (send/receive)
+
+  // ⚠️  No ++ or -- as expressions (only statements)
+  i++   // OK as statement
+  // j = i++  → compile error (++ is not an expression in Go)
+
+  // ⚠️  No ternary operator in Go
+  // x = (a > b) ? a : b  → does NOT exist
+  // Use if-else instead:
+  var max int
+  if a > b {
+      max = a
+  } else {
+      max = b
+  }
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 6 — CONTROL FLOW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ── 6.1 if / else if / else ─────────────────────────────────────────────────────
+
+    score := 85
+
+    if score >= 90 {
+        fmt.Println("A")
+    } else if score >= 80 {
+        fmt.Println("B")
+    } else if score >= 70 {
+        fmt.Println("C")
+    } else {
+        fmt.Println("F")
+    }
+
+    // ⚠️  No parentheses around condition (unlike Java)
+    // ⚠️  Braces are MANDATORY (even for single-line body)
+
+    // if with init statement (scoped to if block)
+    if val, err := strconv.Atoi("42"); err == nil {
+        fmt.Println("Parsed:", val)
+    } else {
+        fmt.Println("Error:", err)
+    }
+    // val and err are NOT accessible here
+
+
+  ── 6.2 for — Go's only loop ────────────────────────────────────────────────────
+
+    // Go has ONE loop keyword: for
+    // It covers while, do-while, for-each, infinite loop
+
+    // Classic C-style for
+    for i := 0; i < 5; i++ {
+        fmt.Println(i)
+    }
+
+    // While-style (condition only)
+    n := 1
+    for n < 100 {
+        n *= 2
+    }
+    fmt.Println(n)  // 128
+
+    // Infinite loop
+    for {
+        fmt.Println("running...")
+        break  // exit with break
+    }
+
+    // for-range over slice/array
+    fruits := []string{"Apple", "Banana", "Cherry"}
+    for index, value := range fruits {
+        fmt.Printf("%d: %s\n", index, value)
+    }
+
+    // for-range over map
+    m := map[string]int{"a": 1, "b": 2}
+    for key, val := range m {
+        fmt.Println(key, val)
+    }
+
+    // for-range over string (iterates runes, not bytes)
+    for i, r := range "Go!" {
+        fmt.Printf("%d: %c\n", i, r)
+    }
+
+    // for-range over channel
+    ch := make(chan int, 3)
+    ch <- 1; ch <- 2; ch <- 3; close(ch)
+    for v := range ch {
+        fmt.Println(v)
+    }
+
+
+  ── 6.3 switch ──────────────────────────────────────────────────────────────────
+
+    // No need for break — cases don't fall through by default (unlike Java!)
+    day := "Monday"
+
+    switch day {
+    case "Saturday", "Sunday":
+        fmt.Println("Weekend")
+    case "Monday":
+        fmt.Println("Start of week")
+    default:
+        fmt.Println("Weekday")
+    }
+
+    // switch with init statement
+    switch x := 42; {
+    case x > 100:
+        fmt.Println("big")
+    case x > 10:
+        fmt.Println("medium")  // prints this
+    default:
+        fmt.Println("small")
+    }
+
+    // switch without expression = cleaner if-else chain
+    score := 75
+    switch {
+    case score >= 90:
+        fmt.Println("A")
+    case score >= 80:
+        fmt.Println("B")
+    case score >= 70:
+        fmt.Println("C")  // prints this
+    }
+
+    // fallthrough — explicitly fall to next case
+    switch 2 {
+    case 1:
+        fmt.Println("one")
+    case 2:
+        fmt.Println("two")
+        fallthrough
+    case 3:
+        fmt.Println("three")  // also prints (due to fallthrough)
+    }
+    // Output: two \n three
+
+    // Type switch (very common with interfaces)
+    var i interface{} = "hello"
+    switch v := i.(type) {
+    case int:
+        fmt.Printf("int: %d\n", v)
+    case string:
+        fmt.Printf("string: %s\n", v)  // prints this
+    default:
+        fmt.Printf("unknown: %T\n", v)
+    }
+
+
+  ── 6.4 break, continue, goto ───────────────────────────────────────────────────
+
+    // break — exit loop or switch
+    for i := 0; i < 10; i++ {
+        if i == 5 { break }
+        fmt.Println(i)
+    }
+
+    // continue — skip to next iteration
+    for i := 0; i < 10; i++ {
+        if i%2 == 0 { continue }
+        fmt.Println(i)  // prints odd numbers
+    }
+
+    // Labeled break — break out of nested loop
+    outer:
+    for i := 0; i < 3; i++ {
+        for j := 0; j < 3; j++ {
+            if i == 1 && j == 1 {
+                break outer  // exits both loops
+            }
+            fmt.Printf("%d,%d ", i, j)
+        }
+    }
+    // Output: 0,0 0,1 0,2 1,0
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 7 — FUNCTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ── 7.1 Basic Function ──────────────────────────────────────────────────────────
+
+    func greet(name string) string {
+        return "Hello, " + name + "!"
+    }
+
+    // Call
+    msg := greet("Alice")
+    fmt.Println(msg)  // Hello, Alice!
+
+
+  ── 7.2 Multiple Return Values ──────────────────────────────────────────────────
+
+    // GO's MOST DISTINCTIVE FEATURE compared to Java
+    func divide(a, b float64) (float64, error) {
+        if b == 0 {
+            return 0, fmt.Errorf("division by zero")
+        }
+        return a / b, nil
+    }
+
+    result, err := divide(10, 3)
+    if err != nil {
+        fmt.Println("Error:", err)
+    } else {
+        fmt.Printf("%.2f\n", result)  // 3.33
+    }
+
+    // Ignore a return value with _
+    result, _ = divide(10, 2)
+    fmt.Println(result)  // 5
+
+
+  ── 7.3 Named Return Values ─────────────────────────────────────────────────────
+
+    func minMax(nums []int) (min, max int) {
+        min, max = nums[0], nums[0]
+        for _, v := range nums[1:] {
+            if v < min { min = v }
+            if v > max { max = v }
+        }
+        return  // "naked return" — returns named values
+    }
+
+    lo, hi := minMax([]int{3, 1, 4, 1, 5, 9})
+    fmt.Println(lo, hi)  // 1 9
+
+
+  ── 7.4 Variadic Functions ──────────────────────────────────────────────────────
+
+    func sum(nums ...int) int {
+        total := 0
+        for _, v := range nums {
+            total += v
+        }
+        return total
+    }
+
+    fmt.Println(sum(1, 2, 3))        // 6
+    fmt.Println(sum(1, 2, 3, 4, 5)) // 15
+
+    nums := []int{10, 20, 30}
+    fmt.Println(sum(nums...))         // 60  (spread slice)
+
+
+  ── 7.5 Functions as First-Class Values ─────────────────────────────────────────
+
+    // Assign function to variable
+    add := func(a, b int) int { return a + b }
+    fmt.Println(add(3, 4))  // 7
+
+    // Pass function as argument
+    func apply(nums []int, f func(int) int) []int {
+        result := make([]int, len(nums))
+        for i, v := range nums {
+            result[i] = f(v)
+        }
+        return result
+    }
+
+    doubled := apply([]int{1, 2, 3}, func(n int) int { return n * 2 })
+    fmt.Println(doubled)  // [2 4 6]
+
+    // Return function from function (closure)
+    func multiplier(factor int) func(int) int {
+        return func(x int) int {
+            return x * factor
+        }
+    }
+
+    triple := multiplier(3)
+    fmt.Println(triple(7))  // 21
+
+
+  ── 7.6 defer ───────────────────────────────────────────────────────────────────
+
+    // defer postpones execution until surrounding function returns
+    // Deferred calls execute in LIFO order (last in, first out)
+
+    func readFile(path string) {
+        f, err := os.Open(path)
+        if err != nil { return }
+        defer f.Close()  // guaranteed to run when readFile() returns
+
+        // ... read file
+    }
+
+    // Multiple defers — LIFO order
+    func demoDefer() {
+        defer fmt.Println("third")
+        defer fmt.Println("second")
+        defer fmt.Println("first")
+        fmt.Println("executing")
+    }
+    // Output:
+    // executing
+    // first
+    // second
+    // third
+
+    // defer with loop — common pitfall
+    for i := 0; i < 3; i++ {
+        defer fmt.Println(i)  // all defers capture by value: prints 2, 1, 0
+    }
+
+
+  ── 7.7 init() Function ─────────────────────────────────────────────────────────
+
+    // init() runs automatically before main(), used for package setup
+    // A package can have multiple init() functions (even in same file)
+
+    var config map[string]string
+
+    func init() {
+        config = make(map[string]string)
+        config["env"] = "production"
+        fmt.Println("init() called")
+    }
+
+    func main() {
+        fmt.Println("main() called")
+        fmt.Println(config["env"])
+    }
+    // Output:
+    // init() called
+    // main() called
+    // production
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 8 — ERROR HANDLING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Go has NO exceptions. Errors are returned as values — explicit and visible.
+  This is one of the biggest differences from Java.
+
+  ── 8.1 The error Interface ─────────────────────────────────────────────────────
+
+    // error is a built-in interface with one method:
+    // type error interface { Error() string }
+
+    // Return nil for no error, an error value for failure
+    func safeDivide(a, b int) (int, error) {
+        if b == 0 {
+            return 0, fmt.Errorf("cannot divide %d by zero", a)
+        }
+        return a / b, nil
+    }
+
+    result, err := safeDivide(10, 0)
+    if err != nil {
+        fmt.Println("Error:", err)  // Error: cannot divide 10 by zero
+    } else {
+        fmt.Println(result)
+    }
+
+
+  ── 8.2 Creating Custom Errors ──────────────────────────────────────────────────
+
+    // Using errors.New
+    import "errors"
+    var ErrNotFound = errors.New("record not found")
+
+    // Using fmt.Errorf (with formatting)
+    err := fmt.Errorf("user %d not found", userID)
+
+    // Custom error type (with extra fields)
+    type ValidationError struct {
+        Field   string
+        Message string
+    }
+
+    func (e *ValidationError) Error() string {
+        return fmt.Sprintf("validation error on %s: %s", e.Field, e.Message)
+    }
+
+    func validate(age int) error {
+        if age < 0 {
+            return &ValidationError{Field: "age", Message: "must be non-negative"}
+        }
+        return nil
+    }
+
+
+  ── 8.3 Wrapping and Unwrapping Errors (Go 1.13+) ───────────────────────────────
+
+    // Wrap with %w to add context
+    original := errors.New("connection refused")
+    wrapped := fmt.Errorf("database query failed: %w", original)
+
+    // Unwrap to check type
+    fmt.Println(errors.Is(wrapped, original))  // true
+
+    // errors.As — check if error chain contains a specific type
+    var ve *ValidationError
+    if errors.As(err, &ve) {
+        fmt.Println("Field:", ve.Field)
+    }
+
+
+  ── 8.4 panic and recover ───────────────────────────────────────────────────────
+
+    // panic — stops normal execution (like Java's RuntimeException, unchecked)
+    // Use only for truly unrecoverable situations (programmer error)
+
+    func mustPositive(n int) int {
+        if n <= 0 {
+            panic(fmt.Sprintf("expected positive, got %d", n))
+        }
+        return n
+    }
+
+    // recover — catches a panic (must be used inside defer)
+    func safeRun(f func()) (err error) {
+        defer func() {
+            if r := recover(); r != nil {
+                err = fmt.Errorf("recovered from panic: %v", r)
+            }
+        }()
+        f()
+        return nil
+    }
+
+    err := safeRun(func() { mustPositive(-1) })
+    fmt.Println(err)  // recovered from panic: expected positive, got -1
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 9 — PACKAGES & MODULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ── 9.1 Package Rules ───────────────────────────────────────────────────────────
+
+    // Exported (public): names starting with UPPERCASE
+    func ExportedFunc() {}   // accessible from other packages
+    var ExportedVar = 10
+
+    // Unexported (private): names starting with lowercase
+    func helperFunc() {}     // only within this package
+    var internalVar = 5
+
+    // ⚠️  Go uses naming convention for visibility — no public/private keywords
+
+
+  ── 9.2 Go Modules (go.mod) ─────────────────────────────────────────────────────
+
+    // Initialize a module
+    // $ go mod init github.com/username/myproject
+
+    // go.mod file:
+    module github.com/username/myproject
+
+    go 1.21
+
+    require (
+        github.com/gin-gonic/gin v1.9.1
+        github.com/stretchr/testify v1.8.4
+    )
+
+    // Add a dependency:   go get github.com/gin-gonic/gin
+    // Remove unused deps: go mod tidy
+
+
+  ── 9.3 Standard Library Highlights ────────────────────────────────────────────
+
+    fmt        // formatted I/O (Println, Printf, Errorf, Sprintf)
+    os         // OS operations (files, env vars, stdin/stdout)
+    io         // I/O primitives (Reader, Writer interfaces)
+    strings    // string manipulation (Contains, Split, ToUpper, etc.)
+    strconv    // string conversions (Atoi, Itoa, ParseFloat)
+    math       // math functions (Abs, Sqrt, Floor, Ceil, Max, Min)
+    sort       // sorting (Ints, Strings, Slice, Search)
+    errors     // error creation and wrapping (New, Is, As)
+    time       // time and duration (Now, Sleep, Since, Format)
+    sync       // synchronization (Mutex, WaitGroup, Once)
+    context    // cancellation and deadlines (Background, WithTimeout)
+    net/http   // HTTP client and server
+    encoding/json // JSON marshal/unmarshal
+    log        // logging
+    testing    // unit testing (T, B, Run)
+    reflect    // runtime reflection
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 10 — fmt PACKAGE (Most Used Functions)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    fmt.Println("Hello")           // print with newline
+    fmt.Print("Hello ")            // print without newline
+    fmt.Printf("Age: %d\n", 25)   // formatted print
+
+    // Sprintf — build string (like Java's String.format)
+    s := fmt.Sprintf("Name: %s, Age: %d", "Alice", 30)
+
+    // Errorf — create formatted error
+    err := fmt.Errorf("file not found: %s", filename)
+
+    // COMMON FORMAT VERBS:
+    // %v  — default format (any value)
+    // %+v — struct with field names
+    // %#v — Go syntax representation
+    // %T  — type of value
+    // %d  — integer (decimal)
+    // %b  — integer (binary)
+    // %x  — integer (hexadecimal)
+    // %f  — float (decimal notation)
+    // %.2f — float with 2 decimal places
+    // %e  — float (scientific notation)
+    // %s  — string
+    // %q  — quoted string
+    // %t  — bool
+    // %p  — pointer address
+    // %c  — character (rune)
+
+    type Person struct{ Name string; Age int }
+    p := Person{"Alice", 30}
+    fmt.Printf("%v\n",  p)   // {Alice 30}
+    fmt.Printf("%+v\n", p)   // {Name:Alice Age:30}
+    fmt.Printf("%#v\n", p)   // main.Person{Name:"Alice", Age:30}
+    fmt.Printf("%T\n",  p)   // main.Person
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 11 — PRACTICAL EXAMPLES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ── Example 1: FizzBuzz ─────────────────────────────────────────────────────────
+
+    package main
+
+    import "fmt"
+
+    func fizzBuzz(n int) string {
+        switch {
+        case n%15 == 0:
+            return "FizzBuzz"
+        case n%3 == 0:
+            return "Fizz"
+        case n%5 == 0:
+            return "Buzz"
+        default:
+            return fmt.Sprintf("%d", n)
+        }
+    }
+
+    func main() {
+        for i := 1; i <= 20; i++ {
+            fmt.Println(fizzBuzz(i))
+        }
+    }
+
+
+  ── Example 2: Fibonacci (multiple approaches) ──────────────────────────────────
+
+    package main
+
+    import "fmt"
+
+    // Recursive
+    func fibRecursive(n int) int {
+        if n <= 1 { return n }
+        return fibRecursive(n-1) + fibRecursive(n-2)
+    }
+
+    // Iterative
+    func fibIterative(n int) int {
+        if n <= 1 { return n }
+        a, b := 0, 1
+        for i := 2; i <= n; i++ {
+            a, b = b, a+b
+        }
+        return b
+    }
+
+    // Generator using closure
+    func fibGenerator() func() int {
+        a, b := 0, 1
+        return func() int {
+            val := a
+            a, b = b, a+b
+            return val
+        }
+    }
+
+    func main() {
+        fmt.Println(fibIterative(10))  // 55
+
+        next := fibGenerator()
+        for i := 0; i < 8; i++ {
+            fmt.Printf("%d ", next())
+        }
+        // 0 1 1 2 3 5 8 13
+    }
+
+
+  ── Example 3: Closures — Counter ───────────────────────────────────────────────
+
+    package main
+
+    import "fmt"
+
+    func makeCounter() func() int {
+        count := 0
+        return func() int {
+            count++
+            return count
+        }
+    }
+
+    func main() {
+        counter1 := makeCounter()
+        counter2 := makeCounter()
+
+        fmt.Println(counter1())  // 1
+        fmt.Println(counter1())  // 2
+        fmt.Println(counter1())  // 3
+        fmt.Println(counter2())  // 1  (independent)
+    }
+
+
+  ── Example 4: Multiple Return Values + Error Handling ──────────────────────────
+
+    package main
+
+    import (
+        "errors"
+        "fmt"
+    )
+
+    var ErrInsufficientFunds = errors.New("insufficient funds")
+
+    func withdraw(balance, amount float64) (float64, error) {
+        if amount <= 0 {
+            return balance, fmt.Errorf("invalid amount: %.2f", amount)
+        }
+        if amount > balance {
+            return balance, fmt.Errorf("withdraw %.2f: %w", amount, ErrInsufficientFunds)
+        }
+        return balance - amount, nil
+    }
+
+    func main() {
+        bal := 100.0
+
+        bal, err := withdraw(bal, 30.0)
+        if err != nil {
+            fmt.Println("Error:", err)
+        } else {
+            fmt.Printf("Balance: %.2f\n", bal)  // 70.00
+        }
+
+        _, err = withdraw(bal, 200.0)
+        if errors.Is(err, ErrInsufficientFunds) {
+            fmt.Println("Cannot withdraw — not enough balance")
+        }
+    }
+
+
+  ── Example 5: iota Enum Pattern ────────────────────────────────────────────────
+
+    package main
+
+    import "fmt"
+
+    type Direction int
+
+    const (
+        North Direction = iota
+        East
+        South
+        West
+    )
+
+    func (d Direction) String() string {
+        return [...]string{"North", "East", "South", "West"}[d]
+    }
+
+    func main() {
+        dir := North
+        fmt.Println(dir)        // North
+        fmt.Println(int(dir))   // 0
+
+        dir = South
+        fmt.Println(dir)        // South
+        fmt.Println(int(dir))   // 2
+    }
+
+
+  ── Example 6: defer for Cleanup ────────────────────────────────────────────────
+
+    package main
+
+    import (
+        "fmt"
+        "os"
+    )
+
+    func writeFile(filename, content string) error {
+        f, err := os.Create(filename)
+        if err != nil {
+            return fmt.Errorf("create file: %w", err)
+        }
+        defer f.Close()  // always closes, even if write fails
+
+        _, err = f.WriteString(content)
+        if err != nil {
+            return fmt.Errorf("write file: %w", err)
+        }
+        return nil
+    }
+
+    func main() {
+        err := writeFile("hello.txt", "Hello, Go!")
+        if err != nil {
+            fmt.Println("Error:", err)
+            os.Exit(1)
+        }
+        fmt.Println("File written successfully")
+    }
+
+
+  ── Example 7: String Manipulation ─────────────────────────────────────────────
+
+    package main
+
+    import (
+        "fmt"
+        "strings"
+    )
+
+    func main() {
+        s := "  Hello, Go World!  "
+
+        fmt.Println(strings.TrimSpace(s))         // "Hello, Go World!"
+        fmt.Println(strings.ToUpper(s))           // "  HELLO, GO WORLD!  "
+        fmt.Println(strings.ToLower(s))           // "  hello, go world!  "
+        fmt.Println(strings.Contains(s, "Go"))    // true
+        fmt.Println(strings.HasPrefix(s, "  H"))  // true
+        fmt.Println(strings.HasSuffix(s, "!  "))  // true
+        fmt.Println(strings.Count(s, "o"))        // 3
+        fmt.Println(strings.Replace(s, "Go", "Golang", 1))
+        fmt.Println(strings.Index(s, "Go"))       // 9
+
+        // Split
+        csv := "Alice,Bob,Charlie"
+        parts := strings.Split(csv, ",")
+        fmt.Println(parts)                        // [Alice Bob Charlie]
+
+        // Join
+        joined := strings.Join(parts, " | ")
+        fmt.Println(joined)                       // Alice | Bob | Charlie
+
+        // Builder (efficient string concat)
+        var sb strings.Builder
+        for i := 0; i < 5; i++ {
+            sb.WriteString(fmt.Sprintf("item%d ", i))
+        }
+        fmt.Println(sb.String())  // item0 item1 item2 item3 item4
+    }
+
+
+  ── Example 8: Panic and Recover ────────────────────────────────────────────────
+
+    package main
+
+    import "fmt"
+
+    func riskyOperation(n int) int {
+        if n == 0 {
+            panic("division by zero")
+        }
+        return 100 / n
+    }
+
+    func safeOperation(n int) (result int, err error) {
+        defer func() {
+            if r := recover(); r != nil {
+                err = fmt.Errorf("caught panic: %v", r)
+            }
+        }()
+        result = riskyOperation(n)
+        return
+    }
+
+    func main() {
+        if res, err := safeOperation(5); err != nil {
+            fmt.Println("Error:", err)
+        } else {
+            fmt.Println("Result:", res)  // Result: 20
+        }
+
+        if res, err := safeOperation(0); err != nil {
+            fmt.Println("Error:", err)   // Error: caught panic: division by zero
+        } else {
+            fmt.Println("Result:", res)
+        }
+    }
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 12 — COMMON PITFALLS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ❌  PITFALL 1: Unused imports and variables are COMPILE ERRORS
+      import "fmt"      // if fmt is never used → compile error
+      x := 5            // if x is never used   → compile error
+      Use _ for intentional discard: _ = x
+
+  ❌  PITFALL 2: := is only for new variables inside functions
+      x := 5            // OK inside function
+      // var x = 5      // required at package level
+
+  ❌  PITFALL 3: No implicit type conversion
+      var i int = 42
+      var f float64 = i  // compile error
+      // ✅  var f float64 = float64(i)
+
+  ❌  PITFALL 4: switch cases don't fall through by default
+      // Java developers often forget this and add unnecessary breaks
+      // In Go, use fallthrough explicitly if needed
+
+  ❌  PITFALL 5: defer uses values at time of CALL, not at time of execution
+      x := 10
+      defer fmt.Println(x)  // prints 10, not 20
+      x = 20
+
+  ❌  PITFALL 6: Goroutine + closure loop variable capture
+      for i := 0; i < 3; i++ {
+          go func() { fmt.Println(i) }()  // may print 3 3 3!
+      }
+      // ✅  pass i as argument:
+      for i := 0; i < 3; i++ {
+          go func(i int) { fmt.Println(i) }(i)
+      }
+
+  ❌  PITFALL 7: Ignoring errors
+      os.Remove("file.txt")         // error silently discarded
+      // ✅  err := os.Remove("file.txt"); if err != nil { ... }
+
+  ✅  BEST PRACTICES:
+      • Always handle errors — never use _ for error returns in production
+      • Use gofmt (or go fmt) to format code — it's mandatory in Go culture
+      • Export only what is needed (capitalize only public APIs)
+      • Prefer short variable names in small scopes (i, v, k, err)
+      • Return early on errors (avoid deep if-else nesting)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 13 — INTERVIEW QUESTIONS & ANSWERS (30 Questions)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q1. What are the main features of Go that distinguish it from Java?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Key differences from Java:
+     - Compiled to native binary (no JVM, no bytecode) — faster startup
+     - No inheritance — composition via struct embedding and interfaces
+     - No exceptions — errors are values returned explicitly
+     - Built-in concurrency with goroutines (~2KB) and channels
+     - Only 25 keywords vs Java's ~50
+     - Implicit interface satisfaction (duck typing)
+     - Multiple return values
+     - defer keyword for cleanup
+     - No constructor — use New... factory functions
+     - Garbage collected (like Java) but with shorter GC pauses
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q2. What is the difference between var x int and x := 0 in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: var x int — declares x at package or function level, type explicit, zero value (0)
+     x := 0     — short declaration, only inside functions, type inferred (int)
+     Both create an int with value 0. The := form is more concise and preferred
+     inside functions. var is required at package level.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q3. What are Go's zero values?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Every variable in Go has a zero value — no uninitialized state exists:
+     int, int8..int64, uint*  → 0
+     float32, float64         → 0.0
+     bool                     → false
+     string                   → ""
+     pointer, slice, map,
+     channel, func, interface → nil
+     struct                   → each field set to its zero value
+     array                    → each element set to its zero value
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q4. How does Go handle errors differently from Java?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Java uses try-catch-finally with checked and unchecked exceptions.
+     Go treats errors as VALUES returned from functions (typically as the last
+     return value). The caller explicitly checks if err != nil.
+     Advantages: errors are visible in function signatures, callers cannot ignore
+     them easily, no hidden control flow jumps.
+     Go does have panic/recover for truly exceptional situations (like Java's
+     RuntimeException) but it's discouraged for normal error handling.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q5. What is the purpose of defer in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: defer schedules a function call to execute when the surrounding function
+     returns (whether normally or via panic). Multiple defers execute in LIFO order.
+     Common uses:
+     - Releasing resources (file.Close(), mutex.Unlock())
+     - Logging function entry/exit
+     - Recovering from panics
+     Key nuance: deferred function arguments are evaluated IMMEDIATELY (at the
+     defer statement), not when the deferred function executes.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q6. What is iota in Go and how is it used?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: iota is a pre-declared identifier available inside const blocks that
+     represents the index of the current constant spec, starting at 0 and
+     incrementing by 1 for each constant in the block.
+     It's used to create auto-incrementing enum-like constants:
+     const (A = iota; B; C) → A=0, B=1, C=2
+     It supports expressions: const (KB = 1<<(10*(iota+1)); MB; GB)
+     iota resets to 0 in each new const block.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q7. How does Go's switch differ from Java's switch?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Key differences:
+     1. No automatic fallthrough — no need for break in each case
+     2. Cases can have multiple values: case "Mon", "Tue":
+     3. Switch without expression = cleaner if-else chain
+     4. Switch with init statement: switch x := val(); x > 0 { ... }
+     5. Type switch: switch v := i.(type) { case int: ... }
+     6. fallthrough keyword explicitly falls to NEXT case body
+     In Java, missing break causes fall-through (a common bug source).
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q8. Why does Go have only one loop keyword (for)?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Go's philosophy is simplicity — one construct replaces while, do-while,
+     for-each, and infinite loops:
+     for { }                    — infinite loop (while true)
+     for condition { }          — while loop
+     for i := 0; i < n; i++ {} — classic for
+     for i, v := range slice {} — for-each
+     for key, val := range map  — map iteration
+     for v := range channel     — channel receive
+     This reduces language complexity without losing expressiveness.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q9. What happens if you declare an unused variable or import in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: COMPILE ERROR. Go enforces:
+     - Every imported package must be used
+     - Every declared variable must be used
+     This prevents dead code accumulation and keeps codebases clean.
+     Use _ (blank identifier) for intentional discard:
+     import _ "pkg"   — import for side effects only
+     _, err := fn()   — discard first return value
+     for _, v := range s — discard index
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q10. What is the blank identifier _ in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: _ is the blank identifier — a special variable that discards any value
+     assigned to it. It can be used:
+     - Discard a return value: _, err := fn()
+     - Discard range index: for _, v := range s
+     - Import for side effects: import _ "net/http/pprof"
+     - Satisfy interface check: var _ MyInterface = (*MyStruct)(nil)
+     It cannot be read from — only written to.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q11. What is the difference between panic and error in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: error — returned value indicating a recoverable failure. Caller decides
+              how to handle it. Used for expected error conditions (file not found,
+              invalid input, network timeout).
+     panic  — stops normal execution, unwinds the stack, runs deferred functions.
+              Like Java's RuntimeException. For truly unrecoverable states or
+              programmer errors (nil pointer, index out of bounds, type assertions
+              that fail).
+     Rule: use error for expected failures, panic only for bugs/impossible states.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q12. What is a closure in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: A closure is a function that captures variables from its surrounding scope.
+     The captured variables persist as long as the closure is alive.
+     func counter() func() int {
+         n := 0
+         return func() int { n++; return n }
+     }
+     c := counter()
+     c()  // 1
+     c()  // 2   — n persists between calls
+     Use cases: callbacks, iterators, memoization, factory functions.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q13. What are multiple return values used for in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Most commonly for (result, error) pairs — the idiomatic Go error pattern.
+     Also used for:
+     - Returning multiple computed values without a struct
+     - Named return values for documentation clarity
+     - Returning status/found flags: val, ok := m[key]
+     - Swap idiom: a, b = b, a
+     Java achieves this with wrapper objects, tuples, or exceptions — Go's
+     approach is more explicit and lightweight.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q14. How is visibility (public/private) controlled in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: By naming convention — no keywords:
+     Uppercase first letter → Exported (public): accessible from any package
+     Lowercase first letter → Unexported (private): only within the same package
+     This applies to functions, types, variables, constants, struct fields,
+     and interface methods.
+     Example: fmt.Println is exported; fmt's internal helper is unexported.
+     Note: Go's "private" is at package level, not struct level (unlike Java).
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q15. What is the difference between fmt.Println, fmt.Printf, and fmt.Sprintf?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: fmt.Println(args...)   — prints with spaces between args, adds newline
+     fmt.Printf(fmt, args..)— formatted print, no automatic newline (\n in format)
+     fmt.Sprintf(fmt, args..)— returns formatted string (no print)
+     fmt.Fprintf(w, fmt, ..)— formatted print to an io.Writer
+     fmt.Errorf(fmt, args..)— creates a formatted error value
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q16. What does the := operator do and when can't you use it?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: := is the short variable declaration — declares AND initializes in one step,
+     with type inferred from the right-hand side.
+     Restrictions:
+     1. Only inside functions (not at package level)
+     2. At least one variable on the left must be NEW
+        a, b := 1, 2    — OK, both new
+        a, b := 3, 4    — ERROR if both a and b already exist
+        a, c := 3, 4    — OK, c is new (a is reassigned)
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q17. What is the init() function in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: init() is a special function that runs automatically before main().
+     It's used for package-level initialization.
+     Rules:
+     - Cannot be called explicitly
+     - Can appear multiple times in a file/package
+     - Runs after all variable initializations in the package
+     - Runs in the order files are presented to the compiler
+     - Each imported package's init() runs before the importing package's init()
+     Common uses: setup connections, register drivers, validate configuration.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q18. Can Go functions be assigned to variables?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Yes — functions are first-class values in Go. They can be:
+     - Assigned to variables: f := func(x int) int { return x*2 }
+     - Passed as arguments: sort.Slice(s, func(i,j int) bool { return s[i]<s[j] })
+     - Returned from functions: factory/builder patterns, closures
+     - Stored in maps: dispatch := map[string]func(){ "run": runFn }
+     Function types include parameter and return types: func(int,int) (int, error)
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q19. What is a variadic function and how do you call it with a slice?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: A variadic function accepts zero or more arguments of a type using ...T.
+     Internally received as a []T slice.
+     func sum(nums ...int) int { ... }
+     Call normally: sum(1, 2, 3)
+     Call with a slice: sum(mySlice...)  — the ... unpacks the slice
+     A variadic parameter must be the last parameter.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q20. What is the difference between new() and make() in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: new(T)      — allocates memory for type T, returns *T (pointer to zero value)
+                   Works for any type. Rarely used directly.
+                   p := new(int)  → *int pointing to 0
+
+     make(T, ...) — allocates AND initializes slices, maps, and channels
+                   Returns the type itself (not a pointer)
+                   make([]int, 5)       → initialized slice
+                   make(map[string]int) → initialized map
+                   make(chan int, 10)   → buffered channel
+     Rule: use make for slice/map/channel; new is rarely needed.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q21. How does Go handle string immutability?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Strings in Go are immutable sequences of bytes (UTF-8). You cannot modify
+     individual bytes: s[0] = 'H' is a compile error.
+     To modify: convert to []byte, modify, convert back:
+     b := []byte(s); b[0] = 'H'; s = string(b)
+     For building strings efficiently, use strings.Builder (avoids repeated
+     allocations unlike repeated + concatenation in a loop).
+     Indexing a string (s[i]) gives a byte, not a rune — use range to iterate
+     Unicode characters correctly.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q22. What is the difference between byte and rune?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: byte  = alias for uint8  — represents a single byte (ASCII character)
+     rune  = alias for int32  — represents a Unicode code point (any character)
+     'A' is both a valid byte (65) and rune.
+     '界' is a valid rune (30028) but not a single byte (it's 3 bytes in UTF-8).
+     Use []byte for binary data / ASCII; []rune for Unicode text processing.
+     len("Hello") = 5 bytes; len("Hello界") = 8 bytes but 6 runes.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q23. What will this code print?
+       func main() {
+           defer fmt.Println("1")
+           defer fmt.Println("2")
+           defer fmt.Println("3")
+           fmt.Println("start")
+       }
+  ──────────────────────────────────────────────────────────────────────────────
+  A: start
+     3
+     2
+     1
+     Defers execute in LIFO (last in, first out) order when the function returns.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q24. How does Go's type system differ from Java's?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Key differences:
+     - No implicit conversions (must cast explicitly)
+     - No class hierarchy — types are independent unless they share an interface
+     - Interface satisfaction is IMPLICIT (no implements keyword)
+     - Type aliases and defined types: type Celsius float64 creates a new type
+       distinct from float64 — they cannot be mixed without conversion
+     - No generics until Go 1.18 (type parameters: func Min[T constraints.Ordered])
+     - Type assertions: i.(string) to extract concrete type from interface
+     - Type switches for safe multi-type dispatch
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q25. What is errors.Is() and errors.As() used for?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Both work with error chains created by fmt.Errorf with %w (wrapped errors).
+     errors.Is(err, target) — checks if err or any error in its chain equals
+                              target. Used for sentinel errors:
+                              errors.Is(err, ErrNotFound)
+
+     errors.As(err, &target) — checks if err or any error in its chain is of a
+                               specific type, and sets target to that value:
+                               var ve *ValidationError
+                               errors.As(err, &ve) → ve now holds the error
+
+     Direct == comparison only checks the top-level error, not the chain.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q26. What will this code output and why?
+       x := 10
+       defer fmt.Println(x)
+       x = 20
+       fmt.Println(x)
+  ──────────────────────────────────────────────────────────────────────────────
+  A: 20
+     10
+     defer's arguments are evaluated IMMEDIATELY at the defer statement.
+     So fmt.Println(x) captures x=10 at defer time.
+     fmt.Println(x) after x=20 prints 20 first (normal execution).
+     Then the deferred call prints 10 when main returns.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q27. What is a named return value and when should you use it?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Named return values declare return variables in the function signature:
+     func divide(a, b float64) (result float64, err error) { ... }
+     A bare "return" statement returns the current values of named variables.
+     Use cases:
+     - Self-documenting return types in complex functions
+     - defer modifying return value (advanced pattern)
+     - Short functions where naked return is clear
+     Avoid for long functions — naked returns reduce readability.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q28. What is a Go module and what does go.mod contain?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: A Go module is a collection of related packages with a defined module path
+     (like Java's groupId:artifactId). go.mod is the module definition file:
+     - module path: module github.com/user/project
+     - minimum Go version: go 1.21
+     - direct dependencies with versions: require ( ... )
+     - replacements and exclusions (optional)
+     go.sum contains cryptographic hashes for dependency verification.
+     Commands: go mod init, go mod tidy, go get, go list -m all
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q29. What are the common format verbs in fmt.Printf?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: %v  — default format         %T  — type name
+     %d  — integer decimal        %b  — integer binary
+     %x  — integer hex            %o  — integer octal
+     %f  — float decimal          %.2f — float 2 decimal places
+     %e  — float scientific       %g  — compact float
+     %s  — string                 %q  — quoted string
+     %t  — bool                   %p  — pointer address
+     %c  — character              %+v — struct with field names
+     %#v — Go syntax repr
+     Width: %5d (right-align, width 5), %-5d (left-align), %05d (zero-pad)
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q30. How do you write a basic unit test in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Test files end in _test.go. Test functions start with Test, receive *testing.T.
+
+     // add.go
+     func Add(a, b int) int { return a + b }
+
+     // add_test.go
+     package main
+
+     import "testing"
+
+     func TestAdd(t *testing.T) {
+         got := Add(2, 3)
+         want := 5
+         if got != want {
+             t.Errorf("Add(2,3) = %d; want %d", got, want)
+         }
+     }
+
+     // Table-driven test (idiomatic Go)
+     func TestAddTable(t *testing.T) {
+         tests := []struct{ a, b, want int }{
+             {1, 2, 3}, {0, 0, 0}, {-1, 1, 0},
+         }
+         for _, tt := range tests {
+             got := Add(tt.a, tt.b)
+             if got != tt.want {
+                 t.Errorf("Add(%d,%d) = %d; want %d", tt.a, tt.b, got, tt.want)
+             }
+         }
+     }
+     Run: go test ./...
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  QUICK REFERENCE CHEAT SHEET
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  DECLARE VAR       var x int = 5   /   x := 5  (inside func)
+  CONSTANT          const Pi = 3.14
+  IOTA              const (A = iota; B; C)   → 0,1,2
+  IF                if x > 0 { }  else if { }  else { }
+  IF + INIT         if v, err := fn(); err == nil { }
+  FOR (C-style)     for i := 0; i < n; i++ { }
+  FOR (while)       for condition { }
+  FOR (infinite)    for { }
+  FOR-RANGE         for i, v := range s { }
+  SWITCH            switch x { case 1: ... default: ... }
+  TYPE SWITCH       switch v := i.(type) { case int: ... }
+  FUNCTION          func name(params) (returns) { }
+  MULTI-RETURN      func f() (int, error) { return val, nil }
+  DEFER             defer cleanup()
+  PANIC             panic("msg")
+  RECOVER           r := recover()  (inside defer)
+  ERROR             if err != nil { return fmt.Errorf("ctx: %w", err) }
+  ERRORS.IS         errors.Is(err, ErrSentinel)
+  ERRORS.AS         errors.As(err, &target)
+  POINTER           p := &x   /   *p = val
+  NEW               p := new(T)
+  MAKE              make([]T, len, cap)
+  EXPORT            Uppercase = exported  /  lowercase = unexported
+  TEST              func TestName(t *testing.T) { t.Errorf("...") }
+  BUILD             go build -o app .
+  RUN               go run main.go
+  FORMAT            go fmt ./...
+  TEST CMD          go test ./...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  NEXT TOPIC SUGGESTIONS:
+  → Go Structs & Methods   (Go's answer to Java classes)
+  → Go Interfaces          (implicit satisfaction, duck typing)
+  → Go Maps                (key-value store)
+  → Go Concurrency         (goroutines, channels, WaitGroup)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
