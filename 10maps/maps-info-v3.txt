@@ -1,0 +1,1409 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 1 — WHAT IS A MAP IN GO?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  A map is an UNORDERED collection of key-value pairs where every key is UNIQUE.
+  It is Go's built-in hash table — equivalent to Java's HashMap<K,V>.
+
+  INTERNAL STRUCTURE:
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  Key   → hashed to determine bucket                              │
+  │  Value → stored in that bucket alongside the key                 │
+  │  Implemented as a hash table (like Java's HashMap)               │
+  │  Load factor triggers rehashing when map grows                   │
+  └──────────────────────────────────────────────────────────────────┘
+
+  KEY CHARACTERISTICS:
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  • Unordered — iteration order is RANDOMIZED by design           │
+  │  • Reference type — assignment shares the same underlying map    │
+  │  • Can be nil (zero value is nil)                                │
+  │  • NOT safe for concurrent reads+writes (use sync.Map or mutex)  │
+  │  • Keys must be COMPARABLE types                                 │
+  │  • Values can be any type                                        │
+  │  • Zero value returned for missing keys (not panic, not error)   │
+  └──────────────────────────────────────────────────────────────────┘
+
+  ⚠️  JAVA vs GO COMPARISON:
+  ┌────────────────────────────────────┬───────────────────────────────────────┐
+  │  Java                              │  Go                                   │
+  ├────────────────────────────────────┼───────────────────────────────────────┤
+  │  HashMap<String, Integer>          │  map[string]int                       │
+  │  new HashMap<>()                   │  make(map[string]int)                 │
+  │  map.put("key", val)               │  m["key"] = val                       │
+  │  map.get("key")                    │  m["key"]                             │
+  │  map.containsKey("key")            │  _, ok := m["key"]                    │
+  │  map.remove("key")                 │  delete(m, "key")                     │
+  │  map.size()                        │  len(m)                               │
+  │  map.entrySet() for loop           │  for k, v := range m { }              │
+  │  map.getOrDefault("k", def)        │  if v, ok := m["k"]; ok { }           │
+  │  LinkedHashMap (insertion order)   │  No built-in ordered map              │
+  │  TreeMap (sorted)                  │  No built-in sorted map               │
+  │  ConcurrentHashMap                 │  sync.Map or mutex-protected map      │
+  │  Returns null for missing key      │  Returns zero value for missing key   │
+  └────────────────────────────────────┴───────────────────────────────────────┘
+
+  VALID KEY TYPES (must be comparable with ==):
+    int, float64, bool, string, pointer, array, struct (if all fields comparable)
+
+  INVALID KEY TYPES (not comparable):
+    slice, map, func  → compile error if used as key
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 2 — DECLARATION & INITIALIZATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ── 2.1 Nil Map (zero value) ────────────────────────────────────────────────────
+
+    var m map[string]int
+    fmt.Println(m)          // map[]
+    fmt.Println(m == nil)   // true
+    fmt.Println(len(m))     // 0
+
+    // ⚠️  Reading from nil map is SAFE — returns zero value
+    fmt.Println(m["key"])   // 0  (no panic)
+
+    // ⚠️  Writing to nil map causes PANIC
+    // m["key"] = 1         // panic: assignment to entry in nil map
+
+
+  ── 2.2 make() — Preferred Initialization ───────────────────────────────────────
+
+    // make(map[KeyType]ValueType)
+    m := make(map[string]int)
+    m["apple"]  = 5
+    m["banana"] = 3
+
+    // make with initial capacity hint (performance optimization)
+    // capacity is a hint — map grows beyond it automatically
+    m2 := make(map[string]int, 100)
+
+
+  ── 2.3 Map Literal ─────────────────────────────────────────────────────────────
+
+    // Declare and initialize with values
+    scores := map[string]int{
+        "Alice":   95,
+        "Bob":     87,
+        "Charlie": 92,
+    }
+    fmt.Println(scores)  // map[Alice:95 Bob:87 Charlie:92]
+
+    // Empty map literal (NOT nil)
+    empty := map[string]int{}
+    fmt.Println(empty == nil)  // false
+
+
+  ── 2.4 Map of Complex Value Types ──────────────────────────────────────────────
+
+    // Map of slices
+    groups := map[string][]string{
+        "fruits":     {"apple", "banana", "cherry"},
+        "vegetables": {"carrot", "broccoli"},
+    }
+
+    // Map of structs
+    type Point struct{ X, Y int }
+    points := map[string]Point{
+        "origin": {0, 0},
+        "top":    {0, 10},
+    }
+
+    // Map of maps (nested)
+    nested := map[string]map[string]int{
+        "math":    {"Alice": 95, "Bob": 80},
+        "science": {"Alice": 88, "Bob": 92},
+    }
+
+    // Map with function values
+    ops := map[string]func(int, int) int{
+        "add": func(a, b int) int { return a + b },
+        "mul": func(a, b int) int { return a * b },
+    }
+    fmt.Println(ops["add"](3, 4))  // 7
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 3 — CRUD OPERATIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ── 3.1 Create / Update ─────────────────────────────────────────────────────────
+
+    m := make(map[string]int)
+
+    // Insert
+    m["apple"]  = 10
+    m["banana"] = 5
+
+    // Update (same syntax as insert)
+    m["apple"] = 20   // overwrites previous value
+    fmt.Println(m)    // map[apple:20 banana:5]
+
+
+  ── 3.2 Read — The Two-Value Idiom ──────────────────────────────────────────────
+
+    m := map[string]int{"apple": 10, "banana": 5}
+
+    // Single-value read — returns zero value if key missing (no error, no panic)
+    v := m["apple"]
+    fmt.Println(v)         // 10
+
+    missing := m["cherry"]
+    fmt.Println(missing)   // 0  ← zero value for int, NOT an error
+
+    // Two-value read — check existence
+    v, ok := m["apple"]
+    fmt.Println(v, ok)     // 10 true
+
+    v, ok = m["cherry"]
+    fmt.Println(v, ok)     // 0 false
+
+    // ✅  ALWAYS use two-value form when you need to distinguish
+    //     "key exists with zero value" from "key does not exist"
+    m["zero"] = 0
+    v1 := m["zero"]       // v1 = 0 — can't tell if key exists
+    v2, ok2 := m["zero"]  // v2 = 0, ok2 = true  ← correct
+
+
+  ── 3.3 Delete ──────────────────────────────────────────────────────────────────
+
+    m := map[string]int{"a": 1, "b": 2, "c": 3}
+
+    delete(m, "b")
+    fmt.Println(m)           // map[a:1 c:3]
+
+    // Delete non-existent key — NO panic, NO error (safe to call always)
+    delete(m, "nonexistent") // silently does nothing
+
+    // Delete all entries (Go 1.21+)
+    clear(m)
+    fmt.Println(len(m))      // 0
+
+    // Pre Go 1.21 — delete all:
+    for k := range m { delete(m, k) }
+
+
+  ── 3.4 Length ──────────────────────────────────────────────────────────────────
+
+    m := map[string]int{"a": 1, "b": 2, "c": 3}
+    fmt.Println(len(m))  // 3
+
+    var nilMap map[string]int
+    fmt.Println(len(nilMap))  // 0  (safe on nil map)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 4 — ITERATING OVER MAPS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    m := map[string]int{"Alice": 95, "Bob": 87, "Charlie": 92}
+
+  ── 4.1 Iterate keys and values ─────────────────────────────────────────────────
+
+    for key, value := range m {
+        fmt.Printf("%s: %d\n", key, value)
+    }
+    // ⚠️  Order is RANDOMIZED every run — do NOT rely on it
+
+
+  ── 4.2 Keys only ───────────────────────────────────────────────────────────────
+
+    for key := range m {
+        fmt.Println(key)
+    }
+
+
+  ── 4.3 Values only ─────────────────────────────────────────────────────────────
+
+    for _, value := range m {
+        fmt.Println(value)
+    }
+
+
+  ── 4.4 Sorted iteration (collect keys, sort, then iterate) ─────────────────────
+
+    import "sort"
+
+    m := map[string]int{"banana": 3, "apple": 5, "cherry": 1}
+
+    keys := make([]string, 0, len(m))
+    for k := range m {
+        keys = append(keys, k)
+    }
+    sort.Strings(keys)
+
+    for _, k := range keys {
+        fmt.Printf("%s: %d\n", k, m[k])
+    }
+    // apple: 5
+    // banana: 3
+    // cherry: 1
+
+
+  ── 4.5 Deleting during iteration ───────────────────────────────────────────────
+
+    m := map[string]int{"a": 1, "b": 2, "c": 3, "d": 4}
+
+    // Safe to delete during range in Go
+    for k, v := range m {
+        if v%2 == 0 {
+            delete(m, k)  // delete even values
+        }
+    }
+    fmt.Println(m)  // map[a:1 c:3]
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 5 — MAPS ARE REFERENCE TYPES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Maps are reference types — assigning or passing copies the map HEADER
+  (a pointer to the underlying hash table), not the data.
+
+  ── 5.1 Assignment shares underlying map ────────────────────────────────────────
+
+    original := map[string]int{"a": 1, "b": 2}
+    reference := original   // both point to same map
+
+    reference["c"] = 3
+    delete(reference, "a")
+
+    fmt.Println(original)   // map[b:2 c:3]  ← changed!
+    fmt.Println(reference)  // map[b:2 c:3]
+
+    // Unlike arrays, maps are NOT copied on assignment
+
+
+  ── 5.2 Passing map to function modifies original ───────────────────────────────
+
+    func addEntry(m map[string]int, key string, val int) {
+        m[key] = val  // modifies the original map
+    }
+
+    func main() {
+        m := map[string]int{"a": 1}
+        addEntry(m, "b", 2)
+        fmt.Println(m)  // map[a:1 b:2]  ← original modified
+    }
+
+
+  ── 5.3 Deep copy a map ─────────────────────────────────────────────────────────
+
+    func copyMap(src map[string]int) map[string]int {
+        dst := make(map[string]int, len(src))
+        for k, v := range src {
+            dst[k] = v
+        }
+        return dst
+    }
+
+    original := map[string]int{"a": 1, "b": 2}
+    copied   := copyMap(original)
+    copied["c"] = 3
+    fmt.Println(original)  // map[a:1 b:2]  unchanged
+    fmt.Println(copied)    // map[a:1 b:2 c:3]
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 6 — MAP PATTERNS & IDIOMS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ── 6.1 Frequency Counter (most common pattern) ─────────────────────────────────
+
+    words := []string{"go", "is", "great", "go", "is", "go"}
+    freq := make(map[string]int)
+
+    for _, word := range words {
+        freq[word]++   // zero value (0) + 1 on first occurrence — elegant!
+    }
+    fmt.Println(freq)  // map[go:3 great:1 is:2]
+
+
+  ── 6.2 Set Implementation ──────────────────────────────────────────────────────
+
+    // Go has no built-in Set — use map[T]bool or map[T]struct{}
+
+    // Using map[string]bool
+    set := make(map[string]bool)
+    set["apple"]  = true
+    set["banana"] = true
+
+    // Check membership
+    if set["apple"] {
+        fmt.Println("apple is in set")
+    }
+
+    // Using map[string]struct{} — more memory-efficient (struct{} takes 0 bytes)
+    set2 := make(map[string]struct{})
+    set2["apple"]  = struct{}{}
+    set2["banana"] = struct{}{}
+
+    // Check membership
+    if _, ok := set2["apple"]; ok {
+        fmt.Println("apple is in set2")
+    }
+
+    // Remove from set
+    delete(set2, "apple")
+
+
+  ── 6.3 Grouping / Bucketing ────────────────────────────────────────────────────
+
+    type Person struct {
+        Name string
+        Dept string
+    }
+
+    people := []Person{
+        {"Alice", "Engineering"},
+        {"Bob", "Marketing"},
+        {"Charlie", "Engineering"},
+        {"Diana", "Marketing"},
+        {"Eve", "Engineering"},
+    }
+
+    // Group by department
+    byDept := make(map[string][]Person)
+    for _, p := range people {
+        byDept[p.Dept] = append(byDept[p.Dept], p)
+    }
+
+    for dept, members := range byDept {
+        fmt.Printf("%s: %v\n", dept, members)
+    }
+    // Engineering: [{Alice} {Charlie} {Eve}]
+    // Marketing:   [{Bob} {Diana}]
+
+
+  ── 6.4 Memoization / Caching ───────────────────────────────────────────────────
+
+    var memo = make(map[int]int)
+
+    func fibMemo(n int) int {
+        if n <= 1 {
+            return n
+        }
+        if v, ok := memo[n]; ok {
+            return v  // return cached result
+        }
+        result := fibMemo(n-1) + fibMemo(n-2)
+        memo[n] = result
+        return result
+    }
+
+
+  ── 6.5 Inverted Index ──────────────────────────────────────────────────────────
+
+    // Reverse a map — swap keys and values
+    original := map[string]int{"alice": 1, "bob": 2, "charlie": 3}
+    inverted := make(map[int]string, len(original))
+
+    for k, v := range original {
+        inverted[v] = k
+    }
+    fmt.Println(inverted)  // map[1:alice 2:bob 3:charlie]
+
+    // ⚠️  Only valid if all values are unique
+
+
+  ── 6.6 Default Value Pattern ───────────────────────────────────────────────────
+
+    // Get value or default (no getOrDefault like Java)
+    func getOrDefault(m map[string]int, key string, def int) int {
+        if v, ok := m[key]; ok {
+            return v
+        }
+        return def
+    }
+
+    m := map[string]int{"a": 10}
+    fmt.Println(getOrDefault(m, "a", 0))    // 10
+    fmt.Println(getOrDefault(m, "b", 99))   // 99
+
+
+  ── 6.7 Word Count ──────────────────────────────────────────────────────────────
+
+    import (
+        "strings"
+    )
+
+    func wordCount(sentence string) map[string]int {
+        counts := make(map[string]int)
+        for _, word := range strings.Fields(sentence) {
+            counts[strings.ToLower(word)]++
+        }
+        return counts
+    }
+
+    wc := wordCount("Go is great and Go is fast")
+    fmt.Println(wc)
+    // map[and:1 fast:1 go:2 great:1 is:2]
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 7 — MAPS WITH STRUCTS AS VALUES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    type Student struct {
+        Name  string
+        Score int
+    }
+
+    students := map[string]Student{
+        "s001": {"Alice", 95},
+        "s002": {"Bob", 87},
+    }
+
+    // Read struct value
+    s := students["s001"]
+    fmt.Println(s.Name, s.Score)  // Alice 95
+
+    // ⚠️  Cannot modify struct field directly in map
+    // students["s001"].Score = 100  // compile error!
+    // Reason: map value is not addressable
+
+    // ✅  Solution 1: copy, modify, reassign
+    s = students["s001"]
+    s.Score = 100
+    students["s001"] = s
+
+    // ✅  Solution 2: use pointer to struct
+    studentsPtr := map[string]*Student{
+        "s001": {"Alice", 95},
+        "s002": {"Bob", 87},
+    }
+    studentsPtr["s001"].Score = 100  // works with pointer!
+    fmt.Println(studentsPtr["s001"])  // &{Alice 100}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 8 — CONCURRENT MAP ACCESS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ⚠️  Go maps are NOT safe for concurrent reads and writes.
+  Concurrent access causes a RUNTIME PANIC (fatal error: concurrent map read/write)
+
+  ── 8.1 sync.Mutex — protect with lock ──────────────────────────────────────────
+
+    import (
+        "fmt"
+        "sync"
+    )
+
+    type SafeMap struct {
+        mu sync.Mutex
+        m  map[string]int
+    }
+
+    func NewSafeMap() *SafeMap {
+        return &SafeMap{m: make(map[string]int)}
+    }
+
+    func (sm *SafeMap) Set(key string, val int) {
+        sm.mu.Lock()
+        defer sm.mu.Unlock()
+        sm.m[key] = val
+    }
+
+    func (sm *SafeMap) Get(key string) (int, bool) {
+        sm.mu.Lock()
+        defer sm.mu.Unlock()
+        v, ok := sm.m[key]
+        return v, ok
+    }
+
+    func main() {
+        sm := NewSafeMap()
+        var wg sync.WaitGroup
+
+        for i := 0; i < 100; i++ {
+            wg.Add(1)
+            go func(i int) {
+                defer wg.Done()
+                sm.Set(fmt.Sprintf("key%d", i), i)
+            }(i)
+        }
+        wg.Wait()
+        fmt.Println("Done, entries:", len(sm.m))
+    }
+
+
+  ── 8.2 sync.RWMutex — better for read-heavy workloads ──────────────────────────
+
+    type RWSafeMap struct {
+        mu sync.RWMutex
+        m  map[string]int
+    }
+
+    func (rm *RWSafeMap) Set(key string, val int) {
+        rm.mu.Lock()          // exclusive write lock
+        defer rm.mu.Unlock()
+        rm.m[key] = val
+    }
+
+    func (rm *RWSafeMap) Get(key string) (int, bool) {
+        rm.mu.RLock()         // shared read lock (multiple readers OK)
+        defer rm.mu.RUnlock()
+        v, ok := rm.m[key]
+        return v, ok
+    }
+
+
+  ── 8.3 sync.Map — built-in concurrent map ──────────────────────────────────────
+
+    import "sync"
+
+    var sm sync.Map
+
+    // Store
+    sm.Store("key1", 100)
+    sm.Store("key2", 200)
+
+    // Load
+    v, ok := sm.Load("key1")
+    if ok {
+        fmt.Println(v.(int))  // 100  (type assertion needed)
+    }
+
+    // LoadOrStore — atomic get-or-set
+    actual, loaded := sm.LoadOrStore("key3", 300)
+    fmt.Println(actual, loaded)  // 300 false (key3 was new)
+
+    // Delete
+    sm.Delete("key1")
+
+    // Iterate
+    sm.Range(func(key, value any) bool {
+        fmt.Println(key, value)
+        return true  // return false to stop iteration
+    })
+
+    // sync.Map is best for:
+    // 1. Read-heavy workloads where keys are written once then read many times
+    // 2. Multiple goroutines modifying disjoint sets of keys
+    // For heavy write workloads, mutex-protected map is often faster
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 9 — PRACTICAL EXAMPLES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ── Example 1: Two Sum (classic interview problem) ──────────────────────────────
+
+    package main
+
+    import "fmt"
+
+    func twoSum(nums []int, target int) (int, int) {
+        seen := make(map[int]int)  // value → index
+        for i, n := range nums {
+            complement := target - n
+            if j, ok := seen[complement]; ok {
+                return j, i
+            }
+            seen[n] = i
+        }
+        return -1, -1
+    }
+
+    func main() {
+        nums := []int{2, 7, 11, 15}
+        i, j := twoSum(nums, 9)
+        fmt.Printf("Indices: %d, %d\n", i, j)  // 0, 1
+    }
+
+
+  ── Example 2: Anagram Check ────────────────────────────────────────────────────
+
+    package main
+
+    import "fmt"
+
+    func isAnagram(s, t string) bool {
+        if len(s) != len(t) {
+            return false
+        }
+        counts := make(map[rune]int)
+        for _, ch := range s {
+            counts[ch]++
+        }
+        for _, ch := range t {
+            counts[ch]--
+            if counts[ch] < 0 {
+                return false
+            }
+        }
+        return true
+    }
+
+    func main() {
+        fmt.Println(isAnagram("listen", "silent"))  // true
+        fmt.Println(isAnagram("hello", "world"))    // false
+    }
+
+
+  ── Example 3: Group Anagrams ───────────────────────────────────────────────────
+
+    package main
+
+    import (
+        "fmt"
+        "sort"
+        "strings"
+    )
+
+    func groupAnagrams(words []string) map[string][]string {
+        groups := make(map[string][]string)
+        for _, word := range words {
+            // Sort letters of word to create a canonical key
+            letters := strings.Split(word, "")
+            sort.Strings(letters)
+            key := strings.Join(letters, "")
+            groups[key] = append(groups[key], word)
+        }
+        return groups
+    }
+
+    func main() {
+        words := []string{"eat", "tea", "tan", "ate", "nat", "bat"}
+        groups := groupAnagrams(words)
+        for _, g := range groups {
+            fmt.Println(g)
+        }
+        // [eat tea ate]
+        // [tan nat]
+        // [bat]
+    }
+
+
+  ── Example 4: LRU Cache Concept (map + list) ───────────────────────────────────
+
+    package main
+
+    import "fmt"
+
+    // Simple fixed-size cache (evicts oldest key when full)
+    type Cache struct {
+        capacity int
+        store    map[string]string
+        order    []string
+    }
+
+    func NewCache(cap int) *Cache {
+        return &Cache{
+            capacity: cap,
+            store:    make(map[string]string),
+            order:    make([]string, 0, cap),
+        }
+    }
+
+    func (c *Cache) Put(key, val string) {
+        if _, exists := c.store[key]; !exists {
+            if len(c.store) >= c.capacity {
+                oldest := c.order[0]
+                c.order = c.order[1:]
+                delete(c.store, oldest)
+            }
+            c.order = append(c.order, key)
+        }
+        c.store[key] = val
+    }
+
+    func (c *Cache) Get(key string) (string, bool) {
+        v, ok := c.store[key]
+        return v, ok
+    }
+
+    func main() {
+        cache := NewCache(3)
+        cache.Put("a", "alpha")
+        cache.Put("b", "beta")
+        cache.Put("c", "gamma")
+        cache.Put("d", "delta")  // evicts "a"
+
+        if v, ok := cache.Get("a"); ok {
+            fmt.Println(v)
+        } else {
+            fmt.Println("a evicted")  // prints this
+        }
+        fmt.Println(cache.store)  // map[b:beta c:gamma d:delta]
+    }
+
+
+  ── Example 5: Map Reduce Pattern ───────────────────────────────────────────────
+
+    package main
+
+    import "fmt"
+
+    type Employee struct {
+        Name   string
+        Dept   string
+        Salary int
+    }
+
+    func main() {
+        employees := []Employee{
+            {"Alice", "Eng", 90000},
+            {"Bob", "Mkt", 70000},
+            {"Charlie", "Eng", 85000},
+            {"Diana", "Mkt", 72000},
+            {"Eve", "Eng", 95000},
+        }
+
+        // Total salary by department
+        deptTotal := make(map[string]int)
+        deptCount := make(map[string]int)
+        for _, e := range employees {
+            deptTotal[e.Dept] += e.Salary
+            deptCount[e.Dept]++
+        }
+
+        // Average salary by department
+        for dept, total := range deptTotal {
+            avg := total / deptCount[dept]
+            fmt.Printf("%s: avg salary = $%d\n", dept, avg)
+        }
+        // Eng: avg salary = $90000
+        // Mkt: avg salary = $71000
+    }
+
+
+  ── Example 6: Graph Adjacency List ─────────────────────────────────────────────
+
+    package main
+
+    import "fmt"
+
+    type Graph struct {
+        adjacency map[string][]string
+    }
+
+    func NewGraph() *Graph {
+        return &Graph{adjacency: make(map[string][]string)}
+    }
+
+    func (g *Graph) AddEdge(from, to string) {
+        g.adjacency[from] = append(g.adjacency[from], to)
+        g.adjacency[to]   = append(g.adjacency[to], from)
+    }
+
+    func (g *Graph) BFS(start string) []string {
+        visited := make(map[string]bool)
+        queue   := []string{start}
+        result  := []string{}
+
+        for len(queue) > 0 {
+            node := queue[0]
+            queue = queue[1:]
+            if visited[node] {
+                continue
+            }
+            visited[node] = true
+            result = append(result, node)
+            for _, neighbor := range g.adjacency[node] {
+                if !visited[neighbor] {
+                    queue = append(queue, neighbor)
+                }
+            }
+        }
+        return result
+    }
+
+    func main() {
+        g := NewGraph()
+        g.AddEdge("A", "B")
+        g.AddEdge("A", "C")
+        g.AddEdge("B", "D")
+        g.AddEdge("C", "D")
+        fmt.Println(g.BFS("A"))  // [A B C D]
+    }
+
+
+  ── Example 7: Configuration Store ─────────────────────────────────────────────
+
+    package main
+
+    import (
+        "fmt"
+        "strconv"
+    )
+
+    type Config struct {
+        data map[string]string
+    }
+
+    func NewConfig(pairs ...string) *Config {
+        c := &Config{data: make(map[string]string)}
+        for i := 0; i+1 < len(pairs); i += 2 {
+            c.data[pairs[i]] = pairs[i+1]
+        }
+        return c
+    }
+
+    func (c *Config) GetString(key, def string) string {
+        if v, ok := c.data[key]; ok {
+            return v
+        }
+        return def
+    }
+
+    func (c *Config) GetInt(key string, def int) int {
+        if v, ok := c.data[key]; ok {
+            if n, err := strconv.Atoi(v); err == nil {
+                return n
+            }
+        }
+        return def
+    }
+
+    func main() {
+        cfg := NewConfig(
+            "host", "localhost",
+            "port", "8080",
+            "debug", "true",
+        )
+        fmt.Println(cfg.GetString("host", "unknown"))  // localhost
+        fmt.Println(cfg.GetInt("port", 3000))          // 8080
+        fmt.Println(cfg.GetString("timeout", "30s"))   // 30s (default)
+    }
+
+
+  ── Example 8: Counting Unique Elements and Intersect ───────────────────────────
+
+    package main
+
+    import "fmt"
+
+    func intersection(a, b []int) []int {
+        setA := make(map[int]struct{})
+        for _, v := range a {
+            setA[v] = struct{}{}
+        }
+        result := []int{}
+        seen   := make(map[int]bool)
+        for _, v := range b {
+            if _, ok := setA[v]; ok && !seen[v] {
+                result = append(result, v)
+                seen[v] = true
+            }
+        }
+        return result
+    }
+
+    func union(a, b []int) []int {
+        set := make(map[int]struct{})
+        for _, v := range a { set[v] = struct{}{} }
+        for _, v := range b { set[v] = struct{}{} }
+        result := make([]int, 0, len(set))
+        for k := range set {
+            result = append(result, k)
+        }
+        return result
+    }
+
+    func main() {
+        a := []int{1, 2, 3, 4, 5}
+        b := []int{3, 4, 5, 6, 7}
+        fmt.Println(intersection(a, b))  // [3 4 5]
+        fmt.Println(union(a, b))         // [1 2 3 4 5 6 7] (any order)
+    }
+
+
+  ── Example 9: Nested Map — Student Grades ──────────────────────────────────────
+
+    package main
+
+    import "fmt"
+
+    func main() {
+        // map[student]map[subject]grade
+        grades := make(map[string]map[string]int)
+
+        // Safe nested map insertion
+        addGrade := func(student, subject string, grade int) {
+            if _, ok := grades[student]; !ok {
+                grades[student] = make(map[string]int)
+            }
+            grades[student][subject] = grade
+        }
+
+        addGrade("Alice", "Math", 95)
+        addGrade("Alice", "Science", 88)
+        addGrade("Bob",   "Math", 78)
+        addGrade("Bob",   "Science", 92)
+
+        // Print all grades
+        for student, subjects := range grades {
+            fmt.Printf("%s:\n", student)
+            for subject, grade := range subjects {
+                fmt.Printf("  %s: %d\n", subject, grade)
+            }
+        }
+
+        // Average per student
+        for student, subjects := range grades {
+            total := 0
+            for _, g := range subjects {
+                total += g
+            }
+            fmt.Printf("%s average: %.1f\n", student,
+                float64(total)/float64(len(subjects)))
+        }
+    }
+
+
+  ── Example 10: Map as Dispatch Table ───────────────────────────────────────────
+
+    package main
+
+    import (
+        "fmt"
+        "strings"
+    )
+
+    func main() {
+        // Replaces large if-else or switch chains
+        commands := map[string]func(string) string{
+            "upper":   strings.ToUpper,
+            "lower":   strings.ToLower,
+            "reverse": func(s string) string {
+                r := []rune(s)
+                for i, j := 0, len(r)-1; i < j; i, j = i+1, j-1 {
+                    r[i], r[j] = r[j], r[i]
+                }
+                return string(r)
+            },
+            "length": func(s string) string {
+                return fmt.Sprintf("%d", len(s))
+            },
+        }
+
+        inputs := []struct{ cmd, text string }{
+            {"upper", "hello"},
+            {"reverse", "golang"},
+            {"length", "interview"},
+        }
+
+        for _, input := range inputs {
+            if fn, ok := commands[input.cmd]; ok {
+                fmt.Printf("%s(%q) = %q\n", input.cmd, input.text, fn(input.text))
+            }
+        }
+        // upper("hello")     = "HELLO"
+        // reverse("golang")  = "gnalog"
+        // length("interview")= "9"
+    }
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 10 — COMMON PITFALLS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ❌  PITFALL 1: Writing to a nil map → runtime PANIC
+      var m map[string]int
+      m["key"] = 1             // panic: assignment to entry in nil map
+      // ✅  m := make(map[string]int)
+
+  ❌  PITFALL 2: Not using two-value form for existence check
+      v := m["missing"]        // v = 0 — can't tell if key exists
+      // ✅  v, ok := m["missing"]
+
+  ❌  PITFALL 3: Relying on map iteration order
+      for k, v := range m { } // order is RANDOM every run
+      // ✅  sort keys first if order matters
+
+  ❌  PITFALL 4: Modifying struct fields directly in map
+      m["key"].Field = val     // compile error — not addressable
+      // ✅  copy, modify, reassign  OR  use map[key]*Struct
+
+  ❌  PITFALL 5: Concurrent map access without synchronization
+      go func() { m["k"] = 1 }()   // data race → runtime panic
+      go func() { _ = m["k"] }()
+      // ✅  use sync.Mutex, sync.RWMutex, or sync.Map
+
+  ❌  PITFALL 6: Using slice/map/func as map key
+      m := map[[]int]string{}  // compile error: invalid map key type []int
+      // ✅  use arrays [N]int or convert to string key
+
+  ❌  PITFALL 7: Forgetting to initialize nested map
+      grades := make(map[string]map[string]int)
+      grades["Alice"]["Math"] = 95   // panic! inner map is nil
+      // ✅  check and init inner map first:
+      //    if grades["Alice"] == nil { grades["Alice"] = make(map[string]int) }
+
+  ✅  BEST PRACTICES:
+      • Always use make() or literal {} — never write to a nil map
+      • Use two-value idiom for all existence checks
+      • Use map[T]struct{} for memory-efficient sets (not map[T]bool)
+      • Pre-size with make(map[K]V, n) when count is known
+      • Protect shared maps with sync.RWMutex or sync.Map in goroutines
+      • Use pointer values (map[K]*V) when you need to mutate struct fields
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 11 — INTERVIEW QUESTIONS & ANSWERS (30 Questions)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q1. What is a map in Go? How does it compare to Java's HashMap?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: A Go map is a built-in unordered hash table mapping unique keys to values.
+     Compared to Java's HashMap:
+     - Syntax: map[K]V vs HashMap<K,V>
+     - Assignment is m[k]=v vs map.put(k,v)
+     - Reading returns zero value (not null) for missing keys
+     - Two-value idiom v,ok := m[k] replaces containsKey()/get()
+     - No LinkedHashMap/TreeMap equivalents built in
+     - Not thread-safe (sync.Map or mutex needed vs ConcurrentHashMap)
+     - map[T]struct{} pattern for sets (no built-in Set type)
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q2. What is the zero value of a map and what operations are safe on it?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Zero value is nil (var m map[string]int → m is nil).
+     Safe on nil map: reading (returns zero value), len() (returns 0),
+     range (zero iterations), delete (no-op).
+     UNSAFE: writing → panic: assignment to entry in nil map.
+     Always initialize with make() or a literal before writing.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q3. What is the two-value idiom for maps and why is it important?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: v, ok := m[key]
+     ok is true if the key exists, false if it doesn't.
+     v is the value if key exists, or the zero value if it doesn't.
+     Critical because single-value read m[key] returns zero value for
+     BOTH a missing key AND a key with zero value stored:
+     m["x"] = 0 → m["x"] is 0, same as missing key.
+     Only two-value form distinguishes these cases.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q4. Is map iteration order guaranteed in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: No. Iteration order is deliberately RANDOMIZED in each run (since Go 1.0).
+     This prevents developers from accidentally relying on hash order.
+     To iterate in a predictable order: extract keys into a slice,
+     sort the slice, then iterate using the sorted keys to access map values.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q5. What types can be used as map keys in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Any COMPARABLE type (supports == operator):
+     Valid: bool, int, float, complex, string, pointer, array, struct
+            (if all fields are comparable), interface
+     Invalid: slice, map, func — using these causes a compile error.
+     Note: array [3]int is valid; slice []int is NOT.
+     For struct keys: ALL fields must be comparable.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q6. What happens when you read a missing key from a map?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: No panic, no error — Go returns the ZERO VALUE for the value type:
+     map[string]int    → 0
+     map[string]string → ""
+     map[string]bool   → false
+     map[string]*Struct → nil
+     This is why the two-value idiom (v, ok := m[k]) is essential when
+     you need to distinguish "key missing" from "key has zero value".
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q7. How do you delete a key from a map? What if the key doesn't exist?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: delete(m, key) — built-in function.
+     Deleting a non-existent key is completely safe — no panic, no error.
+     In Go 1.21+, clear(m) removes ALL entries at once.
+     Pre Go 1.21: for k := range m { delete(m, k) }
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q8. Are maps reference types or value types in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Maps are REFERENCE types. The map variable holds a pointer (header) to
+     the underlying hash table. Assignment copies the header, not the data.
+     So: b := a means both b and a point to the same map.
+     Modifying via b affects a and vice versa.
+     To deep copy: iterate and copy entries manually or use maps.Clone() (Go 1.21).
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q9. How do you implement a Set in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Go has no built-in Set type. Two common approaches:
+     1. map[T]bool — simple, readable:
+        set["apple"] = true; if set["apple"] { ... }
+     2. map[T]struct{} — memory efficient (struct{} is 0 bytes):
+        set["apple"] = struct{}{}; if _, ok := set["apple"]; ok { ... }
+     struct{} is preferred in performance-sensitive code since bool takes 1 byte.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q10. Are Go maps safe for concurrent use?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: No. Concurrent reads+writes (or concurrent writes) cause a runtime panic:
+     "fatal error: concurrent map read and map write"
+     Solutions:
+     1. sync.Mutex — wrap all reads and writes
+     2. sync.RWMutex — allow concurrent reads, exclusive writes (read-heavy)
+     3. sync.Map — built-in concurrent map, best for specific patterns
+     4. Channel-based serialization
+     Multiple concurrent READS without any writes are safe.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q11. When should you use sync.Map vs a mutex-protected map?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: sync.Map is optimized for two cases:
+     1. Keys are written once and read many times (e.g., registry/cache)
+     2. Multiple goroutines modify disjoint sets of keys (no key contention)
+     sync.Map uses interface{} values (requires type assertion on Load).
+     Mutex-protected map is simpler, faster for write-heavy workloads,
+     and type-safe. Default to mutex unless you have a proven concurrent use case.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q12. How do you count frequency of elements using a map?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: The zero-value default enables an elegant pattern:
+     freq := make(map[string]int)
+     for _, word := range words { freq[word]++ }
+     On first occurrence, freq[word] is 0 (zero value), so 0++ = 1.
+     No need to check if key exists before incrementing — it just works.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q13. Can you modify a struct field stored as a map value directly?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: No. Map values are NOT addressable, so m["key"].Field = val is a compile error.
+     Solutions:
+     1. Copy → modify → reassign:
+        s := m["key"]; s.Field = val; m["key"] = s
+     2. Store pointers: map[string]*Struct — then m["key"].Field = val works
+        because you're modifying via the pointer, not the map value directly.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q14. What is the output of this code?
+       m := map[string]int{"a": 1, "b": 2}
+       v := m["c"]
+       fmt.Println(v)
+  ──────────────────────────────────────────────────────────────────────────────
+  A: 0
+     "c" doesn't exist in the map. Reading a missing key returns the zero value
+     for the value type, which is 0 for int. No panic, no error.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q15. How do you iterate over a map in sorted key order?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Collect keys into a slice, sort it, then access map values:
+     keys := make([]string, 0, len(m))
+     for k := range m { keys = append(keys, k) }
+     sort.Strings(keys)
+     for _, k := range keys { fmt.Println(k, m[k]) }
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q16. What is the difference between make(map[K]V) and map[K]V{}?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Both create an initialized, empty, non-nil map ready for use.
+     make(map[K]V)    — idiomatic when you're adding entries dynamically
+     make(map[K]V, n) — same but with capacity hint n for performance
+     map[K]V{}        — idiomatic for inline initialization, possibly with values
+     Both are equivalent for an empty map. Use make when you know the
+     approximate size upfront; use literal {} for small, known-value maps.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q17. What happens when you delete a key during map iteration?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Safe in Go. The specification guarantees that deleting a key during range
+     will not cause a panic. The deleted key won't appear in subsequent
+     iterations. Keys added during iteration may or may not appear.
+     Common pattern: filter-delete during range:
+     for k, v := range m { if v < 0 { delete(m, k) } }
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q18. How would you invert a map (swap keys and values)?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: inverted := make(map[V]K, len(original))
+     for k, v := range original { inverted[v] = k }
+     Important: only valid when all VALUES are unique. If multiple keys share
+     a value, only the last key processed will appear in the inverted map
+     (overwritten silently). Always validate uniqueness first if unsure.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q19. How do you check if two maps are equal in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: No built-in == for maps (compile error). Options:
+     1. reflect.DeepEqual(m1, m2) — works for all types, uses reflection
+     2. Manual comparison:
+        if len(m1) != len(m2) { return false }
+        for k, v := range m1 {
+            if v2, ok := m2[k]; !ok || v2 != v { return false }
+        }
+     3. Go 1.21+: maps.Equal(m1, m2) from the "maps" package
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q20. What are the performance characteristics of Go maps?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Average case (hash table):
+     Lookup:  O(1)
+     Insert:  O(1) amortized (occasional rehash on growth)
+     Delete:  O(1)
+     Iterate: O(n)
+     Worst case with hash collisions: O(n) per operation (rare).
+     Memory: grows in chunks; capacity hint in make() avoids rehashing.
+     Map operations have higher constant factor than slice indexing due to
+     hashing overhead. For tight loops over small data, consider slice of pairs.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q21. Can you use a struct as a map key?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Yes, IF all struct fields are comparable.
+     type Point struct { X, Y int }
+     grid := map[Point]string{ {1,2}: "A", {3,4}: "B" }
+     Works because int is comparable.
+     If the struct contains a slice, map, or func field: compile error.
+     Useful for multi-dimensional keys (grid coordinates, composite keys).
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q22. How does map capacity hint work in make()?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: make(map[K]V, n) — the second arg is a capacity HINT, not a hard limit.
+     The map pre-allocates enough buckets to hold ~n entries without rehashing.
+     The map still grows beyond n automatically.
+     Benefit: if you know you'll insert ~1000 entries, pre-sizing avoids
+     multiple rehash cycles — measurable improvement in tight loops.
+     Unlike slices, there is no cap() function for maps.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q23. Write a function to find the most frequent element in a slice using a map.
+  ──────────────────────────────────────────────────────────────────────────────
+  A: func mostFrequent(nums []int) int {
+         freq := make(map[int]int)
+         for _, v := range nums { freq[v]++ }
+         maxVal, maxCount := 0, 0
+         for val, count := range freq {
+             if count > maxCount {
+                 maxCount = count
+                 maxVal = val
+             }
+         }
+         return maxVal
+     }
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q24. What is a dispatch table pattern using maps?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: A map from string (or any comparable type) to function values.
+     Replaces large if-else or switch chains with O(1) lookup.
+     ops := map[string]func(int,int) int{
+         "add": func(a,b int) int { return a+b },
+         "sub": func(a,b int) int { return a-b },
+     }
+     result := ops["add"](3, 4)  // 7
+     Commonly used in: command parsers, HTTP route handlers, plugin systems.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q25. What new map utilities were added in Go 1.21?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Go 1.21 added the "maps" package with generic utilities:
+     maps.Clone(m)           — shallow copy of a map
+     maps.Copy(dst, src)     — copy all entries from src to dst
+     maps.Equal(m1, m2)      — true if maps have same key-value pairs
+     maps.Keys(m)            — returns all keys as a slice
+     maps.Values(m)          — returns all values as a slice
+     maps.DeleteFunc(m, fn)  — delete entries where fn returns true
+     Also: clear(m) builtin removes all entries (replaces for-range delete loop).
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q26. How do you safely access nested maps?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Check and initialize each level before writing:
+     outer := make(map[string]map[string]int)
+     // Safe write to nested map:
+     if outer["alice"] == nil {
+         outer["alice"] = make(map[string]int)
+     }
+     outer["alice"]["math"] = 95
+     For reading: use two-value form at each level:
+     if inner, ok := outer["alice"]; ok {
+         if score, ok := inner["math"]; ok { fmt.Println(score) }
+     }
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q27. What is the difference between map[string]bool and map[string]struct{}
+       for implementing a set?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: map[string]bool:
+     - Simple: set["a"] = true; if set["a"] { }
+     - Uses 1 byte per entry for the bool value
+     - Risk: set["a"] = false might cause confusion (key exists but "not in set")
+
+     map[string]struct{}:
+     - struct{} has zero size (0 bytes) — more memory efficient at scale
+     - Explicit existence check: _, ok := set["a"]; if ok { }
+     - Cannot accidentally store "false" — key either exists or it doesn't
+     - Idiomatic Go for sets, especially in performance-sensitive code
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q28. What is the output?
+       m1 := map[string]int{"a": 1}
+       m2 := m1
+       m2["b"] = 2
+       fmt.Println(len(m1))
+  ──────────────────────────────────────────────────────────────────────────────
+  A: 2
+     m2 := m1 copies the map HEADER (pointer), not the data.
+     Both m1 and m2 point to the same underlying hash table.
+     Adding "b" via m2 is visible through m1 as well.
+     This is the key difference from arrays (which are value types).
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q29. How would you implement memoization using a map in Go?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: var cache = make(map[int]int)
+     func fib(n int) int {
+         if n <= 1 { return n }
+         if v, ok := cache[n]; ok { return v }
+         result := fib(n-1) + fib(n-2)
+         cache[n] = result
+         return result
+     }
+     The two-value idiom (v, ok) is essential — without it you can't distinguish
+     a cached result of 0 from a cache miss. For concurrent use: add a mutex.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Q30. How does Go detect concurrent map access violations?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: Since Go 1.6, the runtime includes a built-in concurrent access detector
+     for maps. If a goroutine is writing to a map while another goroutine reads
+     OR writes, the runtime throws a fatal non-recoverable error:
+     "fatal error: concurrent map read and map write"
+     This cannot be caught with recover() — it terminates the program.
+     Detection uses a lightweight flag in the map header checked on every access.
+     Use go test -race to catch data races during testing — the race detector
+     provides detailed goroutine stack traces showing the conflicting accesses.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  QUICK REFERENCE CHEAT SHEET
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  DECLARE NIL        var m map[K]V
+  MAKE               m := make(map[K]V)
+  MAKE + HINT        m := make(map[K]V, 100)
+  LITERAL            m := map[K]V{k1: v1, k2: v2}
+  INSERT/UPDATE      m[key] = value
+  READ               v := m[key]           (zero value if missing)
+  READ + CHECK       v, ok := m[key]       (ok=false if missing)
+  DELETE             delete(m, key)         (safe on missing key)
+  DELETE ALL (1.21)  clear(m)
+  LENGTH             len(m)
+  ITERATE            for k, v := range m { }
+  KEYS ONLY          for k := range m { }
+  SORTED ITER        sort keys slice first, then loop
+  NIL CHECK          m == nil
+  FREQUENCY          freq[k]++              (zero default = 0)
+  SET (bool)         set[k] = true
+  SET (efficient)    set[k] = struct{}{}
+  IN SET             _, ok := set[k]
+  COPY (manual)      for k,v := range src { dst[k]=v }
+  COPY (1.21)        maps.Clone(m)
+  EQUAL (1.21)       maps.Equal(m1, m2)
+  CONCURRENT         sync.Mutex / sync.RWMutex / sync.Map
+  RACE DETECT        go test -race ./...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

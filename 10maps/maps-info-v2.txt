@@ -1,0 +1,192 @@
+Go Maps in Golang
+=======================================================================
+
+1. Introduction
+---------------
+- Maps are Go's built-in unordered key-value store (hash table).
+- Keys must be comparable types (string, int, float, bool, struct/array with comparable fields, pointer, channel, interface).
+- NOT allowed as keys: slices, maps, functions.
+- Values can be any type.
+- Maps are reference types (nil by default).
+- Average O(1) for insert, lookup, delete.
+- Iteration order is intentionally random (even in same insertion order).
+- Go 1.24 introduced a new Swiss Tables-based map implementation for better performance.
+
+2. Declaration & Initialization
+-------------------------------
+var m map[string]int          // nil map → cannot write (panic)
+m = make(map[string]int)      // empty map
+m = make(map[string]int, 100) // with capacity hint (performance)
+
+m := map[string]int{}                         // empty literal
+m := map[string]int{"apple": 5, "banana": 3}  // with data
+
+Important: Never write to a nil map.
+m["key"] = 1   // panic: assignment to entry in nil map
+
+3. Basic Operations
+-------------------
+m["apple"] = 10                  // insert or update
+v := m["apple"]                  // read (returns zero value if missing)
+v, ok := m["apple"]              // comma-ok idiom (recommended)
+delete(m, "apple")               // safe even if key doesn't exist
+len(m)                           // number of pairs
+clear(m)                         // remove all entries (Go 1.21+)
+
+Reading from nil map is safe (returns zero value).
+
+4. Iteration
+------------
+for k, v := range m {
+    fmt.Println(k, v)
+}
+
+To iterate in sorted key order:
+keys := make([]string, 0, len(m))
+for k := range m {
+    keys = append(keys, k)
+}
+sort.Strings(keys)
+for _, k := range keys {
+    fmt.Println(k, m[k])
+}
+
+5. Useful Examples
+
+Example 1: Basic usage + maps package
+-------------------------------------
+package main
+import (
+    "fmt"
+    "maps"
+    "sort"
+)
+
+func main() {
+    m := make(map[string]int)
+    m["one"] = 1
+    m["two"] = 2
+
+    fmt.Println(m)                    // map[one:1 two:2]
+    v, ok := m["three"]
+    fmt.Println(v, ok)                // 0 false
+
+    delete(m, "two")
+    clear(m)
+
+    // Go 1.23+ iterator functions
+    scores := map[string]int{"Alice": 95, "Bob": 87}
+    for k, v := range maps.All(scores) {
+        fmt.Printf("%s: %d\n", k, v)
+    }
+    for k := range maps.Keys(scores) {
+        fmt.Println(k)
+    }
+}
+
+Example 2: Map as a Set
+-----------------------
+set := make(map[string]struct{})
+set["golang"] = struct{}{}
+if _, exists := set["golang"]; exists {
+    fmt.Println("exists")
+}
+
+Example 3: Map of slices (append works on missing key)
+------------------------------------------------------
+likes := make(map[string][]string)
+likes["go"] = append(likes["go"], "Alice", "Bob")
+
+Example 4: Struct as key
+------------------------
+type Point struct{ X, Y int }
+points := make(map[Point]bool)
+points[Point{1, 2}] = true
+
+Example 5: Copy a map (Go 1.21+)
+--------------------------------
+original := map[string]int{"a": 1}
+copyMap := maps.Clone(original)
+
+6. maps Package (std lib)
+-------------------------
+import "maps"
+
+maps.Clone(m)                    // shallow copy
+maps.Copy(dst, src)              // copy entries
+maps.Equal(m1, m2)               // deep equality
+maps.DeleteFunc(m, func(k string, v int) bool { return v < 0 })
+maps.All(m)      // iterator over key-value pairs (Go 1.23+)
+maps.Keys(m)     // iterator over keys
+maps.Values(m)   // iterator over values
+maps.Insert(m, seq)              // insert from iterator
+maps.Collect(seq)                // create map from iterator
+
+7. Concurrency
+--------------
+Maps are NOT safe for concurrent read/write.
+Use sync.RWMutex or sync.Map for concurrent access.
+
+Safe pattern with mutex:
+type SafeMap struct {
+    sync.RWMutex
+    m map[string]int
+}
+
+8. Common Gotchas & Best Practices
+----------------------------------
+- Always initialize before writing (make or literal).
+- Use comma-ok to distinguish missing key vs zero value.
+- Deleting during iteration is safe.
+- Capacity hint in make() helps reduce reallocations.
+- For large maps, consider pre-allocating with reasonable capacity.
+- Prefer maps package functions over manual loops when possible.
+
+9. Interview Questions & Answers
+--------------------------------
+Q1. What is the zero value of a map?
+A: nil. You cannot write to a nil map.
+
+Q2. How do you check if a key exists in a map?
+A: value, ok := m[key]
+
+Q3. What happens when you read a non-existent key?
+A: Returns the zero value of the value type. Use comma-ok to detect absence.
+
+Q4. Are maps ordered?
+A: No. Iteration order is random by design (changed in every run for security).
+
+Q5. Can you use a slice as a map key?
+A: No, slices are not comparable.
+
+Q6. How do you delete all entries from a map?
+A: clear(m) since Go 1.21, or reassign m = make(map[K]V)
+
+Q7. Are maps concurrency safe?
+A: No. Use mutex or sync.Map.
+
+Q8. Difference between nil map and empty map?
+A: Nil map cannot be written to. Empty map (make or {}) can.
+
+Q9. How to copy a map?
+A: maps.Clone(m) or manual loop with make + copy.
+
+Q10. Explain how to implement a Set in Go.
+A: map[T]struct{}  (struct{} has zero size)
+
+Q11. What changed in maps in Go 1.23?
+A: New iterator functions: maps.All, Keys, Values, Insert, Collect.
+
+Q12. What changed in maps in Go 1.24?
+A: New Swiss Tables implementation → better performance for modifications and iteration.
+
+Q13. Safe way to iterate and delete from a map?
+A: for k := range m { if condition(k) { delete(m, k) } }
+
+Q14. Can struct be used as map key?
+A: Yes, if all fields are comparable types.
+
+Q15. How does capacity hint in make(map) help?
+A: Reduces number of hash table resizes when you know approximate size in advance.
+
+============

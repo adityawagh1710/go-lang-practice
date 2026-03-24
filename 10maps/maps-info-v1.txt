@@ -1,0 +1,245 @@
+GO LANGUAGE – MAPS
+======================================================================
+
+1. INTRODUCTION TO MAPS
+-----------------------
+A map in Go is a collection of key-value pairs.
+
+- Similar to HashMap (Java) or Object (JavaScript)
+- Keys must be UNIQUE
+- Keys must be of comparable types (int, string, bool, etc.)
+
+Syntax:
+map[keyType]valueType
+
+Example:
+map[string]int
+
+--------------------------------------------------------------------------
+
+2. DECLARING MAPS
+-----------------
+
+Method 1: Using make()
+m := make(map[string]int)
+
+Method 2: Map literal
+m := map[string]int{
+    "a": 1,
+    "b": 2,
+}
+
+Method 3: Empty map
+var m map[string]int   // nil map (IMPORTANT)
+
+--------------------------------------------------------------------------
+
+3. ADDING & UPDATING VALUES
+---------------------------
+
+m := make(map[string]int)
+
+m["age"] = 25
+m["age"] = 30   // update
+
+--------------------------------------------------------------------------
+
+4. ACCESSING VALUES
+-------------------
+
+value := m["age"]
+
+NOTE:
+If key does NOT exist → returns ZERO VALUE
+
+Example:
+m := map[string]int{}
+fmt.Println(m["unknown"])   // 0
+
+--------------------------------------------------------------------------
+
+5. CHECK IF KEY EXISTS ⭐
+------------------------
+
+value, ok := m["age"]
+
+if ok {
+    fmt.Println("Key exists:", value)
+} else {
+    fmt.Println("Key not found")
+}
+
+--------------------------------------------------------------------------
+
+6. DELETE KEY
+-------------
+
+delete(m, "age")
+
+--------------------------------------------------------------------------
+
+7. MAP LENGTH
+-------------
+
+len(m)
+
+--------------------------------------------------------------------------
+
+8. ITERATING MAP
+----------------
+
+m := map[string]int{
+    "a": 1,
+    "b": 2,
+}
+
+for key, value := range m {
+    fmt.Println(key, value)
+}
+
+--------------------------------------------------------------------------
+
+9. NIL MAP vs EMPTY MAP ⚠️ IMPORTANT
+------------------------------------
+
+var m map[string]int   // nil map
+
+m["a"] = 1   // ❌ PANIC (assignment to entry in nil map)
+
+Correct:
+m := make(map[string]int)
+
+--------------------------------------------------------------------------
+
+10. MAP OF STRUCTS
+------------------
+
+type User struct {
+    Name string
+}
+
+users := map[int]User{
+    1: {Name: "Aditya"},
+}
+
+--------------------------------------------------------------------------
+
+11. MAP OF SLICES
+-----------------
+
+m := map[string][]int{
+    "nums": {1,2,3},
+}
+
+m["nums"] = append(m["nums"], 4)
+
+--------------------------------------------------------------------------
+
+12. NESTED MAPS
+---------------
+
+m := map[string]map[string]int{
+    "user1": {
+        "age": 25,
+    },
+}
+
+--------------------------------------------------------------------------
+
+13. PASSING MAP TO FUNCTION
+---------------------------
+
+func update(m map[string]int) {
+    m["a"] = 100
+}
+
+NOTE:
+Maps are reference types → changes reflect outside
+
+--------------------------------------------------------------------------
+
+14. REAL-WORLD EXAMPLES
+-----------------------
+
+Example 1: Word Count
+---------------------
+
+text := "go is good go is fast"
+
+words := strings.Split(text, " ")
+count := make(map[string]int)
+
+for _, word := range words {
+    count[word]++
+}
+
+fmt.Println(count)
+
+--------------------------------------------------
+
+Example 2: Student Marks
+------------------------
+
+marks := map[string]int{
+    "Aditya": 90,
+    "Rahul":  80,
+}
+
+--------------------------------------------------
+
+Example 3: API Response (JSON-like)
+-----------------------------------
+
+response := map[string]interface{}{
+    "status": "success",
+    "data": map[string]string{
+        "name": "Aditya",
+    },
+}
+
+--------------------------------------------------------------------------
+
+INTERVIEW QUESTIONS (IMPORTANT)
+-------------------------------
+
+1. What is a map in Go?
+2. Difference between map and slice?
+3. What happens when key is not present?
+4. How to check if key exists?
+5. What is nil map vs empty map?
+6. Are maps thread-safe?
+   → NO
+
+7. Can maps be compared?
+   → Only with nil
+
+8. What are valid map key types?
+9. Why maps are reference types?
+10. What is zero value of map?
+    → nil
+
+11. How to delete key from map?
+12. How iteration works in map?
+    → Random order
+
+13. Can map be passed to function?
+    → Yes (reference behavior)
+
+14. Can we use slice as key?
+    → NO
+
+15. How to make map thread-safe?
+    → sync.Mutex / sync.Map
+
+--------------------------------------------------------------------------
+
+SUMMARY
+-------
+Maps are:
+- Fast (O(1))
+- Key-value store
+- Reference type
+- Unordered
+- Not thread-safe by default
+
+--------------------------------------------------------------------------
