@@ -17,5 +17,5 @@ func main() {
 	c, python, java := true, false, "no!"
 
 	fmt.Println(i, j, k, c, python, java)
-  fmt.Println(i, c, python1, java1)
+  fmt.Println(i, c, python1, java2)
 }
