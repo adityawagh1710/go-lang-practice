@@ -14,12 +14,14 @@ func main() {
 	fmt.Println("cap ", cap(nums))
 
 	// Access and update array by index
+	// slice_name := []datatype{values}
 	nums2 := []int{10, 20, 30}
 	fmt.Println("Slice 0 index ", nums2[0])
 	nums2[1] = 50
 	fmt.Println("Slice 1 index ", nums2)
 
 	// Slice append to attach multiple array elements
+	// slice_name = append(slice_name, element1, element2, ...)
 	nums3 := make([]int, 0, 5)
 	nums3 = append(nums3, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
 	fmt.Println("Append ", nums3)
