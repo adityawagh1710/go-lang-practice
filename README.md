@@ -1,12 +1,70 @@
-# Go Lang Practice
+# 🚀 Go Lang Practice
 
-## Introduction to Go
-* Go is an open-source programming language developed by Google (2009).
-* Statically typed, compiled, and designed for simplicity, speed, and concurrency.
-* Key features:
-  * Fast compilation to a single binary (easy deployment).
-  * Built-in concurrency: goroutines (lightweight threads) and channels.
-  * Garbage collection.
-  * Strong standard library.
-  * Excellent for web servers, microservices, CLI tools, cloud-native apps.
-* Official site: https://go.dev
+<p align="center">
+  <img src="https://go.dev/blog/go-brand/Go-Logo/PNG/Go-Logo_Blue.png" width="180"/>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Go-00ADD8?style=for-the-badge&logo=go&logoColor=white"/>
+  <img src="https://img.shields.io/github/languages/top/adityawagh1710/go-lang-practice?style=for-the-badge"/>
+  <img src="https://img.shields.io/github/license/adityawagh1710/go-lang-practice?style=for-the-badge"/>
+</p>
+
+## 📘 Introduction to Go
+
+**Go (Golang)** is an open-source programming language developed by Google in 2009.
+
+### ✨ Key Features
+
+* ⚡ **Fast Compilation** → Compiles into a single binary (easy deployment)
+* 🔄 **Concurrency Support** → Goroutines & Channels
+* 🧠 **Garbage Collection**
+* 📦 **Strong Standard Library**
+* 🌐 Ideal for:
+
+  * Web servers
+  * Microservices
+  * CLI tools
+  * Cloud-native applications
+
+## 🌍 Official Website
+
+👉 https://go.dev
+
+## 📂 Project Structure
+
+```
+go-lang-practice/
+│
+├── basics/
+├── slices/
+├── maps/
+├── goroutines/
+└── projects/
+```
+
+---
+
+## 🧑‍💻 Getting Started
+
+### Install Go on linux
+
+```bash
+sudo apt install golang-go
+```
+
+### Run a Program
+
+```bash
+go run main.go
+```
+
+## 📌 Topics Covered
+
+* Variables & Data Types
+* Control Structures
+* Functions
+* Arrays & Slices
+* Maps
+* Structs
+* Goroutines & Channels
