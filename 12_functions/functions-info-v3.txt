@@ -1,0 +1,1162 @@
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║                     GO LANGUAGE — FUNCTIONS COMPLETE REFERENCE                 ║
+║                        Theory + Examples + Interview Q&A                       ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  INDEX
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1.  Function Basics & Syntax
+  2.  Multiple Return Values
+  3.  Named Return Values
+  4.  Variadic Functions
+  5.  Anonymous Functions (Function Literals)
+  6.  First-Class Functions
+  7.  Higher-Order Functions
+  8.  Closures
+  9.  Defer
+  10. Panic & Recover
+  11. Methods (Functions on Types)
+  12. Function Types & Signatures
+  13. Recursive Functions
+  14. init() Function
+  15. Interview Questions & Answers
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1. FUNCTION BASICS & SYNTAX
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SYNTAX:
+  func functionName(param1 type1, param2 type2) returnType {
+      // body
+      return value
+  }
+
+KEY RULES:
+  - Declared with the 'func' keyword
+  - Parameters are typed (type comes AFTER variable name — opposite of Java)
+  - Return type comes AFTER the parameter list
+  - Functions are first-class citizens (can be assigned to variables, passed as args)
+  - No function overloading in Go
+  - Unused imports cause compile error; unused variables also cause compile error
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 1 — Basic Function
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+// Function with no return
+func greet(name string) {
+    fmt.Println("Hello,", name)
+}
+
+// Function with one return value
+func add(a int, b int) int {
+    return a + b
+}
+
+// Shorthand: same-type params share one type declaration
+func multiply(a, b int) int {
+    return a * b
+}
+
+func main() {
+    greet("Aditya")           // Hello, Aditya
+    fmt.Println(add(3, 4))   // 7
+    fmt.Println(multiply(3, 4)) // 12
+}
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 2 — No Parameters, No Return
+──────────────────────────────────────────────────────────────────────────────────
+
+func printDivider() {
+    fmt.Println("─────────────────────")
+}
+
+func main() {
+    printDivider()
+}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  2. MULTIPLE RETURN VALUES  ★ Go's Most Distinctive Feature
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Go allows functions to return MORE THAN ONE value.
+Most common pattern: return a result + an error.
+
+SYNTAX:
+  func functionName(params) (type1, type2) {
+      return val1, val2
+  }
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE — divide returns result and error
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "errors"
+    "fmt"
+)
+
+func divide(a, b float64) (float64, error) {
+    if b == 0 {
+        return 0, errors.New("cannot divide by zero")
+    }
+    return a / b, nil
+}
+
+func main() {
+    result, err := divide(10, 2)
+    if err != nil {
+        fmt.Println("Error:", err)
+    } else {
+        fmt.Println("Result:", result) // Result: 5
+    }
+
+    _, err2 := divide(5, 0) // Use _ to ignore the result
+    if err2 != nil {
+        fmt.Println("Error:", err2) // Error: cannot divide by zero
+    }
+}
+
+NOTE:
+  - The blank identifier _ discards a return value you don't need
+  - Always check errors! Ignoring errors is bad Go practice
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  3. NAMED RETURN VALUES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+You can name the return variables in the function signature.
+A bare 'return' then returns whatever those named variables hold.
+
+SYNTAX:
+  func functionName(params) (name1 type1, name2 type2) {
+      name1 = ...
+      name2 = ...
+      return  // bare return
+  }
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE — Named returns
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+func minMax(nums []int) (min, max int) {
+    min, max = nums[0], nums[0]
+    for _, v := range nums {
+        if v < min {
+            min = v
+        }
+        if v > max {
+            max = v
+        }
+    }
+    return // bare return: returns min and max
+}
+
+func main() {
+    lo, hi := minMax([]int{3, 1, 7, 2, 9, 4})
+    fmt.Println("Min:", lo, "Max:", hi) // Min: 1 Max: 9
+}
+
+WHEN TO USE:
+  ✔ When the names document what you're returning (improves readability)
+  ✔ Useful with defer to modify return values before the function exits
+  ✘ Avoid for simple single-return functions — can hurt clarity
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  4. VARIADIC FUNCTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+A variadic function accepts a variable number of arguments using ...
+
+SYNTAX:
+  func functionName(params, name ...type) returnType { }
+
+RULES:
+  - The variadic param must be the LAST parameter
+  - Inside the function it behaves as a slice of that type
+  - To pass a slice, spread it with the ... operator
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE — Variadic sum
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+func sum(nums ...int) int {
+    total := 0
+    for _, n := range nums {
+        total += n
+    }
+    return total
+}
+
+func main() {
+    fmt.Println(sum(1, 2, 3))        // 6
+    fmt.Println(sum(10, 20))         // 30
+
+    nums := []int{5, 10, 15}
+    fmt.Println(sum(nums...))        // 30  ← spread with ...
+}
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE — Mixed params + variadic
+──────────────────────────────────────────────────────────────────────────────────
+
+func printAll(prefix string, values ...string) {
+    for _, v := range values {
+        fmt.Println(prefix, v)
+    }
+}
+
+func main() {
+    printAll(">>", "Go", "Java", "Python")
+    // >> Go
+    // >> Java
+    // >> Python
+}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  5. ANONYMOUS FUNCTIONS (Function Literals)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Anonymous functions have NO name. They can be:
+  - Assigned to a variable
+  - Invoked immediately (IIFE — Immediately Invoked Function Expression)
+  - Passed as arguments to other functions
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 1 — Assigned to variable
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+func main() {
+    square := func(n int) int {
+        return n * n
+    }
+
+    fmt.Println(square(5))  // 25
+    fmt.Println(square(9))  // 81
+}
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 2 — Immediately Invoked (IIFE)
+──────────────────────────────────────────────────────────────────────────────────
+
+func main() {
+    result := func(a, b int) int {
+        return a + b
+    }(3, 4) // Called immediately with args 3, 4
+
+    fmt.Println(result) // 7
+}
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 3 — Used with goroutines
+──────────────────────────────────────────────────────────────────────────────────
+
+import "sync"
+
+func main() {
+    var wg sync.WaitGroup
+    wg.Add(1)
+
+    go func() {
+        defer wg.Done()
+        fmt.Println("Running in a goroutine")
+    }()
+
+    wg.Wait()
+}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  6. FIRST-CLASS FUNCTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+In Go, functions are first-class values. This means:
+  ✔ Assign a function to a variable
+  ✔ Pass a function as an argument
+  ✔ Return a function from a function
+  ✔ Store functions in data structures (maps, slices)
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE — Store functions in a map
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+func add(a, b int) int      { return a + b }
+func subtract(a, b int) int { return a - b }
+func multiply(a, b int) int { return a * b }
+
+func main() {
+    operations := map[string]func(int, int) int{
+        "add":      add,
+        "subtract": subtract,
+        "multiply": multiply,
+    }
+
+    fmt.Println(operations["add"](10, 5))      // 15
+    fmt.Println(operations["subtract"](10, 5)) // 5
+    fmt.Println(operations["multiply"](10, 5)) // 50
+}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  7. HIGHER-ORDER FUNCTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+A Higher-Order Function either:
+  - Takes a function as a parameter, OR
+  - Returns a function
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 1 — Function as parameter (like Java's Predicate / Consumer)
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+func applyToEach(nums []int, fn func(int) int) []int {
+    result := make([]int, len(nums))
+    for i, v := range nums {
+        result[i] = fn(v)
+    }
+    return result
+}
+
+func main() {
+    nums := []int{1, 2, 3, 4, 5}
+
+    doubled  := applyToEach(nums, func(n int) int { return n * 2 })
+    squared  := applyToEach(nums, func(n int) int { return n * n })
+
+    fmt.Println(doubled)  // [2 4 6 8 10]
+    fmt.Println(squared)  // [1 4 9 16 25]
+}
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 2 — filter (like Java Stream filter)
+──────────────────────────────────────────────────────────────────────────────────
+
+func filter(nums []int, predicate func(int) bool) []int {
+    var result []int
+    for _, v := range nums {
+        if predicate(v) {
+            result = append(result, v)
+        }
+    }
+    return result
+}
+
+func main() {
+    nums := []int{1, 2, 3, 4, 5, 6, 7, 8}
+    evens := filter(nums, func(n int) bool { return n%2 == 0 })
+    fmt.Println(evens) // [2 4 6 8]
+}
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 3 — Function returning a function (like Java's Function composition)
+──────────────────────────────────────────────────────────────────────────────────
+
+func multiplier(factor int) func(int) int {
+    return func(n int) int {
+        return n * factor
+    }
+}
+
+func main() {
+    triple := multiplier(3)
+    double := multiplier(2)
+
+    fmt.Println(triple(5)) // 15
+    fmt.Println(double(5)) // 10
+}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  8. CLOSURES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+A closure is a function that CAPTURES variables from its surrounding scope.
+The captured variables persist between calls.
+
+Think of it as: the function "closes over" the outer variable.
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 1 — Counter closure
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+func makeCounter() func() int {
+    count := 0 // captured by the returned function
+    return func() int {
+        count++
+        return count
+    }
+}
+
+func main() {
+    counterA := makeCounter()
+    counterB := makeCounter()
+
+    fmt.Println(counterA()) // 1
+    fmt.Println(counterA()) // 2
+    fmt.Println(counterA()) // 3
+
+    fmt.Println(counterB()) // 1  ← independent state
+    fmt.Println(counterB()) // 2
+}
+
+NOTE: counterA and counterB each have their OWN copy of 'count'.
+      This is different from a shared global variable.
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 2 — Closure capturing loop variable (COMMON GOTCHA)
+──────────────────────────────────────────────────────────────────────────────────
+
+// ❌ WRONG — all goroutines/funcs share the same 'i'
+funcs := make([]func(), 3)
+for i := 0; i < 3; i++ {
+    funcs[i] = func() { fmt.Println(i) } // captures 'i' by reference
+}
+for _, f := range funcs {
+    f() // prints 3, 3, 3  ← all see the final value of i
+}
+
+// ✅ CORRECT — create a new variable per iteration
+funcs := make([]func(), 3)
+for i := 0; i < 3; i++ {
+    i := i // new 'i' scoped to this iteration
+    funcs[i] = func() { fmt.Println(i) }
+}
+for _, f := range funcs {
+    f() // prints 0, 1, 2 ✔
+}
+
+// ✅ ALSO CORRECT — pass as argument
+for i := 0; i < 3; i++ {
+    funcs[i] = func(n int) func() {
+        return func() { fmt.Println(n) }
+    }(i)
+}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  9. DEFER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+defer delays the execution of a function call until the surrounding
+function returns. Multiple defers execute in LIFO order (stack).
+
+USE CASES:
+  - Close files / DB connections
+  - Release mutex locks
+  - Logging function entry/exit
+  - Cleanup resources
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 1 — Basic defer (LIFO order)
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+func main() {
+    defer fmt.Println("third")  // executes last
+    defer fmt.Println("second") // executes second
+    defer fmt.Println("first")  // executes first
+
+    fmt.Println("main body")
+}
+
+// Output:
+// main body
+// first
+// second
+// third
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 2 — Defer for resource cleanup (like Java's try-with-resources)
+──────────────────────────────────────────────────────────────────────────────────
+
+import (
+    "fmt"
+    "os"
+)
+
+func readFile(filename string) {
+    file, err := os.Open(filename)
+    if err != nil {
+        fmt.Println("Error:", err)
+        return
+    }
+    defer file.Close() // Always runs when readFile returns
+
+    // ... read from file ...
+    fmt.Println("Reading file:", filename)
+}
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 3 — Defer modifying named return values
+──────────────────────────────────────────────────────────────────────────────────
+
+func doWork() (result string) {
+    defer func() {
+        result = "modified by defer: " + result
+    }()
+
+    result = "original"
+    return // bare return — defer runs AFTER this, modifies result
+}
+
+func main() {
+    fmt.Println(doWork()) // modified by defer: original
+}
+
+IMPORTANT: defer arguments are evaluated IMMEDIATELY, but execution is deferred.
+  i := 0
+  defer fmt.Println(i) // captures i=0 NOW
+  i = 10
+  // prints 0, not 10
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  10. PANIC & RECOVER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+panic()   — stops normal execution of a goroutine (like Java's throw RuntimeException)
+recover() — halts the panic, returns the value passed to panic (like Java's catch)
+            recover() ONLY works inside a deferred function
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE — panic and recover
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+func safeDiv(a, b int) (result int, err error) {
+    defer func() {
+        if r := recover(); r != nil {
+            err = fmt.Errorf("recovered from panic: %v", r)
+        }
+    }()
+
+    result = a / b // panics if b == 0
+    return
+}
+
+func main() {
+    res, err := safeDiv(10, 2)
+    fmt.Println(res, err) // 5 <nil>
+
+    res, err = safeDiv(10, 0)
+    fmt.Println(res, err) // 0 recovered from panic: runtime error: integer divide by zero
+}
+
+COMPARISON TO JAVA:
+  Java:  try { ... } catch (Exception e) { ... } finally { ... }
+  Go:    defer (for finally) + recover() inside defer (for catch)
+
+BEST PRACTICE:
+  - Use panic only for truly unrecoverable programmer errors
+  - Use error returns for expected failures
+  - Use recover in library code to prevent a panic from crashing the caller
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  11. METHODS (Functions on Types)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+A method is a function with a RECEIVER argument.
+The receiver comes between 'func' and the function name.
+
+SYNTAX:
+  func (receiverName ReceiverType) methodName(params) returnType { }
+
+  Value Receiver:   func (e Employee) GetName() string    — works on a COPY
+  Pointer Receiver: func (e *Employee) SetName(s string)  — works on the ORIGINAL
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE — Methods with value and pointer receivers
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+type Employee struct {
+    Name   string
+    Salary float64
+}
+
+// Value receiver — does not modify original
+func (e Employee) GetDetails() string {
+    return fmt.Sprintf("Name: %s, Salary: %.2f", e.Name, e.Salary)
+}
+
+// Pointer receiver — modifies original
+func (e *Employee) Raise(percent float64) {
+    e.Salary += e.Salary * (percent / 100)
+}
+
+// Value receiver — works on copy
+func (e Employee) Annual() float64 {
+    return e.Salary * 12
+}
+
+func main() {
+    emp := Employee{Name: "Aditya", Salary: 50000}
+
+    fmt.Println(emp.GetDetails())   // Name: Aditya, Salary: 50000.00
+    emp.Raise(10)
+    fmt.Println(emp.GetDetails())   // Name: Aditya, Salary: 55000.00
+    fmt.Println(emp.Annual())       // 660000.00
+}
+
+WHEN TO USE POINTER RECEIVER:
+  ✔ You need to MODIFY the receiver's state
+  ✔ The struct is large (avoid expensive copy)
+  ✔ Consistency — if any method uses pointer receiver, prefer all to use it
+
+WHEN TO USE VALUE RECEIVER:
+  ✔ You only READ the state (no modification)
+  ✔ Receiver is a small, immutable type (int, string, small struct)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  12. FUNCTION TYPES & SIGNATURES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+You can define a custom TYPE for a function signature (like a Java @FunctionalInterface).
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE — Custom function types
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+// Define a function type
+type MathOp func(int, int) int
+type Predicate func(int) bool
+type Transformer func(string) string
+
+func compute(a, b int, op MathOp) int {
+    return op(a, b)
+}
+
+func main() {
+    add := MathOp(func(a, b int) int { return a + b })
+    sub := MathOp(func(a, b int) int { return a - b })
+
+    fmt.Println(compute(10, 5, add)) // 15
+    fmt.Println(compute(10, 5, sub)) // 5
+}
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE — Methods ON function types
+──────────────────────────────────────────────────────────────────────────────────
+
+type StringTransformer func(string) string
+
+func (t StringTransformer) Apply(s string) string {
+    return t(s)
+}
+
+func (t StringTransformer) Chain(other StringTransformer) StringTransformer {
+    return func(s string) string {
+        return other(t(s))
+    }
+}
+
+func main() {
+    upper := StringTransformer(func(s string) string {
+        return strings.ToUpper(s)
+    })
+    exclaim := StringTransformer(func(s string) string {
+        return s + "!"
+    })
+
+    combined := upper.Chain(exclaim)
+    fmt.Println(combined.Apply("hello")) // HELLO!
+}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  13. RECURSIVE FUNCTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Go supports recursion. A function can call itself.
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 1 — Factorial
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+func factorial(n int) int {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorial(n-1)
+}
+
+func main() {
+    fmt.Println(factorial(5)) // 120
+    fmt.Println(factorial(0)) // 1
+}
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 2 — Fibonacci
+──────────────────────────────────────────────────────────────────────────────────
+
+func fib(n int) int {
+    if n <= 1 {
+        return n
+    }
+    return fib(n-1) + fib(n-2)
+}
+
+func main() {
+    for i := 0; i <= 8; i++ {
+        fmt.Printf("fib(%d) = %d\n", i, fib(i))
+    }
+    // fib(0)=0, fib(1)=1, fib(2)=1, fib(3)=2, fib(4)=3, fib(5)=5 ...
+}
+
+NOTE: Go does NOT optimize tail recursion. Use iteration or memoization for
+      performance-critical recursive logic.
+
+
+──────────────────────────────────────────────────────────────────────────────────
+  14. init() FUNCTION
+──────────────────────────────────────────────────────────────────────────────────
+
+- Called automatically BEFORE main()
+- Can appear multiple times in a file or package
+- Runs in order of declaration
+- Cannot be called manually
+- Used for initialization: DB connections, config loading, registration, etc.
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE — init() for setup
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+var config map[string]string
+
+func init() {
+    fmt.Println("init() called — setting up config")
+    config = map[string]string{
+        "host": "localhost",
+        "port": "8080",
+    }
+}
+
+func main() {
+    fmt.Println("main() called")
+    fmt.Println("Host:", config["host"])
+}
+
+// Output:
+// init() called — setting up config
+// main() called
+// Host: localhost
+
+EXECUTION ORDER:
+  package-level variables → init() → main()
+
+COMPARISON TO JAVA:
+  Java:  static { } blocks
+  Go:    init() functions
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  QUICK REFERENCE TABLE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Concept               Syntax                          Java Equivalent
+  ─────────────────────────────────────────────────────────────────────────────
+  Basic function        func name(p T) R { }            returnType name(T p)
+  No return             func name(p T) { }              void name(T p)
+  Multiple returns      func f() (T1, T2) { }           No direct equivalent
+  Named returns         func f() (a T, b T) { return }  No direct equivalent
+  Variadic              func f(v ...T) { }              void f(T... v)
+  Anonymous func        func(p T) R { } (args)          Lambdas: (p) -> expr
+  Higher-order          func f(fn func(T) R) { }        Function<T,R> as param
+  Closure               captures outer variables         Lambda capturing finals
+  defer                 defer f()                        try-finally / AutoCloseable
+  panic                 panic("msg")                     throw new RuntimeException
+  recover               recover() in deferred func       catch(Exception e)
+  Method                func (r Recv) Name() { }        Instance methods
+  Pointer receiver      func (r *Recv) Name() { }       Mutating instance method
+  init()                func init() { }                  static { } initializer
+  Function type         type F func(T) R                 @FunctionalInterface
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  15. INTERVIEW QUESTIONS & ANSWERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  BASICS                                                                      ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Q1. How do you declare a function in Go? How is it different from Java?
+
+A:  In Go: func name(param type) returnType { }
+    The type comes AFTER the variable name (unlike Java where it comes before).
+    Go uses the 'func' keyword, Java uses the return type to start a method.
+    Go also allows multiple return values; Java does not.
+
+──────────────────────────────────────────────────────────────────────────────
+
+Q2. Can a Go function return multiple values? Give a real-world example.
+
+A:  Yes. The most common pattern is returning a result and an error:
+
+    func readUser(id int) (User, error) {
+        // if not found
+        return User{}, errors.New("user not found")
+        // if found
+        return user, nil
+    }
+
+    Caller:
+    user, err := readUser(42)
+    if err != nil { ... }
+
+──────────────────────────────────────────────────────────────────────────────
+
+Q3. What is a variadic function? How do you pass a slice to one?
+
+A:  A variadic function accepts zero or more arguments of a type using ...
+    The variadic param must be the last parameter and acts as a slice inside.
+
+    func sum(nums ...int) int { ... }
+
+    To pass a slice:
+    nums := []int{1, 2, 3}
+    sum(nums...)  // spread with ...
+
+──────────────────────────────────────────────────────────────────────────────
+
+Q4. What are named return values? When should you use them?
+
+A:  Named return values give names to the return variables in the signature.
+    A bare 'return' then returns those variables.
+
+    func split(n int) (x, y int) {
+        x = n / 2
+        y = n - x
+        return
+    }
+
+    Use them when: the names add documentation clarity, or when defer
+    needs to modify the return value. Avoid for trivial functions.
+
+══════════════════════════════════════════════════════════════════════════════
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  FIRST-CLASS & HIGHER-ORDER                                                  ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Q5. What does "functions are first-class citizens" mean in Go?
+
+A:  It means functions can be:
+    - Assigned to variables:  f := someFunc
+    - Passed as arguments:    doWork(transform)
+    - Returned from functions: return func(n int) int { ... }
+    - Stored in collections:  map[string]func(int,int)int{}
+    This enables functional programming patterns similar to Java 8+ lambdas.
+
+──────────────────────────────────────────────────────────────────────────────
+
+Q6. Write a higher-order function that filters a slice of integers.
+
+A:  func filter(nums []int, fn func(int) bool) []int {
+        var out []int
+        for _, v := range nums {
+            if fn(v) {
+                out = append(out, v)
+            }
+        }
+        return out
+    }
+
+    Usage:
+    evens := filter([]int{1,2,3,4,5,6}, func(n int) bool { return n%2 == 0 })
+    // [2 4 6]
+
+──────────────────────────────────────────────────────────────────────────────
+
+Q7. How do you define a custom function type in Go?
+
+A:  type Handler func(http.ResponseWriter, *http.Request)
+    type Predicate func(int) bool
+    type Transform func(string) string
+
+    This makes function signatures reusable and self-documenting,
+    similar to @FunctionalInterface in Java.
+
+══════════════════════════════════════════════════════════════════════════════
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  CLOSURES                                                                    ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Q8. What is a closure in Go? Give a practical example.
+
+A:  A closure is a function that captures variables from its outer scope.
+    The captured variables live as long as the closure does.
+
+    func makeAdder(x int) func(int) int {
+        return func(y int) int { return x + y }
+    }
+
+    add5 := makeAdder(5)
+    fmt.Println(add5(3))  // 8
+    fmt.Println(add5(10)) // 15
+
+    'x' is captured from makeAdder's scope and persists.
+
+──────────────────────────────────────────────────────────────────────────────
+
+Q9. What is the classic closure-in-loop gotcha in Go?
+
+A:  When a closure captures a loop variable, all closures share the
+    same variable (its final value after the loop ends).
+
+    ❌ WRONG:
+    for i := 0; i < 3; i++ {
+        go func() { fmt.Println(i) }() // all print 3
+    }
+
+    ✅ FIX 1 — shadow with new variable:
+    for i := 0; i < 3; i++ {
+        i := i
+        go func() { fmt.Println(i) }()
+    }
+
+    ✅ FIX 2 — pass as argument:
+    for i := 0; i < 3; i++ {
+        go func(n int) { fmt.Println(n) }(i)
+    }
+
+══════════════════════════════════════════════════════════════════════════════
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  DEFER                                                                       ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Q10. How does defer work in Go? What is the execution order of multiple defers?
+
+A:   defer schedules a function call to execute when the surrounding function
+     returns. Multiple defers execute in LIFO (Last-In, First-Out) order —
+     like a stack.
+
+     func main() {
+         defer fmt.Println("1st defer — runs last")
+         defer fmt.Println("2nd defer — runs first")
+         fmt.Println("function body")
+     }
+     // function body
+     // 2nd defer — runs first
+     // 1st defer — runs last
+
+──────────────────────────────────────────────────────────────────────────────
+
+Q11. Are defer arguments evaluated immediately or lazily?
+
+A:   Arguments to defer are evaluated IMMEDIATELY when the defer statement
+     is encountered, not when it executes.
+
+     x := 5
+     defer fmt.Println(x) // captures x=5 now
+     x = 10
+     // prints 5, not 10
+
+     However, if the deferred function is a closure (no explicit args),
+     it captures the variable by reference and sees the final value.
+
+     defer func() { fmt.Println(x) }() // prints 10
+
+──────────────────────────────────────────────────────────────────────────────
+
+Q12. Can defer modify named return values?
+
+A:   Yes. Deferred functions can modify named return values because they
+     have access to them through the outer function's scope.
+
+     func doWork() (result int) {
+         defer func() { result++ }()
+         return 5 // result = 5, then defer increments it to 6
+     }
+     fmt.Println(doWork()) // 6
+
+══════════════════════════════════════════════════════════════════════════════
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  PANIC & RECOVER                                                             ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Q13. What is the difference between panic and error in Go?
+
+A:   error — the normal way to signal expected failures (I/O, validation,
+              not found). Returned as a value.
+     panic  — for unrecoverable programmer errors (nil pointer dereference,
+              out-of-bounds index, logic violation). Stops execution of
+              the current goroutine, runs deferred functions, then crashes.
+
+     Rule of thumb: use error for anything a caller should handle.
+     Use panic only for bugs that "should never happen."
+
+──────────────────────────────────────────────────────────────────────────────
+
+Q14. How does recover() work? Why must it be called inside defer?
+
+A:   recover() stops a panicking goroutine and returns the value passed to
+     panic(). It only has effect when called INSIDE a deferred function —
+     because by the time a panic propagates, only deferred functions run.
+
+     func safe(fn func()) (err error) {
+         defer func() {
+             if r := recover(); r != nil {
+                 err = fmt.Errorf("panic caught: %v", r)
+             }
+         }()
+         fn()
+         return nil
+     }
+
+══════════════════════════════════════════════════════════════════════════════
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  METHODS                                                                     ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Q15. What is the difference between a value receiver and a pointer receiver?
+
+A:   Value receiver  — func (e Employee) Name() string
+     Receives a COPY of the struct. Modifications do NOT affect the original.
+     Safe for read-only operations.
+
+     Pointer receiver — func (e *Employee) Raise(pct float64)
+     Receives a pointer to the ORIGINAL struct. Modifications DO affect it.
+     Required when you need to mutate state or avoid copying large structs.
+
+──────────────────────────────────────────────────────────────────────────────
+
+Q16. Can you define methods on non-struct types in Go?
+
+A:   Yes! You can define methods on any named type defined in the same package.
+
+     type Celsius float64
+
+     func (c Celsius) ToFahrenheit() float64 {
+         return float64(c)*9/5 + 32
+     }
+
+     temp := Celsius(100)
+     fmt.Println(temp.ToFahrenheit()) // 212
+
+     You CANNOT define methods on built-in types directly (like int, string).
+     You must create a named type alias first.
+
+══════════════════════════════════════════════════════════════════════════════
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  MISC                                                                      ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Q17. Does Go support function overloading?
+
+A:   No. Go does NOT support function overloading.
+     You cannot have two functions with the same name and different signatures.
+     Alternatives: use variadic functions, different function names, or
+     interface types to handle different argument types.
+
+──────────────────────────────────────────────────────────────────────────────
+
+Q18. What is the purpose of init() in Go? How many init() functions can a
+     package have?
+
+A:   init() is a special function called automatically before main() to
+     perform package-level initialization (DB setup, config loading, etc.).
+     A package CAN have multiple init() functions — even in the same file.
+     They run in the order they appear. init() cannot be called manually.
+
+     Execution order: imports → package-level vars → init() → main()
+
+──────────────────────────────────────────────────────────────────────────────
+
+Q19. How do you write an IIFE (Immediately Invoked Function Expression) in Go?
+
+A:   By appending call arguments directly after the function literal:
+
+     result := func(a, b int) int {
+         return a + b
+     }(3, 7)
+
+     fmt.Println(result) // 10
+
+     Common use: inside goroutines:
+     go func() {
+         // do work
+     }()
+
+──────────────────────────────────────────────────────────────────────────────
+
+Q20. Explain how Go functions differ from Java methods.
+
+A:   Key differences:
+     1. Go functions are package-level; Java methods belong to a class.
+     2. Go supports multiple return values; Java does not.
+     3. Go has no overloading; Java does.
+     4. Go functions are first-class (can be stored/passed freely).
+     5. Go uses 'func' keyword; Java uses return type as the start.
+     6. Go error handling uses return values; Java uses exceptions.
+     7. Go has defer; Java uses try-finally.
+     8. Go has panic/recover; Java has throw/catch.
+     9. Go closures capture by reference; Java lambdas capture effectively
+        final variables only.
+    10. Go methods attach to types with receiver syntax, not nested in a class.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

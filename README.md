@@ -31,6 +31,13 @@
 
 👉 https://go.dev
 
+## 🌍 Training websites
+
+👉 https://roadmap.sh/golang
+👉 https://tour.ardanlabs.com/tour/eng/list
+👉 https://www.tpointtech.com/golang-tutorial
+👉 https://www.w3schools.com/go
+
 ## 📂 Project Structure
 
 ```

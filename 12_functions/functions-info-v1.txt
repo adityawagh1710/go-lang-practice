@@ -1,0 +1,286 @@
+# Go Lang Functions - Complete Notes
+==================================================
+
+1. What is a Function in Go?
+   ==================================================
+
+* A function is a reusable block of code used to perform a specific task.
+* Defined using the `func` keyword.
+
+Syntax:
+func functionName(parameters) returnType {
+// code
+}
+
+Example:
+package main
+
+import "fmt"
+
+func greet() {
+fmt.Println("Hello, Go!")
+}
+
+func main() {
+greet()
+}
+
+==================================================
+2. Function with Parameters
+===========================
+
+* Functions can take input parameters.
+
+Example:
+func add(a int, b int) int {
+return a + b
+}
+
+func main() {
+fmt.Println(add(10, 20))
+}
+
+Short Syntax:
+func add(a, b int) int
+
+==================================================
+3. Multiple Return Values ⭐
+===========================
+
+* Go allows returning multiple values from a function.
+
+Example:
+func divide(a int, b int) (int, int) {
+return a / b, a % b
+}
+
+func main() {
+q, r := divide(10, 3)
+fmt.Println("Quotient:", q, "Remainder:", r)
+}
+
+==================================================
+4. Named Return Values
+======================
+
+* Return values can be named.
+
+Example:
+func calculate(a, b int) (sum int, diff int) {
+sum = a + b
+diff = a - b
+return
+}
+
+==================================================
+5. Variadic Functions (...)
+===========================
+
+* Accept variable number of arguments.
+
+Example:
+func sum(nums ...int) int {
+total := 0
+for _, n := range nums {
+total += n
+}
+return total
+}
+
+func main() {
+fmt.Println(sum(1, 2, 3, 4))
+}
+
+==================================================
+6. Anonymous Functions
+======================
+
+* Functions without a name.
+
+Example:
+func main() {
+result := func(a, b int) int {
+return a + b
+}(5, 3)
+
+```
+fmt.Println(result)
+```
+
+}
+
+==================================================
+7. Functions as Values
+======================
+
+* Functions can be assigned to variables.
+
+Example:
+func add(a, b int) int {
+return a + b
+}
+
+func main() {
+f := add
+fmt.Println(f(10, 20))
+}
+
+==================================================
+8. Higher-Order Functions ⭐
+===========================
+
+* Functions that accept or return other functions.
+
+Example:
+func operate(a, b int, op func(int, int) int) int {
+return op(a, b)
+}
+
+func multiply(a, b int) int {
+return a * b
+}
+
+func main() {
+fmt.Println(operate(3, 4, multiply))
+}
+
+==================================================
+9. Closures
+===========
+
+* Functions that capture outer variables.
+
+Example:
+func counter() func() int {
+count := 0
+return func() int {
+count++
+return count
+}
+}
+
+func main() {
+c := counter()
+fmt.Println(c()) // 1
+fmt.Println(c()) // 2
+}
+
+==================================================
+10. Recursion
+=============
+
+* Function calling itself.
+
+Example:
+func factorial(n int) int {
+if n == 0 {
+return 1
+}
+return n * factorial(n-1)
+}
+
+==================================================
+11. Defer in Functions
+======================
+
+* Executes at the end of function.
+
+Example:
+func main() {
+defer fmt.Println("End")
+fmt.Println("Start")
+}
+
+==================================================
+12. Error Handling in Functions
+===============================
+
+* Functions commonly return (value, error).
+
+Example:
+import "errors"
+
+func divide(a, b int) (int, error) {
+if b == 0 {
+return 0, errors.New("division by zero")
+}
+return a / b, nil
+}
+
+==================================================
+13. Methods (Functions with Receiver)
+=====================================
+
+* Functions attached to structs.
+
+Example:
+type Rectangle struct {
+width, height int
+}
+
+func (r Rectangle) area() int {
+return r.width * r.height
+}
+
+==================================================
+14. Function Types
+==================
+
+* Functions can have types.
+
+Example:
+type operation func(int, int) int
+
+func add(a, b int) int {
+return a + b
+}
+
+func main() {
+var op operation = add
+fmt.Println(op(5, 5))
+}
+
+==================================================
+INTERVIEW QUESTIONS
+===================
+
+1. What is a function in Go?
+2. Difference between function and method?
+3. What are multiple return values?
+4. What are variadic functions?
+5. What is a closure?
+6. What is defer and when is it used?
+7. What are higher-order functions?
+8. Can functions be passed as arguments?
+9. What is recursion?
+10. Difference between anonymous function and closure?
+11. How does Go handle errors?
+12. What are named return values?
+13. What is function type in Go?
+14. Can a function return another function?
+
+==================================================
+REAL-TIME USE CASES
+===================
+
+1. API Development:
+
+   * Handler functions for HTTP requests.
+
+2. Middleware:
+
+   * Functions wrapping other functions.
+
+3. Utility Functions:
+
+   * Reusable helpers (validation, parsing).
+
+4. Database Layer:
+
+   * CRUD operation functions.
+
+5. Logging & Monitoring:
+
+   * Wrapper functions for logging.
+
+==================================================
