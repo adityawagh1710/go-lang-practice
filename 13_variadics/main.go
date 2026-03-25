@@ -1,6 +1,8 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // Basic variadics
 func sum(nums ...int) int {
@@ -19,8 +21,14 @@ func printNumbers(nums ...int) {
 }
 
 func display(nums ...int) {
-    fmt.Println("Slice:", nums)
-    fmt.Println("Length:", len(nums))
+	fmt.Println("Slice:", nums)
+	fmt.Println("Length:", len(nums))
+}
+
+func greet(prefix string, names ...string) {
+	for _, name := range names {
+		fmt.Println(prefix, name)
+	}
 }
 
 func main() {
@@ -37,4 +45,7 @@ func main() {
 	fmt.Println(sum(numbers...))
 
 	display(numbers...)
+
+	users := []string{"John", "Maven", "Max"}
+	greet("Hello", users...)
 }
