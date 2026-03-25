@@ -46,6 +46,7 @@ func main() {
 
 	display(numbers...)
 
+	// With other params
 	users := []string{"John", "Maven", "Max"}
 	greet("Hello", users...)
 }
