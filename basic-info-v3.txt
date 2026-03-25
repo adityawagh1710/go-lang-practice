@@ -1,0 +1,727 @@
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║               GO LANGUAGE — PHASE 1: CORE LANGUAGE FUNDAMENTALS                ║
+║                        Study Notes for Experienced Devs                         ║
+║                          (Java Background → Go)                                 ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ TABLE OF CONTENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1. What is Go? Key Philosophy
+  2. Go vs Java — Quick Mental Map
+  3. Setting Up Go
+  4. Hello World & Program Structure
+  5. Variables & Constants
+  6. Basic Data Types
+  7. Functions
+  8. Control Flow (if, for, switch)
+  9. Arrays, Slices, Maps
+ 10. Structs (Go's version of Classes)
+ 11. Pointers in Go
+ 12. Interfaces
+ 13. Error Handling
+ 14. Packages & Modules
+ 15. Interview Q&A
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 1. WHAT IS GO? KEY PHILOSOPHY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  - Created at Google in 2009 by Rob Pike, Ken Thompson, Robert Griesemer
+  - Statically typed, compiled language
+  - Designed for simplicity, performance, and concurrency
+  - No classes, no inheritance — uses structs + interfaces instead
+  - Garbage collected (like Java), but much lower latency
+  - Single binary output — no JVM needed to run
+
+  Go's Core Principles:
+  ┌─────────────────────────────────────────────────────┐
+  │  1. Simplicity over cleverness                      │
+  │  2. Fast compilation                                │
+  │  3. Built-in concurrency (goroutines & channels)    │
+  │  4. Explicit error handling (no exceptions)         │
+  │  5. Strong standard library                         │
+  └─────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 2. GO vs JAVA — QUICK MENTAL MAP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌──────────────────────────┬──────────────────────────┬──────────────────────────┐
+  │ Concept                  │ Java                     │ Go                       │
+  ├──────────────────────────┼──────────────────────────┼──────────────────────────┤
+  │ Class                    │ class Person {}          │ type Person struct {}    │
+  │ Constructor              │ new Person()             │ Person{} or &Person{}    │
+  │ Inheritance              │ extends                  │ ✗ Not supported          │
+  │ Interface                │ implements               │ Implicit (duck typing)   │
+  │ Exception handling       │ try/catch/finally        │ if err != nil            │
+  │ Threads                  │ Thread / ExecutorService │ goroutine (go func())    │
+  │ Generics                 │ List<T>                  │ Supported since Go 1.18  │
+  │ Null                     │ null                     │ nil                      │
+  │ Package                  │ com.example.app          │ package main             │
+  │ Access modifier          │ public/private/protected │ Capitalized = public     │
+  │ Loops                    │ for, while, do-while     │ for only (all-in-one)    │
+  │ String formatting        │ String.format()          │ fmt.Sprintf()            │
+  └──────────────────────────┴──────────────────────────┴──────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 3. SETTING UP GO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  1. Download from: https://golang.org/dl/
+  2. Verify install:
+       $ go version
+
+  3. Create a new project:
+       $ mkdir myapp && cd myapp
+       $ go mod init github.com/yourname/myapp
+
+  4. Run a Go file:
+       $ go run main.go
+
+  5. Build a binary:
+       $ go build -o myapp
+
+  Recommended IDE: VS Code with "Go" extension by Google
+  Alternative    : GoLand by JetBrains (like IntelliJ for Go)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 4. HELLO WORLD & PROGRAM STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  package main                    // every executable must be 'main'
+
+  import "fmt"                    // import standard library package
+
+  func main() {                   // entry point — no args, no return type
+      fmt.Println("Hello, Go!")
+  }
+
+  Key Rules:
+  - Every file starts with 'package <name>'
+  - Executable programs must have 'package main' with a main() function
+  - Unused imports = COMPILE ERROR (Go enforces clean code)
+  - Unused variables = COMPILE ERROR
+  - Opening brace '{' must be on the SAME line (not next line like Java allows)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 5. VARIABLES & CONSTANTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  // Long form (explicit type)
+  var name string = "Aditya"
+  var age  int    = 8
+
+  // Short form (type inferred) — most common inside functions
+  name := "Aditya"
+  age  := 8
+
+  // Multiple assignment
+  x, y := 10, 20
+
+  // Zero values (Go initializes all variables)
+  var i int     // 0
+  var f float64 // 0.0
+  var b bool    // false
+  var s string  // ""
+
+  // Constants
+  const Pi = 3.14159
+  const MaxRetries = 3
+
+  // iota — auto-incrementing constant (like Java enum ordinal)
+  const (
+      Sunday = iota   // 0
+      Monday          // 1
+      Tuesday         // 2
+      Wednesday       // 3
+  )
+
+  NOTE: ':=' only works INSIDE functions. Use 'var' for package-level variables.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 6. BASIC DATA TYPES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌──────────────┬──────────────────────────────────────────────┐
+  │ Type         │ Description                                  │
+  ├──────────────┼──────────────────────────────────────────────┤
+  │ int          │ Platform-dependent (32 or 64 bit)            │
+  │ int8/16/32/64│ Explicit size integers                       │
+  │ uint         │ Unsigned integer                             │
+  │ float32/64   │ Floating point (prefer float64)              │
+  │ complex64/128│ Complex numbers                              │
+  │ bool         │ true / false                                 │
+  │ string       │ UTF-8, immutable                             │
+  │ byte         │ alias for uint8                              │
+  │ rune         │ alias for int32 (represents a Unicode char)  │
+  └──────────────┴──────────────────────────────────────────────┘
+
+  // Type conversion (explicit — no auto-casting like Java sometimes allows)
+  var x int = 42
+  var f float64 = float64(x)
+  var y int = int(f)
+
+  // Strings
+  s := "Hello, Go!"
+  fmt.Println(len(s))          // length in bytes
+  fmt.Println(s[0])            // 72 (byte value of 'H')
+  fmt.Println(string(s[0]))    // "H"
+
+  // String concatenation
+  full := "Aditya" + " " + "Dev"
+
+  // Multi-line string (raw string literal)
+  msg := `Line 1
+  Line 2
+  Line 3`
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 7. FUNCTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  // Basic function
+  func add(a int, b int) int {
+      return a + b
+  }
+
+  // Shorthand when params are same type
+  func add(a, b int) int {
+      return a + b
+  }
+
+  // Multiple return values (Go's superpower — no need for wrapper objects!)
+  func divide(a, b float64) (float64, error) {
+      if b == 0 {
+          return 0, fmt.Errorf("cannot divide by zero")
+      }
+      return a / b, nil
+  }
+
+  // Calling it
+  result, err := divide(10, 2)
+  if err != nil {
+      fmt.Println("Error:", err)
+  }
+
+  // Named return values
+  func minMax(arr []int) (min, max int) {
+      min, max = arr[0], arr[0]
+      for _, v := range arr {
+          if v < min { min = v }
+          if v > max { max = v }
+      }
+      return  // naked return — returns named values
+  }
+
+  // Variadic functions (like Java varargs)
+  func sum(nums ...int) int {
+      total := 0
+      for _, n := range nums {
+          total += n
+      }
+      return total
+  }
+  sum(1, 2, 3, 4, 5)
+
+  // First-class functions (functions as values)
+  double := func(x int) int { return x * 2 }
+  fmt.Println(double(5))  // 10
+
+  // Higher-order function
+  func apply(f func(int) int, x int) int {
+      return f(x)
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 8. CONTROL FLOW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ── IF / ELSE ──────────────────────────────────────────────────────────────────
+
+  if x > 10 {
+      fmt.Println("big")
+  } else if x > 5 {
+      fmt.Println("medium")
+  } else {
+      fmt.Println("small")
+  }
+
+  // If with init statement (very Go-idiomatic)
+  if err := doSomething(); err != nil {
+      fmt.Println("Error:", err)
+  }
+
+  ── FOR LOOP (Go's ONLY loop — replaces for, while, do-while) ──────────────────
+
+  // Classic for
+  for i := 0; i < 5; i++ {
+      fmt.Println(i)
+  }
+
+  // While-style
+  n := 1
+  for n < 100 {
+      n *= 2
+  }
+
+  // Infinite loop
+  for {
+      // break to exit
+  }
+
+  // Range-based (like Java enhanced for)
+  nums := []int{10, 20, 30}
+  for i, v := range nums {
+      fmt.Printf("index: %d, value: %d\n", i, v)
+  }
+
+  // Ignore index with blank identifier
+  for _, v := range nums {
+      fmt.Println(v)
+  }
+
+  ── SWITCH ─────────────────────────────────────────────────────────────────────
+
+  // No break needed! Cases don't fall through by default
+  switch day {
+  case "Mon", "Tue", "Wed", "Thu", "Fri":
+      fmt.Println("Weekday")
+  case "Sat", "Sun":
+      fmt.Println("Weekend")
+  default:
+      fmt.Println("Unknown")
+  }
+
+  // Switch without expression (replaces if-else chains)
+  switch {
+  case x < 0:
+      fmt.Println("negative")
+  case x == 0:
+      fmt.Println("zero")
+  default:
+      fmt.Println("positive")
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 9. ARRAYS, SLICES, MAPS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ── ARRAYS (fixed size — rarely used directly) ─────────────────────────────────
+
+  var arr [3]int           // [0, 0, 0]
+  arr[0] = 10
+  arr2 := [3]string{"a", "b", "c"}
+  arr3 := [...]int{1, 2, 3, 4}  // compiler counts size
+
+  ── SLICES (dynamic — this is what you'll use 95% of the time) ─────────────────
+
+  // Think of slice like Java's ArrayList but backed by an array
+  s := []int{1, 2, 3}
+
+  // make(type, length, capacity)
+  s2 := make([]int, 5)       // [0,0,0,0,0]
+  s3 := make([]int, 3, 10)   // length 3, capacity 10
+
+  // Append
+  s = append(s, 4, 5)
+
+  // Slicing a slice
+  s[1:3]   // elements at index 1 and 2
+  s[:2]    // first 2 elements
+  s[2:]    // from index 2 to end
+
+  // Length and capacity
+  fmt.Println(len(s), cap(s))
+
+  // Iterating
+  for i, v := range s {
+      fmt.Println(i, v)
+  }
+
+  // 2D slice
+  matrix := [][]int{
+      {1, 2, 3},
+      {4, 5, 6},
+  }
+
+  ── MAPS (like Java's HashMap) ─────────────────────────────────────────────────
+
+  // Create
+  m := map[string]int{
+      "alice": 90,
+      "bob":   85,
+  }
+
+  // make
+  m2 := make(map[string]int)
+
+  // Insert / Update
+  m["charlie"] = 95
+
+  // Read
+  score := m["alice"]
+
+  // Check if key exists (important pattern!)
+  score, ok := m["dave"]
+  if !ok {
+      fmt.Println("dave not found")
+  }
+
+  // Delete
+  delete(m, "bob")
+
+  // Iterate
+  for key, val := range m {
+      fmt.Printf("%s: %d\n", key, val)
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 10. STRUCTS (Go's version of Classes)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  // Define a struct
+  type Employee struct {
+      ID         int
+      Name       string
+      Department string
+      Salary     float64
+  }
+
+  // Create (value type)
+  e1 := Employee{ID: 1, Name: "Aditya", Department: "Backend", Salary: 120000}
+
+  // Create with pointer (heap allocated — like Java objects)
+  e2 := &Employee{ID: 2, Name: "Ravi", Department: "DevOps"}
+
+  // Access fields
+  fmt.Println(e1.Name)
+  fmt.Println(e2.Name)  // Go auto-dereferences, no need for e2->Name
+
+  // Methods on structs (value receiver)
+  func (e Employee) String() string {
+      return fmt.Sprintf("%s [%s]", e.Name, e.Department)
+  }
+
+  // Methods with pointer receiver (modifies original)
+  func (e *Employee) Raise(percent float64) {
+      e.Salary += e.Salary * percent / 100
+  }
+
+  e1.Raise(10)  // Go auto-takes address when needed
+
+  // Struct embedding (Go's version of inheritance via composition)
+  type Manager struct {
+      Employee           // embedded struct — inherits all fields and methods
+      TeamSize int
+  }
+
+  m := Manager{
+      Employee: Employee{ID: 3, Name: "Suresh", Department: "Engineering"},
+      TeamSize: 8,
+  }
+  fmt.Println(m.Name)      // promoted field — access directly
+  fmt.Println(m.String())  // promoted method
+
+  // Anonymous structs (useful for quick grouping)
+  point := struct {
+      X, Y int
+  }{X: 10, Y: 20}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 11. POINTERS IN GO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  NOTE: Go pointers are SAFE — no pointer arithmetic like C/C++
+
+  // & = address of
+  // * = dereference (get value at address)
+
+  x := 42
+  p := &x          // p is a pointer to x (*int)
+  fmt.Println(p)   // prints memory address e.g. 0xc000018050
+  fmt.Println(*p)  // prints 42 (dereferences)
+
+  *p = 100         // modifies x through the pointer
+  fmt.Println(x)   // 100
+
+  // Why use pointers?
+  // 1. Modify a value inside a function (pass by reference)
+  // 2. Avoid copying large structs
+  // 3. Allow nil-able values (pointer can be nil, value cannot)
+
+  func increment(n *int) {
+      *n++
+  }
+  increment(&x)
+
+  // new() — allocates zeroed memory and returns pointer
+  p2 := new(int)   // *int pointing to 0
+  *p2 = 55
+
+  // Rule of thumb:
+  // Use pointer receiver (*T) when method modifies struct or struct is large
+  // Use value receiver (T) when method only reads struct
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 12. INTERFACES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  KEY DIFFERENCE FROM JAVA:
+  Go interfaces are IMPLICIT — no 'implements' keyword needed.
+  If a type has all the methods an interface requires, it satisfies it automatically.
+  This is called DUCK TYPING: "If it walks like a duck and quacks like a duck..."
+
+  // Define interface
+  type Shape interface {
+      Area() float64
+      Perimeter() float64
+  }
+
+  // Circle — implicitly implements Shape
+  type Circle struct {
+      Radius float64
+  }
+  func (c Circle) Area() float64      { return 3.14 * c.Radius * c.Radius }
+  func (c Circle) Perimeter() float64 { return 2 * 3.14 * c.Radius }
+
+  // Rectangle — implicitly implements Shape
+  type Rectangle struct {
+      Width, Height float64
+  }
+  func (r Rectangle) Area() float64      { return r.Width * r.Height }
+  func (r Rectangle) Perimeter() float64 { return 2 * (r.Width + r.Height) }
+
+  // Use interface as parameter
+  func printShapeInfo(s Shape) {
+      fmt.Printf("Area: %.2f, Perimeter: %.2f\n", s.Area(), s.Perimeter())
+  }
+
+  printShapeInfo(Circle{Radius: 5})
+  printShapeInfo(Rectangle{Width: 4, Height: 6})
+
+  // Empty interface — accepts any type (like Object in Java)
+  func printAnything(v interface{}) {
+      fmt.Println(v)
+  }
+  // In Go 1.18+ use 'any' (alias for interface{})
+  func printAnything(v any) {
+      fmt.Println(v)
+  }
+
+  // Type assertion — check what concrete type is behind an interface
+  var s Shape = Circle{Radius: 3}
+  if c, ok := s.(Circle); ok {
+      fmt.Println("It's a circle with radius", c.Radius)
+  }
+
+  // Type switch
+  func describe(i interface{}) {
+      switch v := i.(type) {
+      case int:
+          fmt.Printf("int: %d\n", v)
+      case string:
+          fmt.Printf("string: %s\n", v)
+      case Circle:
+          fmt.Printf("circle radius: %f\n", v.Radius)
+      default:
+          fmt.Printf("unknown type: %T\n", v)
+      }
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 13. ERROR HANDLING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Go does NOT have exceptions. Errors are values — returned explicitly.
+
+  // error is a built-in interface:
+  // type error interface { Error() string }
+
+  // Return error from function
+  func openFile(name string) (string, error) {
+      if name == "" {
+          return "", fmt.Errorf("filename cannot be empty")
+      }
+      return "file contents", nil
+  }
+
+  // Handle error at call site
+  content, err := openFile("data.txt")
+  if err != nil {
+      fmt.Println("Error:", err)
+      return
+  }
+  fmt.Println(content)
+
+  // Custom error type
+  type ValidationError struct {
+      Field   string
+      Message string
+  }
+  func (e *ValidationError) Error() string {
+      return fmt.Sprintf("validation error: %s — %s", e.Field, e.Message)
+  }
+
+  func validate(age int) error {
+      if age < 0 {
+          return &ValidationError{Field: "age", Message: "must be non-negative"}
+      }
+      return nil
+  }
+
+  // errors.Is and errors.As (Go 1.13+)
+  import "errors"
+
+  var ErrNotFound = errors.New("not found")
+
+  err = someFunc()
+  if errors.Is(err, ErrNotFound) {
+      // handle specifically
+  }
+
+  var ve *ValidationError
+  if errors.As(err, &ve) {
+      fmt.Println("Field:", ve.Field)
+  }
+
+  // panic / recover (use SPARINGLY — only for truly unrecoverable states)
+  func riskyOp() {
+      defer func() {
+          if r := recover(); r != nil {
+              fmt.Println("Recovered:", r)
+          }
+      }()
+      panic("something went very wrong")
+  }
+
+  // defer — runs when function exits (like Java's finally)
+  func readFile() {
+      f, _ := os.Open("file.txt")
+      defer f.Close()   // guaranteed to run when readFile() returns
+      // ... read file
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 14. PACKAGES & MODULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  // Project structure
+  myapp/
+  ├── go.mod           ← module definition (like pom.xml / build.gradle)
+  ├── go.sum           ← dependency checksums
+  ├── main.go          ← entry point
+  └── employee/
+      └── employee.go  ← 'employee' package
+
+  // go.mod
+  module github.com/aditya/myapp
+  go 1.21
+
+  // employee/employee.go
+  package employee                  // package name = directory name (convention)
+
+  type Employee struct {
+      Name string                   // Exported (capital letter = public)
+      salary float64                // unexported (lowercase = private)
+  }
+  func (e Employee) GetSalary() float64 { return e.salary }
+
+  // main.go
+  package main
+  import (
+      "fmt"
+      "github.com/aditya/myapp/employee"
+  )
+  func main() {
+      e := employee.Employee{Name: "Aditya"}
+      fmt.Println(e.Name)
+  }
+
+  // Add external dependency
+  $ go get github.com/gin-gonic/gin
+
+  // Key standard library packages
+  fmt      — formatting, printing
+  os       — OS operations (files, env vars)
+  io       — I/O primitives
+  net/http — HTTP server and client
+  encoding/json — JSON marshal/unmarshal
+  errors   — error handling utilities
+  sync     — Mutex, WaitGroup (concurrency)
+  context  — request context, cancellation
+  time     — time operations
+  strings  — string utilities
+  strconv  — string conversions
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 15. INTERVIEW Q&A
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Q1. How is Go different from Java?
+A:  Go is compiled to native binary (no JVM), uses goroutines instead of threads,
+    has no classes/inheritance, uses implicit interfaces, and handles errors via
+    return values instead of exceptions.
+
+Q2. What is the zero value in Go?
+A:  Every variable is initialized to its zero value: 0 for numerics, false for bool,
+    "" for string, nil for pointers/slices/maps/channels/interfaces/functions.
+
+Q3. What is the difference between := and var?
+A:  ':=' is short variable declaration (only inside functions, infers type).
+    'var' can be used at package level and allows explicit type declaration.
+
+Q4. What is a slice vs an array in Go?
+A:  Arrays are fixed-size value types. Slices are dynamic, reference a backing array,
+    and are the idiomatic Go collection. Slices carry length and capacity.
+
+Q5. How does Go implement OOP without classes?
+A:  Via structs (data) + methods (behavior) + interfaces (polymorphism) + embedding
+    (composition over inheritance).
+
+Q6. What are Go interfaces and how are they different from Java interfaces?
+A:  Go interfaces are satisfied implicitly — no 'implements' keyword. Any type that
+    has all required methods automatically satisfies the interface (structural typing
+    / duck typing). Java requires explicit declaration.
+
+Q7. What is defer in Go?
+A:  defer schedules a function call to run just before the surrounding function
+    returns. Used for cleanup (closing files, releasing locks). Multiple defers run
+    in LIFO order.
+
+Q8. Why does Go not have exceptions?
+A:  Go's designers believed exceptions complicate control flow and make it hard to
+    reason about code. Errors as values are explicit, visible, and force the caller
+    to decide how to handle them.
+
+Q9. What is the difference between value receiver and pointer receiver?
+A:  Value receiver (T) gets a copy — suitable for read-only methods or small structs.
+    Pointer receiver (*T) gets the actual address — use when method modifies the
+    struct or struct is large (avoids copying).
+
+Q10. What is the blank identifier '_' used for?
+A:  To discard values you don't need (e.g., ignoring an index in range loop or
+    discarding an error — though discarding errors is bad practice).
+
+Q11. Can Go have multiple return values? Why is this useful?
+A:  Yes. Most commonly used to return (result, error) pairs, eliminating the need
+    for wrapper objects or exception-based error signaling.
+
+Q12. What is the 'any' type in Go?
+A:  'any' is an alias for 'interface{}' introduced in Go 1.18. It represents any
+    type, similar to Object in Java.
+
+Q13. What is iota used for?
+A:  iota is a constant generator that auto-increments within a const block, starting
+    at 0. Used to create enumeration-like constants.
+
+Q14. How do you check if a key exists in a map?
+A:  val, ok := m[key]
+    If 'ok' is true, the key exists. If false, 'val' is the zero value.
+
+Q15. What is the difference between make() and new()?
+A:  new(T) allocates zeroed memory for type T and returns *T.
+    make(T, args) initializes slices, maps, and channels (reference types that need
+    internal structure initialized). make returns T (not *T).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
