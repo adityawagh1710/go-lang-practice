@@ -1,0 +1,103 @@
+========================================
+1. What is range in Go?
+========================================
+- `range` is used to iterate over:
+  Arrays, Slices, Maps, Strings, Channels
+
+- It returns:
+  (1) index/key
+  (2) value
+
+Syntax:
+for index, value := range collection {
+    // code
+}
+
+Ignore values:
+for _, value := range collection {}
+for index := range collection {}
+
+========================================
+2. range with Slice / Array
+========================================
+nums := []int{10, 20, 30}
+
+for i, v := range nums {
+    fmt.Println(i, v)
+}
+
+NOTE:
+- value is COPY (not reference)
+
+========================================
+3. range with Map
+========================================
+m := map[string]int{"a":1, "b":2}
+
+for k, v := range m {
+    fmt.Println(k, v)
+}
+
+NOTE:
+- Order is NOT guaranteed
+
+========================================
+4. range with String
+========================================
+str := "Go"
+
+for i, ch := range str {
+    fmt.Println(i, ch)
+}
+
+NOTE:
+- ch is rune (Unicode int32)
+
+========================================
+5. range with Channel
+========================================
+for v := range ch {
+    fmt.Println(v)
+}
+
+NOTE:
+- Runs until channel is closed
+
+========================================
+6. Modify Values
+========================================
+Wrong:
+for _, v := range nums {
+    v = v * 2
+}
+
+Correct:
+for i := range nums {
+    nums[i] *= 2
+}
+
+========================================
+7. Common Mistakes
+========================================
+- Expecting ordered map
+- Modifying value directly
+- Not closing channel
+- Confusing rune vs byte
+
+========================================
+8. Interview Questions
+========================================
+Q: What does range return?
+A: index/key and value
+
+Q: Is map ordered?
+A: No
+
+Q: Can we skip values?
+A: Yes using `_`
+
+Q: How to modify slice?
+A: Use index
+
+Q: range over string gives?
+A: index + rune

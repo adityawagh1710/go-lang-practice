@@ -26,4 +26,26 @@ func main() {
 	for i, num := range nums {
 		fmt.Println(num, i)
 	}
+
+	fmt.Println("Range with defining the order and oop with no order")
+
+	a := map[string]int{"one": 1, "two": 2, "three": 3, "four": 4}
+
+	// defining the order
+	var b []string
+	b = append(b, "one", "two", "three", "four")
+
+	// loop with no order
+	for k, v := range a {
+		fmt.Printf("%v : %v, ", k, v)
+	}
+
+	fmt.Println()
+	// loop with the defined order
+	// Ignore index with _,
+	for _, element := range b {
+		fmt.Printf("%v : %v, ", element, a[element])
+	}
+
+	fmt.Println()
 }

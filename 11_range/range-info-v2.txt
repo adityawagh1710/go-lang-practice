@@ -1,0 +1,170 @@
+================================================================================
+GO LANG - RANGE KEYWORD NOTES
+================================================================================
+
+1. WHAT IS RANGE?
+   - The `range` keyword is used ONLY in `for` loops to iterate over collections.
+   - It works with: arrays, slices, maps, strings, channels, integers (Go 1.22+), and iterator functions (Go 1.23+).
+   - Syntax:
+       for [key/index], [value/element] := range collection {
+           // body
+       }
+   - You can use 0, 1, or 2 variables (3rd bool var is rare/old).
+   - Use `_` (blank identifier) to ignore index/key or value.
+   - The range expression is evaluated ONLY ONCE before the loop starts.
+   - Loop variables declared with `:=` get a fresh copy on EVERY iteration (since Go 1.22).
+
+2. WHAT EACH TYPE RETURNS
+   | Type                  | 1 variable          | 2 variables                  | Notes |
+   |-----------------------|---------------------|------------------------------|-------|
+   | Array / Slice         | index (int)         | index, value (copy)          | index 0 to len-1 |
+   | String                | byte index (int)    | byte index, rune             | Unicode code points |
+   | Map                   | key                 | key, value                   | Order is RANDOM |
+   | Channel               | received value      | (only 1 var allowed)         | Stops when channel closed |
+   | Integer (Go 1.22+)    | value (0 to n-1)    | not allowed                  | for i := range 10 |
+   | Iterator func (1.23+) | value(s) from yield | depends on func signature    | Custom lazy iteration |
+
+3. EXAMPLES
+
+--- 3.1 Slice / Array ---
+package main
+import "fmt"
+
+func main() {
+    nums := []int{10, 20, 30, 40}
+
+    // Ignore index
+    for _, num := range nums {
+        fmt.Println(num)           // 10 20 30 40
+    }
+
+    // With index
+    for i, num := range nums {
+        fmt.Printf("Index %d = %d\n", i, num)
+    }
+
+    // Sum example (common in interviews)
+    sum := 0
+    for _, num := range nums {
+        sum += num
+    }
+    fmt.Println("Sum:", sum)       // 100
+}
+
+--- 3.2 Map ---
+    m := map[string]int{"a": 1, "b": 2, "c": 3}
+
+    // Key + Value
+    for k, v := range m {
+        fmt.Printf("%s -> %d\n", k, v)
+    }
+
+    // Keys only
+    for k := range m {
+        fmt.Println(k)
+    }
+
+    // Note: Order is RANDOM every time you run the program
+
+--- 3.3 String ---
+    s := "Hello 世界"
+
+    for i, r := range s {
+        fmt.Printf("Index %d → Rune %U (%c)\n", i, r, r)
+    }
+    // Output shows byte index, not character index for multi-byte runes
+
+--- 3.4 Channel ---
+    ch := make(chan int, 3)
+    go func() {
+        ch <- 1
+        ch <- 2
+        ch <- 3
+        close(ch)
+    }()
+
+    for val := range ch {          // Loops until channel is closed
+        fmt.Println(val)
+    }
+
+    // Drain channel without using values
+    for range ch { }
+
+--- 3.5 Integer (Go 1.22+) ---
+    for i := range 5 {             // 0,1,2,3,4
+        fmt.Println(i)
+    }
+
+--- 3.6 Iterator Function (Go 1.23+) ---
+    fibo := func(yield func(int) bool) {
+        a, b := 0, 1
+        for yield(a) {
+            a, b = b, a+b
+        }
+    }
+
+    for x := range fibo {
+        if x > 100 { break }
+        fmt.Print(x, " ")
+    }
+
+4. IMPORTANT GOTCHAS (MUST KNOW FOR INTERVIEWS)
+   - Value is a COPY → modifying the loop variable does NOT change the collection.
+   - For slices: you CAN append during iteration (but be careful with capacity).
+   - Map iteration order is intentionally RANDOM and NOT stable.
+   - Range over nil slice/map/channel → 0 iterations.
+   - Range over nil channel → blocks forever.
+   - Loop variables in closures (goroutines) → capture the variable correctly since Go 1.22 (pre-1.22 was a common bug).
+   - String range = runes, NOT bytes.
+
+5. INTERVIEW QUESTIONS & ANSWERS
+
+Q1. What types can you range over in Go?
+A: Arrays, slices, maps, strings, channels, integers (1.22+), iterator functions (1.23+).
+
+Q2. When you write `for i := range slice`, what does `i` contain?
+A: The index (0 to len-1). If you want the value, use `for _, v := range slice`.
+
+Q3. What is returned when ranging over a string?
+A: Byte index and rune (Unicode code point). Not bytes.
+
+Q4. Does map iteration order guaranteed?
+A: No. It is randomized on purpose. Never rely on order.
+
+Q5. What happens if you `range` over a channel that is never closed?
+A: The loop blocks forever (or until goroutine is killed).
+
+Q6. Can you modify the collection while ranging over it?
+A: For maps: deleting unseen keys is safe; adding may or may not be seen. For slices: appending is allowed but can cause unexpected behavior if capacity changes.
+
+Q7. Explain the blank identifier `_` with range.
+A: Ignores index/key or value. Example: `for _, v := range slice` or `for range ch` (drain).
+
+Q8. What changed in Go 1.22 regarding range loops?
+A: Each iteration gets its own copy of the loop variables (no more shared variable bug in goroutine closures).
+
+Q9. Write code to sum a slice without using index.
+A: (See example 3.1 above)
+
+Q10. How do you iterate only over keys of a map?
+A: `for k := range m { ... }`
+
+Q11. What happens if you range over a nil slice?
+A: Zero iterations, no panic.
+
+Q12. Difference between `for v := range ch` and `for { v, ok := <-ch; if !ok { break } }`?
+A: Range version automatically stops when channel is closed and is cleaner.
+
+Q13. Can you use range with 3 variables?
+A: In very old Go for channels (value + ok bool), but not commonly used now.
+
+Q14. How would you implement a custom iterator with range (Go 1.23)?
+A: Define func(yield func(T) bool) and call yield inside.
+
+Q15. Common bug: Why does this print the same number 10 times when launching goroutines?
+   for i := range 10 {
+       go func() { fmt.Println(i) }()
+   }
+A: Pre-Go 1.22 loop variable was reused. Fix: `go func(i int){...}(i)` or use Go 1.22+.
+
+================================================================================

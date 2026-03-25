@@ -1,0 +1,836 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ TABLE OF CONTENTS RANGE KEYWORD NOTES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1.  What is range?
+  2.  Syntax
+  3.  range over Array
+  4.  range over Slice
+  5.  range over Map
+  6.  range over String
+  7.  range over Channel
+  8.  range with Blank Identifier (_)
+  9.  range — Index Only
+  10. range — Value Only
+  11. range over 2D Slice
+  12. range with Custom Struct Slice
+  13. Modifying Elements during range
+  14. range vs traditional for loop
+  15. range in Go 1.22+ (New Features)
+  16. Common Mistakes
+  17. Interview Q&A (20 Questions)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 1. WHAT IS range?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  'range' is a built-in keyword used with 'for' loop to iterate over:
+    - Arrays
+    - Slices
+    - Maps
+    - Strings (rune by rune)
+    - Channels
+
+  Java equivalent: enhanced for-each loop  →  for (String s : list)
+  Go equivalent:   for i, v := range list  →  gives both index AND value
+
+  KEY POINT: range always returns TWO values (index/key + value).
+             You can ignore either using the blank identifier '_'.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 2. SYNTAX
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  // Full form — both index and value
+  for index, value := range collection {
+      // use index and value
+  }
+
+  // Index only
+  for index := range collection {
+      // use index
+  }
+
+  // Value only — discard index with blank identifier
+  for _, value := range collection {
+      // use value
+  }
+
+  // Neither (just loop N times based on collection length)
+  for range collection {
+      // just iterates
+  }
+
+  ┌──────────────┬───────────────┬──────────────────────────────────────┐
+  │ Data Type    │ 1st value     │ 2nd value                            │
+  ├──────────────┼───────────────┼──────────────────────────────────────┤
+  │ Array/Slice  │ index (int)   │ copy of element                      │
+  │ Map          │ key           │ value                                 │
+  │ String       │ byte index    │ rune (Unicode code point)            │
+  │ Channel      │ element       │ (only 1 value)                       │
+  └──────────────┴───────────────┴──────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 3. range OVER ARRAY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  package main
+  import "fmt"
+
+  func main() {
+      scores := [5]int{90, 85, 78, 92, 88}
+
+      // Both index and value
+      for i, score := range scores {
+          fmt.Printf("Student %d scored: %d\n", i+1, score)
+      }
+  }
+
+  Output:
+    Student 1 scored: 90
+    Student 2 scored: 85
+    Student 3 scored: 78
+    Student 4 scored: 92
+    Student 5 scored: 88
+
+  ── Find Sum using range ────────────────────────────────────────────────────────
+
+  func main() {
+      numbers := [5]int{10, 20, 30, 40, 50}
+      sum := 0
+
+      for _, n := range numbers {
+          sum += n
+      }
+      fmt.Println("Sum:", sum)  // Sum: 150
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 4. range OVER SLICE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  func main() {
+      fruits := []string{"Apple", "Banana", "Mango", "Orange"}
+
+      for i, fruit := range fruits {
+          fmt.Printf("[%d] %s\n", i, fruit)
+      }
+  }
+
+  Output:
+    [0] Apple
+    [1] Banana
+    [2] Mango
+    [3] Orange
+
+  ── Find Max Value ──────────────────────────────────────────────────────────────
+
+  func main() {
+      prices := []float64{299.99, 149.50, 499.00, 89.99, 399.00}
+      max := prices[0]
+
+      for _, p := range prices {
+          if p > max {
+              max = p
+          }
+      }
+      fmt.Printf("Max price: %.2f\n", max)  // Max price: 499.00
+  }
+
+  ── Filter Slice using range ────────────────────────────────────────────────────
+
+  func main() {
+      ages := []int{15, 22, 17, 30, 13, 25, 19}
+      var adults []int
+
+      for _, age := range ages {
+          if age >= 18 {
+              adults = append(adults, age)
+          }
+      }
+      fmt.Println("Adults:", adults)  // Adults: [22 30 25 19]
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 5. range OVER MAP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  IMPORTANT: Map iteration order is RANDOM in Go (by design).
+             Never rely on map range order being consistent.
+
+  func main() {
+      salaries := map[string]float64{
+          "Aditya":  120000,
+          "Ravi":    95000,
+          "Priya":   110000,
+          "Suresh":  85000,
+      }
+
+      for name, salary := range salaries {
+          fmt.Printf("%s earns %.0f\n", name, salary)
+      }
+  }
+
+  Output (order may vary each run):
+    Priya earns 110000
+    Aditya earns 120000
+    Ravi earns 95000
+    Suresh earns 85000
+
+  ── Iterate Keys Only ───────────────────────────────────────────────────────────
+
+  func main() {
+      config := map[string]string{
+          "host": "localhost",
+          "port": "8080",
+          "db":   "postgres",
+      }
+
+      fmt.Println("Config keys:")
+      for key := range config {
+          fmt.Println(" -", key)
+      }
+  }
+
+  ── Find Highest Salary ─────────────────────────────────────────────────────────
+
+  func main() {
+      salaries := map[string]float64{
+          "Alice": 120000,
+          "Bob":   95000,
+          "Carol": 135000,
+      }
+
+      topEmployee := ""
+      topSalary := 0.0
+
+      for name, salary := range salaries {
+          if salary > topSalary {
+              topSalary = salary
+              topEmployee = name
+          }
+      }
+      fmt.Printf("Top earner: %s (%.0f)\n", topEmployee, topSalary)
+      // Top earner: Carol (135000)
+  }
+
+  ── Count Word Frequency ────────────────────────────────────────────────────────
+
+  func main() {
+      words := []string{"go", "java", "go", "python", "go", "java"}
+      freq := make(map[string]int)
+
+      for _, word := range words {
+          freq[word]++  // auto-initializes to 0 if key doesn't exist
+      }
+
+      for word, count := range freq {
+          fmt.Printf("%s: %d\n", word, count)
+      }
+  }
+
+  Output:
+    go: 3
+    java: 2
+    python: 1
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 6. range OVER STRING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  IMPORTANT:
+  - range over string iterates by RUNE (Unicode code point), NOT by byte
+  - 1st value = byte index (not rune index)
+  - 2nd value = rune (int32) — the actual Unicode character
+  - This correctly handles multi-byte characters (emoji, Hindi, Chinese, etc.)
+
+  func main() {
+      name := "Aditya"
+
+      for i, ch := range name {
+          fmt.Printf("index: %d, char: %c, rune value: %d\n", i, ch, ch)
+      }
+  }
+
+  Output:
+    index: 0, char: A, rune value: 65
+    index: 1, char: d, rune value: 100
+    index: 2, char: i, rune value: 105
+    index: 3, char: t, rune value: 116
+    index: 4, char: y, rune value: 121
+    index: 5, char: a, rune value: 97
+
+  ── Unicode / Multi-byte String ─────────────────────────────────────────────────
+
+  func main() {
+      greeting := "नमस्ते"  // Hindi — each char is 3 bytes
+
+      for i, ch := range greeting {
+          fmt.Printf("byte index: %d, char: %c\n", i, ch)
+      }
+  }
+
+  Output:
+    byte index: 0,  char: न
+    byte index: 3,  char: म
+    byte index: 6,  char: स
+    byte index: 9,  char: ्
+    byte index: 12, char: त
+    byte index: 15, char: े
+
+  NOTE: byte indices jump by 3 because each Hindi character = 3 bytes in UTF-8.
+        range handles this correctly — always gives you whole characters (runes).
+
+  ── Count Vowels using range ────────────────────────────────────────────────────
+
+  func main() {
+      sentence := "Go is an awesome language"
+      vowels := 0
+
+      for _, ch := range sentence {
+          switch ch {
+          case 'a', 'e', 'i', 'o', 'u', 'A', 'E', 'I', 'O', 'U':
+              vowels++
+          }
+      }
+      fmt.Println("Vowel count:", vowels)  // Vowel count: 10
+  }
+
+  ── Reverse a String using range ────────────────────────────────────────────────
+
+  func reverseString(s string) string {
+      runes := []rune(s)
+      for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
+          runes[i], runes[j] = runes[j], runes[i]
+      }
+      return string(runes)
+  }
+
+  func main() {
+      fmt.Println(reverseString("Golang"))  // gnaloG
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 7. range OVER CHANNEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  - range over channel receives values until the channel is CLOSED
+  - Only ONE return value (no index)
+  - If channel is never closed, range will block forever (deadlock!)
+
+  func main() {
+      ch := make(chan int, 5)
+
+      // Send values into channel
+      ch <- 10
+      ch <- 20
+      ch <- 30
+      ch <- 40
+      ch <- 50
+      close(ch)  // MUST close, otherwise range blocks forever
+
+      // Receive using range
+      for val := range ch {
+          fmt.Println("Received:", val)
+      }
+  }
+
+  Output:
+    Received: 10
+    Received: 20
+    Received: 30
+    Received: 40
+    Received: 50
+
+  ── Producer-Consumer with range ────────────────────────────────────────────────
+
+  func producer(ch chan<- int) {
+      for i := 1; i <= 5; i++ {
+          ch <- i * 10
+      }
+      close(ch)  // signal that production is done
+  }
+
+  func main() {
+      ch := make(chan int)
+      go producer(ch)
+
+      for val := range ch {
+          fmt.Println("Processing:", val)
+      }
+      fmt.Println("All done!")
+  }
+
+  Output:
+    Processing: 10
+    Processing: 20
+    Processing: 30
+    Processing: 40
+    Processing: 50
+    All done!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 8. range WITH BLANK IDENTIFIER (_)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  '_' is the blank identifier — used to discard a value you don't need.
+  Go forces you to use every declared variable, so _ lets you skip one.
+
+  // Discard index — use only value
+  for _, v := range []int{1, 2, 3} {
+      fmt.Println(v)
+  }
+
+  // Discard value — use only index
+  for i := range []int{1, 2, 3} {
+      fmt.Println(i)
+  }
+
+  // Discard both — just count/repeat
+  count := 0
+  for range []int{1, 2, 3, 4, 5} {
+      count++
+  }
+  fmt.Println(count)  // 5
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 9. range — INDEX ONLY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  func main() {
+      tasks := []string{"Design DB", "Write API", "Write Tests", "Deploy"}
+
+      fmt.Println("Task List:")
+      for i := range tasks {
+          fmt.Printf("  Task #%d: %s\n", i+1, tasks[i])
+      }
+  }
+
+  Output:
+    Task List:
+      Task #1: Design DB
+      Task #2: Write API
+      Task #3: Write Tests
+      Task #4: Deploy
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 10. range — VALUE ONLY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  func main() {
+      departments := []string{"Backend", "Frontend", "DevOps", "QA"}
+
+      fmt.Println("Departments:")
+      for _, dept := range departments {
+          fmt.Println(" -", dept)
+      }
+  }
+
+  Output:
+    Departments:
+     - Backend
+     - Frontend
+     - DevOps
+     - QA
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 11. range OVER 2D SLICE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  func main() {
+      // 3x3 matrix
+      matrix := [][]int{
+          {1, 2, 3},
+          {4, 5, 6},
+          {7, 8, 9},
+      }
+
+      for row, rowData := range matrix {
+          for col, val := range rowData {
+              fmt.Printf("matrix[%d][%d] = %d\n", row, col, val)
+          }
+      }
+  }
+
+  Output:
+    matrix[0][0] = 1
+    matrix[0][1] = 2
+    matrix[0][2] = 3
+    matrix[1][0] = 4
+    ... and so on
+
+  ── Sum of all elements in matrix ───────────────────────────────────────────────
+
+  func main() {
+      matrix := [][]int{
+          {1, 2, 3},
+          {4, 5, 6},
+          {7, 8, 9},
+      }
+      sum := 0
+      for _, row := range matrix {
+          for _, val := range row {
+              sum += val
+          }
+      }
+      fmt.Println("Matrix sum:", sum)  // Matrix sum: 45
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 12. range OVER CUSTOM STRUCT SLICE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  type Employee struct {
+      ID         int
+      Name       string
+      Department string
+      Salary     float64
+  }
+
+  func main() {
+      employees := []Employee{
+          {1, "Aditya",  "Backend",  120000},
+          {2, "Priya",   "Frontend", 110000},
+          {3, "Ravi",    "DevOps",   95000},
+          {4, "Suresh",  "Backend",  130000},
+          {5, "Kavita",  "QA",       88000},
+      }
+
+      // Print all employees
+      fmt.Println("=== Employee List ===")
+      for _, emp := range employees {
+          fmt.Printf("ID: %d | %-10s | %-10s | %.0f\n",
+              emp.ID, emp.Name, emp.Department, emp.Salary)
+      }
+
+      // Filter Backend employees
+      fmt.Println("\n=== Backend Team ===")
+      for _, emp := range employees {
+          if emp.Department == "Backend" {
+              fmt.Printf("%s - %.0f\n", emp.Name, emp.Salary)
+          }
+      }
+
+      // Calculate average salary
+      total := 0.0
+      for _, emp := range employees {
+          total += emp.Salary
+      }
+      avg := total / float64(len(employees))
+      fmt.Printf("\nAverage Salary: %.2f\n", avg)
+  }
+
+  Output:
+    === Employee List ===
+    ID: 1 | Aditya     | Backend    | 120000
+    ID: 2 | Priya      | Frontend   | 110000
+    ID: 3 | Ravi       | DevOps     | 95000
+    ID: 4 | Suresh     | Backend    | 130000
+    ID: 5 | Kavita     | QA         | 88000
+
+    === Backend Team ===
+    Aditya - 120000
+    Suresh - 130000
+
+    Average Salary: 108600.00
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 13. MODIFYING ELEMENTS DURING range
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ⚠️ CRITICAL: range gives you a COPY of the value, NOT the original.
+               Modifying 'v' does NOT modify the original slice!
+
+  // WRONG — does NOT modify original slice
+  func main() {
+      nums := []int{1, 2, 3, 4, 5}
+      for _, v := range nums {
+          v *= 2  // modifies copy only — original unchanged!
+      }
+      fmt.Println(nums)  // [1 2 3 4 5]  — unchanged!
+  }
+
+  // CORRECT — use index to modify original
+  func main() {
+      nums := []int{1, 2, 3, 4, 5}
+      for i := range nums {
+          nums[i] *= 2  // modifies original via index
+      }
+      fmt.Println(nums)  // [2 4 6 8 10]
+  }
+
+  // CORRECT for structs — use pointer slice or index
+  type Product struct {
+      Name  string
+      Price float64
+  }
+
+  func main() {
+      products := []Product{
+          {"Laptop", 50000},
+          {"Phone",  30000},
+          {"Tablet", 25000},
+      }
+
+      // Apply 10% discount — WRONG WAY
+      for _, p := range products {
+          p.Price *= 0.9  // modifies copy only!
+      }
+      fmt.Println(products[0].Price)  // 50000 — unchanged
+
+      // Apply 10% discount — CORRECT WAY
+      for i := range products {
+          products[i].Price *= 0.9  // modifies original
+      }
+      fmt.Println(products[0].Price)  // 45000 — correct!
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 14. range vs TRADITIONAL for LOOP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─────────────────────────────────┬──────────────────────────────────────┐
+  │ range for                       │ Traditional for                      │
+  ├─────────────────────────────────┼──────────────────────────────────────┤
+  │ Cleaner syntax                  │ More verbose                         │
+  │ Auto index + value              │ Manual index management              │
+  │ Works on any iterable           │ Works on arrays/slices with index    │
+  │ Value is a COPY                 │ Access original via index            │
+  │ Can't control step size         │ Can step by 2, 3, etc.               │
+  │ Can't iterate reverse natively  │ Easy to iterate in reverse           │
+  │ Best for read/filter operations │ Best for modify/reverse/step ops     │
+  └─────────────────────────────────┴──────────────────────────────────────┘
+
+  // When to use traditional for loop instead of range:
+
+  // 1. Reverse iteration
+  for i := len(nums) - 1; i >= 0; i-- {
+      fmt.Println(nums[i])
+  }
+
+  // 2. Step by 2
+  for i := 0; i < len(nums); i += 2 {
+      fmt.Println(nums[i])
+  }
+
+  // 3. Modifying while iterating (safer with index)
+  for i := 0; i < len(nums); i++ {
+      nums[i] = nums[i] * 2
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 15. range IN Go 1.22+ (NEW FEATURES)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Go 1.22 (Feb 2024) introduced major range improvements:
+
+  ── range over Integer (NEW in Go 1.22) ─────────────────────────────────────────
+
+  // Before Go 1.22 — needed a dummy slice or manual loop
+  for i := 0; i < 5; i++ { fmt.Println(i) }
+
+  // Go 1.22+ — range directly over integer!
+  for i := range 5 {
+      fmt.Println(i)  // 0, 1, 2, 3, 4
+  }
+
+  // Practical use: repeat N times
+  for range 3 {
+      fmt.Println("Retry...")
+  }
+
+  ── range over Function (Go 1.23 — experimental) ────────────────────────────────
+
+  // Go 1.23 added range over iterator functions (push iterators)
+  // This enables custom iterable types similar to Java's Iterable<T>
+
+  // Example: custom range-able generator
+  func fibonacci(yield func(int) bool) {
+      a, b := 0, 1
+      for {
+          if !yield(a) {
+              return
+          }
+          a, b = b, a+b
+      }
+  }
+
+  // Use it with range
+  for n := range fibonacci {
+      if n > 100 {
+          break
+      }
+      fmt.Println(n)
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 16. COMMON MISTAKES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ❌ MISTAKE 1: Modifying slice value via range variable
+  ──────────────────────────────────────────────────────
+  nums := []int{1, 2, 3}
+  for _, v := range nums {
+      v = v * 10  // WRONG — v is a copy
+  }
+  // Fix: for i := range nums { nums[i] = nums[i] * 10 }
+
+  ❌ MISTAKE 2: Taking address of range variable (classic goroutine bug)
+  ──────────────────────────────────────────────────────────────────────
+  nums := []int{1, 2, 3}
+  for _, v := range nums {
+      go func() {
+          fmt.Println(v)  // WRONG — all goroutines may print same value
+      }()
+  }
+  // Fix: pass v as argument
+  for _, v := range nums {
+      go func(n int) {
+          fmt.Println(n)  // CORRECT
+      }(v)
+  }
+
+  ❌ MISTAKE 3: Ranging over nil slice (safe — no panic, just skips)
+  ──────────────────────────────────────────────────────────────────
+  var s []int  // nil slice
+  for _, v := range s {
+      fmt.Println(v)  // Never executes — safe, no panic
+  }
+
+  ❌ MISTAKE 4: Expecting consistent map iteration order
+  ──────────────────────────────────────────────────────
+  m := map[string]int{"a": 1, "b": 2, "c": 3}
+  for k := range m {
+      fmt.Println(k)  // Order changes every run — never rely on it
+  }
+  // Fix: collect keys, sort them, then iterate
+
+  ❌ MISTAKE 5: Forgetting to close channel in range
+  ──────────────────────────────────────────────────
+  ch := make(chan int)
+  go func() {
+      ch <- 1
+      ch <- 2
+      // forgot close(ch) — range will block forever!
+  }()
+  for v := range ch {  // DEADLOCK!
+      fmt.Println(v)
+  }
+  // Fix: always close(ch) in the sender goroutine
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ 17. INTERVIEW Q&A (20 QUESTIONS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Q1.  What is 'range' in Go and what can it iterate over?
+A:   'range' is used with the for loop to iterate over arrays, slices, maps,
+     strings, and channels. It returns up to two values per iteration:
+     index/key and value.
+
+Q2.  What are the two values returned by range when iterating over a slice?
+A:   The first value is the index (int), and the second is a copy of the element
+     at that index.
+
+Q3.  How do you iterate over only values in a slice using range?
+A:   Use the blank identifier to discard the index:
+     for _, v := range slice { }
+
+Q4.  How do you iterate over only keys in a map using range?
+A:   for key := range myMap { } — simply omit the second variable.
+
+Q5.  Is map iteration order guaranteed in Go?
+A:   No. Go intentionally randomizes map iteration order. Never write code
+     that depends on a consistent map range order.
+
+Q6.  What does range return when iterating over a string?
+A:   The byte index and a rune (int32 / Unicode code point). It iterates by
+     character (rune), not byte, correctly handling multi-byte Unicode chars.
+
+Q7.  What is the difference between ranging over a string by byte vs rune?
+A:   Using range gives runes (correct Unicode characters). Using a regular
+     for loop with index (s[i]) gives bytes, which can break multi-byte chars.
+
+Q8.  Can you modify a slice element using the range value variable?
+A:   No. Range gives a copy of the element. To modify the original, use the
+     index: for i := range slice { slice[i] = newValue }
+
+Q9.  What happens when you range over a nil slice?
+A:   Nothing — it's safe. The loop body simply never executes. No panic.
+
+Q10. What happens when you range over a nil map?
+A:   Same as nil slice — safe, loop body never executes. No panic.
+
+Q11. Why must you close a channel before ranging over it?
+A:   range over a channel reads until the channel is closed. If never closed,
+     range blocks forever causing a deadlock.
+
+Q12. What is the classic goroutine + range bug and how do you fix it?
+A:   Taking the address of a range variable and using it in a goroutine — all
+     goroutines end up using the last value. Fix by passing the variable as a
+     function argument to capture it correctly.
+     Wrong: go func() { fmt.Println(v) }()
+     Right: go func(n int) { fmt.Println(n) }(v)
+
+Q13. What new range feature was introduced in Go 1.22?
+A:   range over integers. You can now write 'for i := range 5' to iterate
+     from 0 to 4, replacing verbose dummy slice patterns.
+
+Q14. How do you iterate over a 2D slice using range?
+A:   Use nested range loops:
+     for _, row := range matrix { for _, val := range row { } }
+
+Q15. Can you use range with a custom type?
+A:   In Go 1.23+, yes — via iterator functions (range-over-func). Before that,
+     only built-in types (array, slice, map, string, channel) support range.
+
+Q16. How is range in Go similar to Java's enhanced for-each?
+A:   Both iterate over collections without manual index management. Difference:
+     Go's range always provides both index and value, while Java's for-each
+     gives only the value.
+
+Q17. How do you count character frequency in a string using range?
+A:   freq := make(map[rune]int)
+     for _, ch := range str { freq[ch]++ }
+
+Q18. How do you use range to build a new filtered slice?
+A:   var result []T
+     for _, v := range original { if condition(v) { result = append(result, v) } }
+
+Q19. What is the performance implication of range over a large struct slice?
+A:   Range copies each element. For large structs, this can be costly. Use
+     a pointer slice ([]* MyStruct) or range with index only (for i := range s)
+     and access s[i] directly to avoid copying.
+
+Q20. Can you use break and continue with range?
+A:   Yes. 'break' exits the range loop entirely. 'continue' skips to the next
+     iteration. Both work exactly like in a regular for loop.
+
+     for i, v := range nums {
+         if v == 0 { continue }   // skip zeros
+         if i == 10 { break }     // stop at index 10
+         fmt.Println(v)
+     }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ QUICK REFERENCE CHEATSHEET
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  for i, v  := range slice    → index + value copy
+  for i     := range slice    → index only
+  for _, v  := range slice    → value only
+  for       range slice       → just loop (no vars)
+
+  for k, v  := range myMap    → key + value
+  for k     := range myMap    → key only
+  for _, v  := range myMap    → value only (rare)
+
+  for i, ch := range "hello"  → byte-index + rune
+  for       range 5           → 0,1,2,3,4  (Go 1.22+)
+
+  for v     := range channel  → value (blocks till closed)
+
+  ⚠️  Range value = COPY. Modify via index: slice[i] = newVal
+  ⚠️  Map order = RANDOM every run
+  ⚠️  Channel range = needs close() or deadlock
+  ⚠️  Goroutine + range variable = pass as argument
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
