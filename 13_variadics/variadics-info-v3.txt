@@ -1,0 +1,558 @@
+================================================================
+# Go Lang Variadic Functions - Complete Notes V3
+================================================================
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 1 — WHAT ARE VARIADIC FUNCTIONS?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+A variadic function accepts a variable number of arguments of the same type.
+The parameter is prefixed with "..." (three dots / ellipsis operator).
+
+SYNTAX:
+    func functionName(param ...Type) ReturnType { }
+
+Inside the function, the variadic parameter behaves as a SLICE of that type.
+Callers can pass 0, 1, or many arguments — all valid.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 2 — BASIC SYNTAX & SIMPLE EXAMPLES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Example 1: Sum of integers
+──────────────────────────
+package main
+
+import "fmt"
+
+func sum(nums ...int) int {
+    total := 0
+    for _, n := range nums {
+        total += n
+    }
+    return total
+}
+
+func main() {
+    fmt.Println(sum())           // Output: 0
+    fmt.Println(sum(1))          // Output: 1
+    fmt.Println(sum(1, 2, 3))    // Output: 6
+    fmt.Println(sum(10, 20, 30, 40)) // Output: 100
+}
+
+Example 2: Printing multiple strings
+─────────────────────────────────────
+func printAll(words ...string) {
+    for i, w := range words {
+        fmt.Printf("[%d] %s\n", i, w)
+    }
+}
+
+func main() {
+    printAll("Go", "Java", "Python", "Rust")
+}
+// Output:
+// [0] Go
+// [1] Java
+// [2] Python
+// [3] Rust
+
+Example 3: Zero arguments — valid!
+────────────────────────────────────
+func greetAll(names ...string) {
+    if len(names) == 0 {
+        fmt.Println("Hello, nobody!")
+        return
+    }
+    for _, name := range names {
+        fmt.Printf("Hello, %s!\n", name)
+    }
+}
+
+func main() {
+    greetAll()               // Hello, nobody!
+    greetAll("Aditya")       // Hello, Aditya!
+    greetAll("Alice", "Bob") // Hello, Alice! Hello, Bob!
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 3 — RULES & CONSTRAINTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+RULE 1 — Only ONE variadic parameter per function:
+    ✅ func f(a int, nums ...int) {}
+    ❌ func f(nums ...int, strs ...string) {}  // Compile error
+
+RULE 2 — Variadic parameter MUST be the LAST parameter:
+    ✅ func f(prefix string, nums ...int) {}
+    ❌ func f(nums ...int, suffix string) {}  // Compile error
+
+RULE 3 — Inside the function, variadic param is a SLICE:
+    func f(nums ...int) {
+        fmt.Printf("Type: %T\n", nums) // Type: []int
+        fmt.Println(len(nums))         // Length works
+        fmt.Println(nums[0])           // Indexing works
+    }
+
+RULE 4 — You can pass ZERO arguments:
+    f()  // nums == nil (not an empty slice, but nil)
+    // len(nil) == 0, so range over nil is safe
+
+RULE 5 — Variadic param CAN be nil:
+    var s []int
+    f(s...)  // Passes nil slice; nums inside will be nil
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 4 — SPREADING A SLICE WITH "..."
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+You can spread an existing slice into a variadic function using the "..." suffix.
+
+Example:
+─────────
+func sum(nums ...int) int {
+    total := 0
+    for _, n := range nums {
+        total += n
+    }
+    return total
+}
+
+func main() {
+    numbers := []int{1, 2, 3, 4, 5}
+    result := sum(numbers...)   // Spread the slice
+    fmt.Println(result)         // Output: 15
+
+    // Equivalent to:
+    result2 := sum(1, 2, 3, 4, 5)
+    fmt.Println(result2)        // Output: 15
+}
+
+IMPORTANT — Spread shares the underlying array (NO copy is made):
+──────────────────────────────────────────────────────────────────
+func modify(nums ...int) {
+    nums[0] = 999
+}
+
+func main() {
+    s := []int{1, 2, 3}
+    modify(s...)
+    fmt.Println(s) // Output: [999 2 3]  ← original slice is modified!
+}
+
+// When individual args are passed, NO such sharing occurs:
+func main() {
+    modify(1, 2, 3)  // A new backing array is created — original unchanged
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 5 — MIXED PARAMETERS (fixed + variadic)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Fixed parameters come before the variadic parameter.
+
+Example 1: Logger with level
+─────────────────────────────
+func logMessage(level string, messages ...string) {
+    for _, msg := range messages {
+        fmt.Printf("[%s] %s\n", level, msg)
+    }
+}
+
+func main() {
+    logMessage("INFO", "Server started", "Listening on :8080")
+    logMessage("ERROR", "DB connection failed")
+    logMessage("DEBUG") // No messages — valid
+}
+// Output:
+// [INFO] Server started
+// [INFO] Listening on :8080
+// [ERROR] DB connection failed
+
+Example 2: Prefix joiner
+─────────────────────────
+import "strings"
+
+func joinWithPrefix(prefix string, words ...string) string {
+    var result []string
+    for _, w := range words {
+        result = append(result, prefix+w)
+    }
+    return strings.Join(result, ", ")
+}
+
+func main() {
+    fmt.Println(joinWithPrefix("Go_", "lang", "routine", "channel"))
+    // Output: Go_lang, Go_routine, Go_channel
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 6 — VARIADIC WITH INTERFACE{} / ANY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Use "...interface{}" (or "...any" in Go 1.18+) to accept mixed types.
+fmt.Println itself uses this pattern!
+
+Example: Custom println-style function
+────────────────────────────────────────
+func printValues(values ...any) {
+    for i, v := range values {
+        fmt.Printf("arg[%d] = %v (type: %T)\n", i, v, v)
+    }
+}
+
+func main() {
+    printValues(42, "hello", true, 3.14, []int{1, 2, 3})
+}
+// Output:
+// arg[0] = 42 (type: int)
+// arg[1] = hello (type: string)
+// arg[2] = true (type: bool)
+// arg[3] = 3.14 (type: float64)
+// arg[4] = [1 2 3] (type: []int)
+
+Example: Type-safe extraction with type switch
+────────────────────────────────────────────────
+func processArgs(args ...any) {
+    for _, a := range args {
+        switch v := a.(type) {
+        case int:
+            fmt.Printf("Integer: %d\n", v)
+        case string:
+            fmt.Printf("String: %s\n", v)
+        case bool:
+            fmt.Printf("Bool: %t\n", v)
+        default:
+            fmt.Printf("Unknown: %v\n", v)
+        }
+    }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 7 — PASSING VARIADIC ARGS TO ANOTHER VARIADIC FUNCTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+You can forward variadic params using "...":
+
+func wrapSum(nums ...int) int {
+    // Forward all nums to sum using spread
+    return sum(nums...)
+}
+
+func sum(nums ...int) int {
+    total := 0
+    for _, n := range nums { total += n }
+    return total
+}
+
+func main() {
+    fmt.Println(wrapSum(1, 2, 3, 4, 5)) // Output: 15
+}
+
+// Without "...", nums (a []int) would not match ...int:
+// return sum(nums)   ← Compile error: cannot use nums (type []int) as int
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 8 — BUILT-IN VARIADIC FUNCTIONS IN GO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Go's standard library uses variadics extensively:
+
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Function                │  Signature (simplified)                       │
+├──────────────────────────┼───────────────────────────────────────────────┤
+│  fmt.Println             │  func Println(a ...any) (n int, err error)    │
+│  fmt.Printf              │  func Printf(format string, a ...any)         │
+│  fmt.Sprintf             │  func Sprintf(format string, a ...any) string │
+│  append                  │  func append(slice []T, elems ...T) []T       │
+│  make (not variadic)     │  —                                            │
+└──────────────────────────────────────────────────────────────────────────┘
+
+append example:
+────────────────
+s := []int{1, 2, 3}
+s = append(s, 4, 5, 6)       // append individual elements
+s = append(s, []int{7,8}...) // append another slice
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 9 — REAL-WORLD PATTERNS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Pattern 1: Functional Options (widely used in Go libraries)
+────────────────────────────────────────────────────────────
+type Server struct {
+    host    string
+    port    int
+    timeout int
+}
+
+type Option func(*Server)
+
+func WithHost(host string) Option {
+    return func(s *Server) { s.host = host }
+}
+
+func WithPort(port int) Option {
+    return func(s *Server) { s.port = port }
+}
+
+func WithTimeout(t int) Option {
+    return func(s *Server) { s.timeout = t }
+}
+
+func NewServer(opts ...Option) *Server {
+    s := &Server{host: "localhost", port: 8080, timeout: 30} // defaults
+    for _, opt := range opts {
+        opt(s)
+    }
+    return s
+}
+
+func main() {
+    s1 := NewServer()                              // all defaults
+    s2 := NewServer(WithPort(9090))               // custom port
+    s3 := NewServer(WithHost("0.0.0.0"), WithTimeout(60))
+    fmt.Printf("%+v\n", s1) // {host:localhost port:8080 timeout:30}
+    fmt.Printf("%+v\n", s2) // {host:localhost port:9090 timeout:30}
+    fmt.Printf("%+v\n", s3) // {host:0.0.0.0 port:8080 timeout:60}
+}
+
+Pattern 2: Variadic error aggregator
+──────────────────────────────────────
+import "errors"
+
+func validate(rules ...func() error) []error {
+    var errs []error
+    for _, rule := range rules {
+        if err := rule(); err != nil {
+            errs = append(errs, err)
+        }
+    }
+    return errs
+}
+
+func main() {
+    name := ""
+    age := -1
+
+    errs := validate(
+        func() error {
+            if name == "" { return errors.New("name is required") }
+            return nil
+        },
+        func() error {
+            if age < 0 { return errors.New("age must be non-negative") }
+            return nil
+        },
+    )
+
+    for _, e := range errs {
+        fmt.Println(e)
+    }
+    // Output:
+    // name is required
+    // age must be non-negative
+}
+
+Pattern 3: Max of variadic ints
+─────────────────────────────────
+func max(nums ...int) (int, bool) {
+    if len(nums) == 0 {
+        return 0, false
+    }
+    m := nums[0]
+    for _, n := range nums[1:] {
+        if n > m { m = n }
+    }
+    return m, true
+}
+
+func main() {
+    v, ok := max(3, 1, 4, 1, 5, 9, 2, 6)
+    if ok { fmt.Println("Max:", v) } // Max: 9
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 10 — COMMON MISTAKES & GOTCHAS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+MISTAKE 1 — Forgetting to spread the slice:
+    nums := []int{1, 2, 3}
+    sum(nums)   // ❌ Compile error: cannot use []int as int
+    sum(nums...) // ✅ Correct
+
+MISTAKE 2 — Multiple variadic params:
+    func f(a ...int, b ...string) {} // ❌ Compile error
+
+MISTAKE 3 — Variadic not last:
+    func f(nums ...int, suffix string) {} // ❌ Compile error
+
+MISTAKE 4 — Assuming variadic is always a non-nil slice:
+    func f(nums ...int) {
+        fmt.Println(nums == nil) // true if called as f()
+        // Safe: len(nil) == 0, range nil is fine
+    }
+    f() // nums is nil, not []int{}
+
+MISTAKE 5 — Mutating spread slice unintentionally:
+    s := []int{1, 2, 3}
+    modifyFirst(s...) // May mutate s if function changes index 0!
+    // Pass a copy if you don't want mutation:
+    copy := append([]int{}, s...)
+    modifyFirst(copy...)
+
+MISTAKE 6 — Spreading non-variadic slice directly:
+    // You cannot spread into a non-variadic function:
+    func f(a, b, c int) {}
+    nums := []int{1, 2, 3}
+    f(nums...) // ❌ Compile error — f is NOT variadic
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 11 — COMPARISON TABLE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌──────────────────────┬────────────────────────┬──────────────────────────┐
+│ Aspect               │ Variadic (f(...T))     │ Slice param (f([]T))     │
+├──────────────────────┼────────────────────────┼──────────────────────────┤
+│ Call syntax          │ f(1, 2, 3)             │ f([]int{1, 2, 3})        │
+│ Spread a slice       │ f(s...)                │ f(s)                     │
+│ Zero args            │ f() — allowed          │ f(nil) or f([]int{})     │
+│ Inside function type │ []T (slice)            │ []T (slice)              │
+│ Readability          │ Caller-friendly        │ More explicit            │
+│ Modification risk    │ Spread shares array    │ Always shares array      │
+│ Use case             │ Flexible APIs, wrappers│ When slice is a real arg │
+└──────────────────────┴────────────────────────┴──────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 12 — INTERVIEW Q&A (25 Questions)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Q1. What is a variadic function in Go?
+A: A function that accepts a variable number of arguments of the same type,
+   declared with "..." before the type. The variadic param is treated as a
+   slice inside the function body.
+
+Q2. What is the syntax for a variadic function in Go?
+A: func functionName(param ...Type) ReturnType { }
+   Example: func sum(nums ...int) int { }
+
+Q3. How many variadic parameters can a Go function have?
+A: Exactly ONE. Go does not allow multiple variadic parameters in a single
+   function signature.
+
+Q4. Where must the variadic parameter appear?
+A: It MUST be the last parameter in the function signature. Having any fixed
+   parameter after the variadic param causes a compile error.
+
+Q5. What is the type of a variadic parameter inside the function?
+A: It is a slice of the element type. For "nums ...int", the type of nums
+   inside the function is []int.
+
+Q6. Can you call a variadic function with zero arguments?
+A: Yes. Passing no arguments is valid. The variadic param will be nil (not
+   an empty slice), but len(nil)==0 and ranging over nil is safe.
+
+Q7. What is the difference between nil and an empty slice for a variadic param?
+A: f() → nums is nil
+   f([]int{}...) → nums is an empty non-nil slice []int{}
+   Both have length 0 and are safe to range over, but nil != []int{}.
+
+Q8. How do you pass an existing slice to a variadic function?
+A: Use the spread operator "...":
+   nums := []int{1, 2, 3}
+   sum(nums...)  // Correct — spreads the slice
+
+Q9. What happens if you pass a slice without "..." to a variadic function?
+A: Compile error. The compiler expects individual elements of type T, but
+   receives a []T instead.
+
+Q10. Does spreading a slice create a copy?
+A: No. Spreading passes the underlying array directly. If the function
+   modifies elements, the original slice is also affected.
+
+Q11. Does passing individual arguments create a new backing array?
+A: Yes. When you call f(1, 2, 3), Go creates a new backing array for the
+   variadic slice — no shared memory with any existing slice.
+
+Q12. Can you mix fixed and variadic parameters?
+A: Yes. Fixed params come first, variadic last.
+   Example: func log(level string, msgs ...string) { }
+
+Q13. How do you forward variadic arguments from one function to another?
+A: Use the spread operator on the variadic param:
+   func wrapper(nums ...int) int { return sum(nums...) }
+
+Q14. What are some built-in Go functions that are variadic?
+A: fmt.Println, fmt.Printf, fmt.Sprintf, append, errors.Join (Go 1.20+).
+
+Q15. How does append use variadics?
+A: func append(slice []T, elems ...T) []T
+   You can append one or many elements: append(s, 1, 2, 3)
+   Or another slice: append(s, other...)
+
+Q16. What is "...interface{}" or "...any" used for?
+A: To accept mixed types. fmt.Println uses this so you can pass any combo
+   of values. "any" is an alias for "interface{}" since Go 1.18.
+
+Q17. How do you handle different types in a "...any" variadic function?
+A: Use a type switch inside the function:
+   switch v := arg.(type) { case int: ... case string: ... }
+
+Q18. Is it possible to have a variadic method (not function)?
+A: Yes. Methods can also be variadic:
+   func (r Receiver) Do(args ...int) { }
+
+Q19. What is the "functional options" pattern and how does it use variadics?
+A: It's a Go idiom where optional config is passed as variadic functions:
+   func NewServer(opts ...Option) *Server { for _, o := range opts { o(s) } }
+   This provides flexible, backward-compatible APIs without config structs.
+
+Q20. Can you use variadic functions with goroutines?
+A: Yes. You can launch goroutines with closures that capture variadic args,
+   but be careful about loop variable capture (use a copy inside the loop).
+
+Q21. Can a variadic function return a variadic?
+A: No. Return types cannot be variadic. You return a regular slice:
+   func f(nums ...int) []int { return nums } // Returns the slice directly
+
+Q22. What happens when you return the variadic param directly?
+A: You return the underlying slice. If the caller spreads a slice in, the
+   returned slice shares the same backing array — potential aliasing issues.
+
+Q23. How does fmt.Println handle its variadic "...any" args?
+A: It iterates the args slice, converts each to a string via reflection/
+   Stringer interface, separates them with spaces, and appends a newline.
+
+Q24. Is "..." only used for variadic functions?
+A: No. "..." also appears in slice literals (composite literals aren't
+   variadic, but you can use s[:]...) and in the go vet/test command flags.
+   In code, "..." is primarily variadic function syntax and spread operator.
+
+Q25. When should you use a variadic function vs accepting a slice?
+A:
+  Use variadic (f(...T)) when:
+  - The function is called frequently with literal values: f(1, 2, 3)
+  - You want a cleaner API (no wrapping in []T{...} every time)
+  - Zero-arg calls should be naturally valid
+  - Building flexible/extensible APIs (functional options, loggers, etc.)
+
+  Use slice (f([]T)) when:
+  - The caller always has a slice to begin with
+  - You want to make it explicit that a collection is required
+  - You need to distinguish nil from an empty input
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  QUICK REFERENCE CHEAT SHEET
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Define variadic:     func f(nums ...int) {}
+  Call with values:    f(1, 2, 3)
+  Call with no args:   f()
+  Call with slice:     f(s...)
+  Type inside func:    []int (slice)
+  Nil when no args:    len(nums) == 0, range nums is safe
+  Only ONE variadic:   always the LAST param
+  Forward to another:  innerFn(nums...)
+  Mixed params:        func f(a string, b int, c ...float64) {}
+  Empty spread:        f([]int{}...)  → nums is non-nil empty slice
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

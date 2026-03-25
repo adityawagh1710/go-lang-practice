@@ -1,0 +1,240 @@
+╔══════════════════════════════════════════════════════╗
+║        🚀 GO LANG VARIADIC FUNCTIONS NOTES           ║
+╚══════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📌 1. WHAT ARE VARIADIC FUNCTIONS?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✔ Functions that accept **zero or more arguments**
+✔ Defined using `...` (ellipsis)
+
+🔹 Syntax:
+
+```go
+func functionName(param ...type) {
+    // behaves like a slice
+}
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📌 2. KEY FEATURES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ Must be the **last parameter**
+✅ Internally treated as a **slice**
+✅ Accepts:
+• Multiple values
+• Slice (using `...`)
+• No values
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📌 3. BASIC EXAMPLE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+```go
+func sum(nums ...int) int {
+    total := 0
+    for _, num := range nums {
+        total += num
+    }
+    return total
+}
+
+func main() {
+    fmt.Println(sum(1, 2, 3))  // 6
+    fmt.Println(sum(10, 20))   // 30
+}
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📌 4. ZERO ARGUMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+```go
+func printNumbers(nums ...int) {
+    fmt.Println(nums)
+}
+
+func main() {
+    printNumbers() // []
+}
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📌 5. VARIADIC AS SLICE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+```go
+func display(nums ...int) {
+    fmt.Println("Slice:", nums)
+    fmt.Println("Length:", len(nums))
+}
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📌 6. PASSING SLICE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+```go
+numbers := []int{1, 2, 3}
+fmt.Println(sum(numbers...)) // unpack slice
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📌 7. WITH OTHER PARAMETERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+```go
+func greet(prefix string, names ...string) {
+    for _, name := range names {
+        fmt.Println(prefix, name)
+    }
+}
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📌 8. REAL-TIME EXAMPLES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔹 Simple
+
+```go
+func multiply(nums ...int) int {
+    result := 1
+    for _, n := range nums {
+        result *= n
+    }
+    return result
+}
+```
+
+🔹 Mid-Level (Logging)
+
+```go
+func log(level string, messages ...string) {
+    for _, msg := range messages {
+        fmt.Println(level + ":", msg)
+    }
+}
+```
+
+🔹 Advanced (Query Builder)
+
+```go
+func buildQuery(base string, conditions ...string) string {
+    query := base
+    for _, condition := range conditions {
+        query += " AND " + condition
+    }
+    return query
+}
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📌 9. IMPORTANT RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✔ Only ONE variadic parameter allowed
+✔ Must be LAST parameter
+✔ Works like a SLICE
+✔ Can accept ZERO values
+✔ Use `...` to pass slice
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📌 10. COMMON MISTAKES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+❌ Wrong
+
+```go
+func test(nums ...int, name string) {} // ERROR
+```
+
+❌ Missing `...`
+
+```go
+sum(numbers) // ERROR
+```
+
+✅ Correct
+
+```go
+sum(numbers...)
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📌 11. INTERVIEW QUESTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔹 Basic
+
+1. What is a variadic function?
+2. Syntax of variadic function?
+3. Can it take zero arguments?
+
+🔹 Intermediate
+4. Why must it be last?
+5. How to pass slice?
+6. Internal representation?
+
+🔹 Advanced
+7. Multiple variadic params possible?
+8. Memory handling?
+9. Slice vs variadic?
+10. When to use?
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📌 12. VARIADIC vs SLICE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+| Feature     | Variadic | Slice     |
+| ----------- | -------- | --------- |
+| Syntax      | `...int` | `[]int`   |
+| Input       | Multiple | One slice |
+| Internal    | Slice    | Slice     |
+| Flexibility | High     | Medium    |
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📌 13. WHEN TO USE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ Use When:
+• Unknown number of inputs
+• Cleaner APIs
+• Logging / utilities
+
+❌ Avoid When:
+• Large datasets
+• Performance critical
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📌 14. SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✔ Uses `...`
+✔ Accepts multiple inputs
+✔ Internally slice
+✔ Must be last param
+✔ Flexible & clean
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📌 15. PRACTICE QUESTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Find max using variadic
+2. Concatenate strings
+3. Logger with timestamp
+4. Average calculator
+
+🔹 Example:
+
+```go
+func max(nums ...int) int {
+    maxVal := nums[0]
+    for _, n := range nums {
+        if n > maxVal {
+            maxVal = n
+        }
+    }
+    return maxVal
+}
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

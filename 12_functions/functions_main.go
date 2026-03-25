@@ -91,6 +91,4 @@ func main() {
 	fmt.Println(operations["add"](10, 5))
 	fmt.Println(operations["subtract"](10, 5))
 	fmt.Println(operations["multiply"](10, 5))
-
-	// 
 }

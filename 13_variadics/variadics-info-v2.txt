@@ -1,0 +1,113 @@
+================================================================
+# Go Lang Variadic Functions - Complete Notes V2
+================================================================
+
+1. WHAT ARE VARIADIC FUNCTIONS?
+   • Functions that accept a variable number of arguments.
+   • Declared using ... (ellipsis) before the type of the LAST parameter only.
+   • Inside the function the parameter is a slice []T.
+   • When called with zero arguments, the slice is nil.
+
+2. SYNTAX
+   func name(fixedParams..., variadicParam ...Type) ReturnType
+
+   Example:
+   func sum(numbers ...int) int { ... }
+
+3. KEY RULES
+   • Only the last parameter can be variadic.
+   • You cannot have two variadic parameters.
+   • Variadic functions and non-variadic functions have different types.
+
+4. EXAMPLES
+
+   4.1 Basic Sum
+   func sum(numbers ...int) int {
+       total := 0
+       for _, n := range numbers {
+           total += n
+       }
+       return total
+   }
+   sum()          → 0
+   sum(5, 10)     → 15
+   sum(1,2,3,4)   → 10
+
+   4.2 Passing a Slice (Unpacking)
+   nums := []int{1,2,3,4}
+   result := sum(nums...)   // note the ...
+
+   4.3 Greeting Multiple People
+   func greet(prefix string, names ...string) {
+       for _, name := range names {
+           fmt.Printf("%s %s!\n", prefix, name)
+       }
+   }
+
+   4.4 Logging with Variable Messages
+   func log(level string, msgs ...string) {
+       fmt.Printf("[%s] %s\n", level, strings.Join(msgs, " | "))
+   }
+
+5. COMMON STANDARD LIBRARY USAGE
+   • fmt.Println(...interface{})
+   • fmt.Printf(format string, a ...interface{})
+   • append(slice []T, elems ...T)
+   • json.MarshalIndent(v interface{}, prefix, indent string)
+
+6. BEST PRACTICES & TIPS
+   • Put fixed parameters first, variadic last.
+   • Add a comment if zero arguments need special handling.
+   • For required minimum arguments, check len() inside the function.
+   • Variadic functions are great for builder-style APIs and logging.
+
+7. INTERVIEW QUESTIONS & ANSWERS
+
+Q1. What is a variadic function in Go?
+A1. A function that can accept zero or more arguments of the same type using the ... syntax on its last parameter.
+
+Q2. How do you declare a variadic function?
+A2. func myFunc(args ...int) { ... } – the ellipsis must be on the final parameter.
+
+Q3. What is the type of a variadic parameter inside the function?
+A3. It is always a slice of the declared type ([]int, []string, etc.).
+
+Q4. What happens when you call a variadic function with zero arguments?
+A4. The slice is nil (len == 0 && cap == 0).
+
+Q5. Can you pass a slice directly to a variadic function?
+A5. Yes, by unpacking it with ... → sum(mySlice...)
+
+Q6. Can a function have more than one variadic parameter?
+A6. No. Only the last parameter can be variadic.
+
+Q7. How is a variadic function different from a function that takes a slice?
+A7. Type-wise they are different. A variadic function can be called with individual arguments; a slice function requires an explicit slice.
+
+Q8. Write a variadic function that finds the maximum number (handle empty case).
+A8.
+   func max(nums ...int) (int, error) {
+       if len(nums) == 0 {
+           return 0, errors.New("no numbers provided")
+       }
+       m := nums[0]
+       for _, n := range nums {
+           if n > m { m = n }
+       }
+       return m, nil
+   }
+
+Q9. Why does fmt.Println use variadic parameters?
+A9. To allow printing any number of values in one call without forcing the caller to create a slice first.
+
+Q10. Can you make a variadic function generic in Go 1.18+?
+A10. Yes – use generics + variadic:
+    func printAny[T any](items ...T) { ... }
+
+Q11. What is the difference between a variadic function type and a non-variadic one?
+A11. They are not identical types. You cannot assign one to the other without conversion.
+
+Q12. How would you require at least one argument in a variadic function?
+A12. Check len(args) == 0 inside the function and return an error or panic.
+
+================================================================
