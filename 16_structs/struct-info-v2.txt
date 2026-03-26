@@ -1,0 +1,225 @@
+# 🚀 Go Lang Struct 
+────────────────────────────────────────────────────────────────────────────────
+★ SECTION 1: MEDIOR LEVEL – THE FOUNDATION ★
+────────────────────────────────────────────────────────────────────────────────
+
+🔹 What is a Struct?
+   A composite data type that groups related fields under one name.
+   Think: "Custom object" without inheritance (Go uses composition).
+
+```go
+// Basic declaration
+type Person struct {
+    Name    string  // exported field
+    age     int     // unexported (lowercase)
+    IsAdmin bool    `json:"is_admin"` // struct tag (medior must-know)
+}
+
+// Value creation (multiple styles)
+p1 := Person{Name: "Alice", age: 30, IsAdmin: true}
+p2 := Person{"Bob", 25, false}           // order matters
+p3 := Person{}                           // zero value
+p4 := &Person{Name: "Charlie"}           // pointer (recommended for large structs)
+────────────────────────────────────────────────────────────────────────────────
+🔹 Zero Value Rule (MUST KNOW)
+All fields get their type’s zero value:
+
+string → ""
+int/float → 0
+bool → false
+pointer → nil
+slice/map → nil
+────────────────────────────────────────────────────────────────────────────────
+🔹 Methods on Structs
+
+Go// Value receiver (makes copy)
+
+func (p Person) Greet() string {
+    return "Hi, I'm " + p.Name
+}
+
+// Pointer receiver (mutates original – preferred for large structs)
+func (p *Person) CelebrateBirthday() {
+    p.age++
+}
+🔹 Embedding (Composition over Inheritance)
+
+Gotype Address struct {
+    City string
+}
+
+type Employee struct {
+    Person   // embedded (promotes fields & methods)
+    Address  // named field
+    Salary   float64
+}
+
+e := Employee{
+    Person: Person{Name: "Dave", age: 40},
+    Address: Address{City: "Berlin"},
+    Salary: 85000,
+}
+
+fmt.Println(e.Name)     // promoted!
+
+fmt.Println(e.Greet())  // promoted method!
+────────────────────────────────────────────────────────────────────────────────
+★ SECTION 2: EXPERIENCED / SENIOR LEVEL – THE DARK ARTS ★
+────────────────────────────────────────────────────────────────────────────────
+🔥 Struct Tags – The Secret Sauce
+
+Gotype User struct {
+    ID        int    `json:"id" db:"user_id" validate:"required"`
+    Email     string `json:"email" validate:"email"`
+    CreatedAt time.Time `json:"created_at,omitempty"`
+}
+
+🔥 Custom Marshal/Unmarshal (JSON, YAML, DB drivers)
+Gotype SensitiveString string
+
+func (s SensitiveString) MarshalJSON() ([]byte, error) {
+    return []byte(`"***REDACTED***"`), nil
+}
+
+type SecretUser struct {
+    Password SensitiveString `json:"password"`
+}
+
+🔥 Performance & Memory (Senior must-know)
+
+Struct padding & alignment (use go run + unsafe or structlayout tool)
+
+Gotype Bad struct {     // 24 bytes on 64-bit (padding waste!)
+    A bool   // 1 byte + 7 padding
+    B int64   // 8 bytes
+    C bool   // 1 byte + 7 padding
+}
+
+type Good struct {    // 16 bytes – reordered
+    B int64
+    A bool
+    C bool
+    _ [6]byte // explicit padding if needed
+}
+
+🔥 Structs + Interfaces (The Real Power)
+
+Gotype Notifier interface {
+    Notify()
+}
+
+type EmailNotifier struct {
+    Email string
+}
+
+func (e EmailNotifier) Notify() { /* ... */ }
+
+// Both value & pointer can satisfy interface
+var n Notifier = EmailNotifier{}     // value
+var n2 Notifier = &EmailNotifier{}   // pointer
+
+🔥 Advanced Patterns
+
+Go// Functional options pattern (very Go-idiomatic)
+type Server struct {
+    host string
+    port int
+    timeout time.Duration
+}
+
+type ServerOption func(*Server)
+
+func WithPort(p int) ServerOption {
+    return func(s *Server) { s.port = p }
+}
+
+func NewServer(opts ...ServerOption) *Server {
+    s := &Server{host: "localhost", port: 8080}
+    for _, opt := range opts {
+        opt(s)
+    }
+    return s
+}
+
+// Usage
+srv := NewServer(WithPort(9000))
+
+🔥 Anonymous Structs (Quick & Dirty)
+
+Go// One-off JSON or config
+config := struct {
+    Debug   bool
+    Timeout int
+}{
+    Debug:   true,
+    Timeout: 30,
+}
+
+🔥 Comparison & Deep Equality
+
+Go// Structs are comparable if ALL fields are comparable
+type Point struct{ X, Y int }
+p1 := Point{1, 2}
+p2 := Point{1, 2}
+fmt.Println(p1 == p2) // true
+
+// Use reflect.DeepEqual for slices/maps inside structs
+────────────────────────────────────────────────────────────────────────────────
+★ REAL-WORLD EXAMPLES ★
+────────────────────────────────────────────────────────────────────────────────
+✅ Example 1: Config Struct with Validation (Medior → Senior)
+Gotype AppConfig struct {
+    Port     int      `env:"PORT" validate:"required,min=1024"`
+    DB       DBConfig `envPrefix:"DB_"`
+    Features []string `json:"features"`
+}
+
+type DBConfig struct {
+    Host string `env:"HOST"`
+    Pass string `env:"PASS"`
+}
+✅ Example 2: Repository Pattern with Embedded Structs
+Gotype BaseModel struct {
+    ID        uuid.UUID `json:"id" db:"id"`
+    CreatedAt time.Time `json:"created_at"`
+    UpdatedAt time.Time `json:"updated_at"`
+}
+
+type User struct {
+    BaseModel
+    Name  string
+    Email string
+}
+────────────────────────────────────────────────────────────────────────────────
+★ INTERVIEW QUESTIONS (Medior → Principal Level)
+────────────────────────────────────────────────────────────────────────────────
+
+🔥 Medior
+Q: What is the difference between value and pointer receivers? When to use each?
+A: Value → copy (safe, small structs). Pointer → mutate + avoid copy (large structs).
+Q: Can you compare two structs with ==? What if they contain slices?
+A: Yes only if ALL fields comparable. Slices → use reflect.DeepEqual.
+Q: What happens if you pass a struct to a function? (hint: copy!)
+🔥 Senior
+Q: How do struct tags work under the hood? Name 3 popular tag libraries.
+A: reflection + encoding/json, gorm, validator/v10.
+Q: Explain struct padding. How do you minimize memory usage?
+Q: How would you implement custom JSON marshaling for a type that hides sensitive data?
+Q: What is embedding? Can you embed multiple structs? What about method conflicts?
+🔥 Principal / Staff
+Q: Design a thread-safe struct with functional options that can be extended at runtime.
+Q: How does Go handle zero values for structs containing pointers to other structs?
+Q: Write a generic function that can pretty-print any struct using reflection (bonus: handle cycles).
+Q: When would you use an anonymous struct vs a named one?
+Q: Explain why sync.Mutex is usually embedded as a pointer, not value.
+
+────────────────────────────────────────────────────────────────────────────────
+★ QUICK REFERENCE CHEAT SHEET ★
+────────────────────────────────────────────────────────────────────────────────
+• Export rule: Uppercase = public
+• Pointer receiver if method mutates OR struct > 8 bytes
+• Always use named fields in struct literals when possible
+• json tags + omitempty = production ready
+• Functional options > config struct for complex constructors
+• Avoid embedding large structs unless you want field promotion
+────────────────────────────────────────────────────────────────────────────────

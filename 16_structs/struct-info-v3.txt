@@ -1,0 +1,1128 @@
+# 🚀 Go Lang Struct
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║  SECTION 1 │ STRUCT BASICS                                                       ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+  ► A struct is a composite data type that groups fields under a named type.
+  ► Unlike classes in OOP, structs in Go have NO inheritance — only composition.
+  ► Structs are VALUE TYPES (copied on assignment, unlike pointers/maps/slices).
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  DECLARATION                                                                      │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+    // Basic struct declaration
+    type Person struct {
+        Name    string
+        Age     int
+        Email   string
+    }
+
+    // Struct with mixed types
+    type Product struct {
+        ID          int
+        Name        string
+        Price       float64
+        InStock     bool
+        Tags        []string
+        Metadata    map[string]string
+    }
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  INITIALIZATION — ALL WAYS                                                        │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+    // 1. Named fields (PREFERRED — order-independent, readable)
+    p1 := Person{Name: "Alice", Age: 30, Email: "alice@go.dev"}
+
+    // 2. Positional (fragile — field order matters, avoid in production)
+    p2 := Person{"Bob", 25, "bob@go.dev"}
+
+    // 3. Zero value (all fields default to zero values)
+    var p3 Person                          // Name="", Age=0, Email=""
+
+    // 4. Using new() — returns a *Person (pointer), all zero values
+    p4 := new(Person)                      // p4 is *Person
+
+    // 5. Address-of literal (most common for pointer structs)
+    p5 := &Person{Name: "Charlie", Age: 35}
+
+    // 6. Anonymous struct (useful for one-off data shapes, test fixtures)
+    config := struct {
+        Host string
+        Port int
+    }{
+        Host: "localhost",
+        Port: 8080,
+    }
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  FIELD ACCESS & ZERO VALUES                                                       │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+    p := Person{Name: "Dana"}
+    fmt.Println(p.Name)    // "Dana"
+    fmt.Println(p.Age)     // 0  (zero value for int)
+    fmt.Println(p.Email)   // "" (zero value for string)
+
+    // Pointer — Go auto-dereferences, both syntaxes work
+    pp := &Person{Name: "Eve"}
+    fmt.Println(pp.Name)       // "Eve"  (auto-deref)
+    fmt.Println((*pp).Name)    // "Eve"  (explicit deref)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║  SECTION 2 │ METHODS ON STRUCTS                                                  ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+  ► Methods are functions with a RECEIVER argument.
+  ► VALUE receiver  → operates on a copy. Good for read-only, small structs.
+  ► POINTER receiver → operates on the original. Good for mutation, large structs.
+
+  ⚠️  RULE: If ANY method uses a pointer receiver, ALL methods should use pointer
+           receivers for consistency (avoids bugs with interface satisfaction).
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  VALUE vs POINTER RECEIVERS                                                       │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+    type Rectangle struct {
+        Width  float64
+        Height float64
+    }
+
+    // VALUE receiver — reads only, does NOT modify original
+    func (r Rectangle) Area() float64 {
+        return r.Width * r.Height
+    }
+
+    func (r Rectangle) Perimeter() float64 {
+        return 2 * (r.Width + r.Height)
+    }
+
+    // POINTER receiver — modifies the original struct
+    func (r *Rectangle) Scale(factor float64) {
+        r.Width  *= factor
+        r.Height *= factor
+    }
+
+    func (r *Rectangle) String() string {
+        return fmt.Sprintf("Rectangle(%.2f x %.2f)", r.Width, r.Height)
+    }
+
+    // Usage
+    rect := Rectangle{Width: 10, Height: 5}
+    fmt.Println(rect.Area())        // 50
+    rect.Scale(2)
+    fmt.Println(rect.Width)         // 20 — mutated via pointer receiver
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  CONSTRUCTOR PATTERN (Go idiom — no constructors keyword)                         │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+    type BankAccount struct {
+        owner   string      // unexported — enforces encapsulation
+        balance float64
+    }
+
+    // Constructor function — validates and returns a pointer
+    func NewBankAccount(owner string, initial float64) (*BankAccount, error) {
+        if owner == "" {
+            return nil, errors.New("owner name cannot be empty")
+        }
+        if initial < 0 {
+            return nil, errors.New("initial balance cannot be negative")
+        }
+        return &BankAccount{owner: owner, balance: initial}, nil
+    }
+
+    func (b *BankAccount) Deposit(amount float64) error {
+        if amount <= 0 {
+            return errors.New("deposit must be positive")
+        }
+        b.balance += amount
+        return nil
+    }
+
+    func (b *BankAccount) Balance() float64 {
+        return b.balance
+    }
+
+    // Usage
+    acc, err := NewBankAccount("Alice", 1000.0)
+    if err != nil {
+        log.Fatal(err)
+    }
+    acc.Deposit(500)
+    fmt.Println(acc.Balance())    // 1500
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║  SECTION 3 │ STRUCT EMBEDDING (COMPOSITION over INHERITANCE)                     ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+  ► Go has NO inheritance. Instead, it uses EMBEDDING to compose behavior.
+  ► Embedded struct's fields and methods are PROMOTED to the outer struct.
+  ► This is Go's way of achieving code reuse.
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  BASIC EMBEDDING                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+    type Animal struct {
+        Name string
+    }
+
+    func (a Animal) Speak() string {
+        return a.Name + " makes a sound"
+    }
+
+    // Dog EMBEDS Animal (not "Dog has-a Animal field" — it IS promoted)
+    type Dog struct {
+        Animal            // embedded (no field name)
+        Breed  string
+    }
+
+    func (d Dog) Speak() string {    // OVERRIDES Animal.Speak
+        return d.Name + " says: Woof!"
+    }
+
+    // Usage
+    d := Dog{
+        Animal: Animal{Name: "Rex"},
+        Breed:  "Labrador",
+    }
+
+    fmt.Println(d.Name)          // "Rex"       — promoted from Animal
+    fmt.Println(d.Speak())       // "Rex says: Woof!" — Dog's own Speak
+    fmt.Println(d.Animal.Speak()) // "Rex makes a sound" — explicit Animal method
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  MULTI-LEVEL EMBEDDING                                                            │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+    type Timestamps struct {
+        CreatedAt time.Time
+        UpdatedAt time.Time
+    }
+
+    func (t *Timestamps) Touch() {
+        t.UpdatedAt = time.Now()
+    }
+
+    type BaseModel struct {
+        ID       int
+        Timestamps                 // embedded
+    }
+
+    type User struct {
+        BaseModel                  // embedded — ID, CreatedAt, UpdatedAt all promoted
+        Username string
+        Email    string
+    }
+
+    // Usage
+    u := User{
+        BaseModel: BaseModel{
+            ID: 1,
+            Timestamps: Timestamps{
+                CreatedAt: time.Now(),
+                UpdatedAt: time.Now(),
+            },
+        },
+        Username: "alice",
+        Email:    "alice@go.dev",
+    }
+
+    fmt.Println(u.ID)           // 1        — from BaseModel
+    fmt.Println(u.CreatedAt)    // ...       — from Timestamps (2 levels deep)
+    u.Touch()                   // calls Timestamps.Touch via promotion
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  EMBEDDING INTERFACES IN STRUCTS                                                  │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+    type Logger interface {
+        Log(msg string)
+    }
+
+    type Service struct {
+        Logger              // embedded interface — any Logger can be injected
+        Name string
+    }
+
+    func (s *Service) Start() {
+        s.Log("Service " + s.Name + " started")   // uses injected logger
+    }
+
+    // Useful for DEPENDENCY INJECTION and testing (mock the logger)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║  SECTION 4 │ STRUCT TAGS                                                         ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+  ► Tags are metadata strings attached to struct fields.
+  ► Format: `key:"value,options"`
+  ► Read at runtime via the `reflect` package.
+  ► Most common: json, db/sql, yaml, validate, xml
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  JSON TAGS                                                                        │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+    type APIResponse struct {
+        UserID    int    `json:"user_id"`              // rename in JSON
+        FullName  string `json:"full_name"`
+        Email     string `json:"email,omitempty"`      // omit if zero value
+        Password  string `json:"-"`                    // NEVER include in JSON
+        Internal  string `json:"-,"`                   // field literally named "-"
+        CreatedAt time.Time `json:"created_at"`
+    }
+
+    // Serialization
+    resp := APIResponse{UserID: 1, FullName: "Alice", Password: "secret"}
+    data, _ := json.Marshal(resp)
+    // Output: {"user_id":1,"full_name":"Alice","created_at":"0001-01-01T00:00:00Z"}
+    // Note: Email omitted (omitempty), Password excluded (-)
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  DATABASE (sqlx / gorm) TAGS                                                      │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+    // sqlx
+    type Employee struct {
+        ID         int       `db:"id"`
+        FirstName  string    `db:"first_name"`
+        LastName   string    `db:"last_name"`
+        HireDate   time.Time `db:"hire_date"`
+    }
+
+    // GORM
+    type Order struct {
+        gorm.Model                              // embeds ID, CreatedAt, UpdatedAt, DeletedAt
+        CustomerID  uint   `gorm:"not null"`
+        Total       float64 `gorm:"type:decimal(10,2)"`
+        Status      string  `gorm:"default:'pending';index"`
+    }
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  VALIDATION TAGS (go-playground/validator)                                        │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+    type SignupRequest struct {
+        Username string `json:"username" validate:"required,min=3,max=20,alphanum"`
+        Email    string `json:"email"    validate:"required,email"`
+        Password string `json:"password" validate:"required,min=8"`
+        Age      int    `json:"age"      validate:"gte=18,lte=120"`
+    }
+
+    // Usage
+    validate := validator.New()
+    req := SignupRequest{Username: "al", Email: "bad-email", Age: 15}
+    err := validate.Struct(req)
+    if err != nil {
+        // err contains all validation errors
+        for _, e := range err.(validator.ValidationErrors) {
+            fmt.Println(e.Field(), e.Tag())   // Username min, Email email, Age gte
+        }
+    }
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  READING TAGS WITH REFLECT                                                        │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+    func printTags(v interface{}) {
+        t := reflect.TypeOf(v)
+        for i := 0; i < t.NumField(); i++ {
+            field := t.Field(i)
+            jsonTag := field.Tag.Get("json")
+            fmt.Printf("Field: %-15s JSON: %s\n", field.Name, jsonTag)
+        }
+    }
+
+    printTags(APIResponse{})
+    // Field: UserID          JSON: user_id
+    // Field: FullName        JSON: full_name
+    // ...
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║  SECTION 5 │ STRUCTS & INTERFACES                                                ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+  ► Interfaces in Go are IMPLICITLY satisfied — no "implements" keyword needed.
+  ► A struct satisfies an interface if it implements ALL required methods.
+  ► This makes Go interfaces extremely composable and decoupled.
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  INTERFACE IMPLEMENTATION                                                         │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+    // Interface definition
+    type Shape interface {
+        Area()      float64
+        Perimeter() float64
+        String()    string
+    }
+
+    // Circle satisfies Shape
+    type Circle struct {
+        Radius float64
+    }
+
+    func (c Circle) Area() float64      { return math.Pi * c.Radius * c.Radius }
+    func (c Circle) Perimeter() float64 { return 2 * math.Pi * c.Radius }
+    func (c Circle) String() string     { return fmt.Sprintf("Circle(r=%.2f)", c.Radius) }
+
+    // Triangle satisfies Shape
+    type Triangle struct {
+        Base, Height, A, B, C float64
+    }
+
+    func (t Triangle) Area() float64      { return 0.5 * t.Base * t.Height }
+    func (t Triangle) Perimeter() float64 { return t.A + t.B + t.C }
+    func (t Triangle) String() string     { return fmt.Sprintf("Triangle(b=%.2f)", t.Base) }
+
+    // Polymorphic function — accepts any Shape
+    func printShapeInfo(s Shape) {
+        fmt.Printf("%s → Area: %.2f, Perimeter: %.2f\n",
+            s.String(), s.Area(), s.Perimeter())
+    }
+
+    // Usage
+    shapes := []Shape{
+        Circle{Radius: 5},
+        Triangle{Base: 10, Height: 6, A: 8, B: 8, C: 10},
+    }
+    for _, s := range shapes {
+        printShapeInfo(s)
+    }
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  TYPE ASSERTION & TYPE SWITCH                                                     │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+    // Type assertion — panics if wrong type
+    var s Shape = Circle{Radius: 3}
+    c := s.(Circle)
+    fmt.Println(c.Radius)   // 3
+
+    // Safe type assertion — no panic
+    c2, ok := s.(Circle)
+    if ok {
+        fmt.Println("It's a circle:", c2.Radius)
+    }
+
+    // Type switch — idiomatic way to handle multiple types
+    func describe(s Shape) {
+        switch v := s.(type) {
+        case Circle:
+            fmt.Println("Circle with radius:", v.Radius)
+        case Triangle:
+            fmt.Println("Triangle with base:", v.Base)
+        case *Rectangle:
+            fmt.Println("Rectangle pointer:", v.Width, v.Height)
+        default:
+            fmt.Printf("Unknown shape: %T\n", v)
+        }
+    }
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║  SECTION 6 │ STRUCT COMPARISON & COPYING                                         ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+  ► Structs are COMPARABLE with == if all fields are comparable types.
+  ► Structs with slices, maps, or functions CANNOT be compared with ==.
+  ► Assignment copies ALL fields (value semantics).
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  COMPARABILITY                                                                    │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+    type Point struct { X, Y int }
+
+    p1 := Point{1, 2}
+    p2 := Point{1, 2}
+    p3 := Point{3, 4}
+
+    fmt.Println(p1 == p2)   // true
+    fmt.Println(p1 == p3)   // false
+    fmt.Println(p1 != p3)   // true
+
+    // Structs with non-comparable fields — compile error on ==
+    type Data struct {
+        Values []int   // slice — not comparable
+    }
+    d1 := Data{Values: []int{1, 2}}
+    d2 := Data{Values: []int{1, 2}}
+    // fmt.Println(d1 == d2)  ← COMPILE ERROR: invalid operation
+    fmt.Println(reflect.DeepEqual(d1, d2))   // true — use reflect.DeepEqual
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  VALUE COPY vs POINTER — CRITICAL TO UNDERSTAND                                   │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+    type Config struct {
+        Host  string
+        Port  int
+        Tags  []string    // slice — shallow copy!
+    }
+
+    original := Config{Host: "localhost", Port: 8080, Tags: []string{"web", "api"}}
+
+    // VALUE copy — modifying scalar fields is safe
+    copy1 := original
+    copy1.Port = 9090
+    fmt.Println(original.Port)   // 8080 — unchanged ✓
+
+    // WARNING: slice is SHALLOW copied — same underlying array!
+    copy1.Tags[0] = "modified"
+    fmt.Println(original.Tags[0])  // "modified" — MUTATED! ✗
+
+    // DEEP copy pattern for slices
+    func (c Config) DeepCopy() Config {
+        newTags := make([]string, len(c.Tags))
+        copy(newTags, c.Tags)
+        return Config{Host: c.Host, Port: c.Port, Tags: newTags}
+    }
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║  SECTION 7 │ ADVANCED PATTERNS (Experienced Level)                               ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  FUNCTIONAL OPTIONS PATTERN                                                       │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+    // Problem: Constructors with many optional params become messy
+    // Solution: Functional options — clean, extensible, backward compatible
+
+    type Server struct {
+        host        string
+        port        int
+        timeout     time.Duration
+        maxConns    int
+        tlsEnabled  bool
+    }
+
+    type Option func(*Server)
+
+    // Option constructors
+    func WithHost(host string) Option {
+        return func(s *Server) { s.host = host }
+    }
+    func WithPort(port int) Option {
+        return func(s *Server) { s.port = port }
+    }
+    func WithTimeout(d time.Duration) Option {
+        return func(s *Server) { s.timeout = d }
+    }
+    func WithMaxConns(n int) Option {
+        return func(s *Server) { s.maxConns = n }
+    }
+    func WithTLS() Option {
+        return func(s *Server) { s.tlsEnabled = true }
+    }
+
+    // Constructor with defaults + options
+    func NewServer(opts ...Option) *Server {
+        s := &Server{          // sensible defaults
+            host:     "0.0.0.0",
+            port:     8080,
+            timeout:  30 * time.Second,
+            maxConns: 100,
+        }
+        for _, opt := range opts {
+            opt(s)             // apply each option
+        }
+        return s
+    }
+
+    // Usage — clean and readable
+    s1 := NewServer()                                             // all defaults
+    s2 := NewServer(WithPort(9090), WithTLS(), WithMaxConns(500)) // custom
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  BUILDER PATTERN                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+    type QueryBuilder struct {
+        table      string
+        conditions []string
+        columns    []string
+        limit      int
+        orderBy    string
+    }
+
+    func NewQueryBuilder(table string) *QueryBuilder {
+        return &QueryBuilder{table: table, columns: []string{"*"}}
+    }
+
+    func (q *QueryBuilder) Select(cols ...string) *QueryBuilder {
+        q.columns = cols
+        return q    // returns self for method chaining
+    }
+
+    func (q *QueryBuilder) Where(cond string) *QueryBuilder {
+        q.conditions = append(q.conditions, cond)
+        return q
+    }
+
+    func (q *QueryBuilder) Limit(n int) *QueryBuilder {
+        q.limit = n
+        return q
+    }
+
+    func (q *QueryBuilder) OrderBy(col string) *QueryBuilder {
+        q.orderBy = col
+        return q
+    }
+
+    func (q *QueryBuilder) Build() string {
+        query := fmt.Sprintf("SELECT %s FROM %s",
+            strings.Join(q.columns, ", "), q.table)
+        if len(q.conditions) > 0 {
+            query += " WHERE " + strings.Join(q.conditions, " AND ")
+        }
+        if q.orderBy != "" {
+            query += " ORDER BY " + q.orderBy
+        }
+        if q.limit > 0 {
+            query += fmt.Sprintf(" LIMIT %d", q.limit)
+        }
+        return query
+    }
+
+    // Usage — fluent method chaining
+    sql := NewQueryBuilder("users").
+        Select("id", "name", "email").
+        Where("age > 18").
+        Where("active = true").
+        OrderBy("name").
+        Limit(50).
+        Build()
+    // SELECT id, name, email FROM users WHERE age > 18 AND active = true ORDER BY name LIMIT 50
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  STRUCT WITH GENERICS (Go 1.18+)                                                  │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+    // Generic Result type — eliminates repetitive error-wrapping structs
+    type Result[T any] struct {
+        Value T
+        Err   error
+    }
+
+    func (r Result[T]) IsOk() bool { return r.Err == nil }
+
+    func (r Result[T]) Unwrap() (T, error) { return r.Value, r.Err }
+
+    // Generic Stack
+    type Stack[T any] struct {
+        items []T
+    }
+
+    func (s *Stack[T]) Push(item T) {
+        s.items = append(s.items, item)
+    }
+
+    func (s *Stack[T]) Pop() (T, bool) {
+        var zero T
+        if len(s.items) == 0 {
+            return zero, false
+        }
+        top := s.items[len(s.items)-1]
+        s.items = s.items[:len(s.items)-1]
+        return top, true
+    }
+
+    func (s *Stack[T]) Size() int { return len(s.items) }
+
+    // Usage
+    intStack := &Stack[int]{}
+    intStack.Push(1)
+    intStack.Push(2)
+    val, _ := intStack.Pop()   // val = 2
+
+    strStack := &Stack[string]{}
+    strStack.Push("hello")
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  STRINGER INTERFACE (fmt.Stringer)                                                │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+    type Color int
+
+    const (
+        Red Color = iota
+        Green
+        Blue
+    )
+
+    type Pixel struct {
+        X, Y  int
+        Color Color
+    }
+
+    // Implement fmt.Stringer for human-readable output
+    func (p Pixel) String() string {
+        colorName := map[Color]string{Red: "Red", Green: "Green", Blue: "Blue"}
+        return fmt.Sprintf("Pixel(%d,%d)[%s]", p.X, p.Y, colorName[p.Color])
+    }
+
+    px := Pixel{10, 20, Green}
+    fmt.Println(px)          // Pixel(10,20)[Green]  ← uses String()
+    fmt.Printf("%v\n", px)   // Pixel(10,20)[Green]
+    fmt.Printf("%s\n", px)   // Pixel(10,20)[Green]
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  STRUCT MEMORY LAYOUT & PADDING OPTIMIZATION                                      │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+    // ❌ BAD layout — wastes memory due to padding
+    type BadLayout struct {
+        A bool       // 1 byte  + 7 padding
+        B int64      // 8 bytes
+        C bool       // 1 byte  + 7 padding
+        D int64      // 8 bytes
+    }
+    // Total: 32 bytes (wasted 14 bytes on padding)
+
+    // ✅ GOOD layout — group by size, largest first
+    type GoodLayout struct {
+        B int64      // 8 bytes
+        D int64      // 8 bytes
+        A bool       // 1 byte
+        C bool       // 1 byte  + 6 padding
+    }
+    // Total: 24 bytes
+
+    // Check sizes
+    fmt.Println(unsafe.Sizeof(BadLayout{}))    // 32
+    fmt.Println(unsafe.Sizeof(GoodLayout{}))   // 24
+
+    // RULE: Order fields from LARGEST to SMALLEST type:
+    //       int64/float64/pointer (8) → int32/float32 (4) → int16 (2) → bool/byte (1)
+
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│  SYNC WITH STRUCTS — THREAD-SAFE PATTERN                                          │
+└──────────────────────────────────────────────────────────────────────────────────┘
+
+    type SafeCounter struct {
+        mu    sync.RWMutex       // embed mutex — NEVER copy after first use
+        count map[string]int
+    }
+
+    func NewSafeCounter() *SafeCounter {
+        return &SafeCounter{count: make(map[string]int)}
+    }
+
+    func (c *SafeCounter) Increment(key string) {
+        c.mu.Lock()
+        defer c.mu.Unlock()
+        c.count[key]++
+    }
+
+    func (c *SafeCounter) Get(key string) int {
+        c.mu.RLock()
+        defer c.mu.RUnlock()
+        return c.count[key]
+    }
+
+    // ⚠️ NEVER pass SafeCounter by value — mutex must not be copied!
+    // Always use *SafeCounter (pointer)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║  SECTION 8 │ COMMON MISTAKES & GOTCHAS                                           ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+  ╔═══╗
+  ║ 1 ║  Modifying struct in range loop — copy, not original
+  ╚═══╝
+    type Item struct { Value int }
+    items := []Item{{1}, {2}, {3}}
+
+    // ❌ WRONG — v is a COPY
+    for _, v := range items {
+        v.Value *= 10    // modifies copy, not original
+    }
+    fmt.Println(items[0].Value)   // 1 — unchanged!
+
+    // ✅ CORRECT — use index
+    for i := range items {
+        items[i].Value *= 10
+    }
+    fmt.Println(items[0].Value)   // 10 ✓
+
+  ╔═══╗
+  ║ 2 ║  Nil pointer receiver — calling method on nil pointer
+  ╚═══╝
+    var p *Person                    // nil pointer
+    // p.Name = "Alice"             // panic: nil pointer dereference
+    // fmt.Println(p.Name)          // panic
+
+    // SAFE: methods can handle nil receiver
+    func (p *Person) GetName() string {
+        if p == nil {
+            return "unknown"
+        }
+        return p.Name
+    }
+    fmt.Println(p.GetName())    // "unknown" — no panic
+
+  ╔═══╗
+  ║ 3 ║  Copying mutex — always use pointer for structs with sync types
+  ╚═══╝
+    type Worker struct {
+        mu sync.Mutex
+        jobs int
+    }
+    w := Worker{}
+    // w2 := w      ← BAD: copies mutex — use &w or pass *Worker
+    w2 := &w         // ✓
+
+  ╔═══╗
+  ║ 4 ║  Unexported fields and JSON serialization
+  ╚═══╝
+    type secret struct {
+        name string       // unexported — json.Marshal IGNORES it
+        Age  int          // exported — json.Marshal includes it
+    }
+    s := secret{name: "Alice", Age: 30}
+    data, _ := json.Marshal(s)
+    fmt.Println(string(data))    // {"Age":30}  — name is missing!
+
+  ╔═══╗
+  ║ 5 ║  Interface nil trap
+  ╚═══╝
+    type MyError struct{ msg string }
+    func (e *MyError) Error() string { return e.msg }
+
+    func getError() error {
+        var err *MyError = nil
+        return err    // ← THIS IS NOT nil! Interface has (type=*MyError, value=nil)
+    }
+
+    err := getError()
+    fmt.Println(err == nil)   // false ← TRAP!
+
+    // FIX:
+    func getErrorFixed() error {
+        return nil    // returns true nil interface
+    }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║  SECTION 9 │ QUICK REFERENCE — CHEAT SHEET                                       ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+    ┌─────────────────────────────────┬──────────────────────────────────────────┐
+    │  Use VALUE receiver when...     │  Use POINTER receiver when...            │
+    ├─────────────────────────────────┼──────────────────────────────────────────┤
+    │  Reading data only              │  Modifying struct fields                 │
+    │  Struct is small (< 64 bytes)   │  Struct is large (avoid copying)         │
+    │  No mutation needed             │  Struct contains sync types              │
+    │  Implementing Stringer, etc.    │  Most methods in the set use pointer     │
+    └─────────────────────────────────┴──────────────────────────────────────────┘
+
+    ┌─────────────────────────────────┬──────────────────────────────────────────┐
+    │  Tag Key                        │  Common Usage                            │
+    ├─────────────────────────────────┼──────────────────────────────────────────┤
+    │  json:"name"                    │  JSON serialization (encoding/json)      │
+    │  json:"name,omitempty"          │  Skip zero-value fields in JSON          │
+    │  json:"-"                       │  Exclude field from JSON entirely        │
+    │  db:"column_name"               │  SQL mapping (sqlx, database/sql)        │
+    │  gorm:"..."                     │  GORM ORM annotations                    │
+    │  yaml:"name"                    │  YAML parsing (gopkg.in/yaml)            │
+    │  validate:"required,min=3"      │  Struct validation (go-playground)       │
+    │  xml:"name,attr"                │  XML encoding/decoding                   │
+    └─────────────────────────────────┴──────────────────────────────────────────┘
+
+    ┌─────────────────────────────────────────────────────────────────────────────┐
+    │  ZERO VALUES BY TYPE                                                         │
+    ├─────────────────────────────────────────────────────────────────────────────┤
+    │  int, float64   → 0                                                          │
+    │  string         → ""                                                         │
+    │  bool           → false                                                      │
+    │  pointer        → nil                                                        │
+    │  slice          → nil  (len=0, cap=0)                                        │
+    │  map            → nil  (must initialize with make before use!)               │
+    │  channel        → nil                                                        │
+    │  interface      → nil                                                        │
+    │  struct         → all fields set to their zero values                        │
+    └─────────────────────────────────────────────────────────────────────────────┘
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║  SECTION 10 │ INTERVIEW QUESTIONS & ANSWERS                                      ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║                  ★ 30 Questions │ Medior → Experienced Level ★                   ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PART A — FUNDAMENTALS (Medior Level)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Q1. What is a struct in Go, and how does it differ from a class in OOP?
+  ────────────────────────────────────────────────────────────────────────
+  A: A struct is a composite type grouping named fields of different types.
+     Unlike OOP classes:
+     • No inheritance (only composition via embedding)
+     • No access modifiers (visibility by capitalization only)
+     • No constructors (use factory functions by convention)
+     • Value type by default (copied on assignment)
+
+  Q2. What is the difference between a value receiver and pointer receiver?
+  ─────────────────────────────────────────────────────────────────────────
+  A: Value receiver gets a COPY of the struct — changes don't affect original.
+     Pointer receiver operates on the ORIGINAL struct — mutations persist.
+     Use pointer receiver when: modifying fields, large struct, or consistency
+     with other pointer-receiver methods in the set.
+
+  Q3. What are struct tags, and how are they used?
+  ─────────────────────────────────────────────────
+  A: Struct tags are string literals after a field declaration, read via
+     reflect at runtime. Format: `key:"value,option"`. Common uses: JSON
+     serialization, database column mapping, YAML parsing, validation rules.
+
+  Q4. What is struct embedding in Go?
+  ────────────────────────────────────
+  A: Embedding a struct type (without a field name) promotes its fields and
+     methods to the outer struct. It's Go's way of achieving code reuse
+     (composition), NOT inheritance. The embedded type's methods can be called
+     directly and can be overridden by the outer struct.
+
+  Q5. How do you create a constructor in Go?
+  ───────────────────────────────────────────
+  A: Go has no constructor keyword. The convention is a function named
+     NewTypeName() that validates inputs, initializes defaults, and returns
+     *TypeName (pointer). Example: func NewServer(host string) *Server { ... }
+
+  Q6. Are structs comparable with == in Go?
+  ──────────────────────────────────────────
+  A: Structs are comparable with == if ALL their fields are comparable types
+     (int, string, bool, array, pointer, etc.). Structs with slices, maps,
+     channels, or functions CANNOT be compared with ==. Use reflect.DeepEqual
+     for deep comparison of those.
+
+  Q7. What is an anonymous struct? When would you use one?
+  ─────────────────────────────────────────────────────────
+  A: A struct defined inline without a type name:
+     cfg := struct { Port int }{ Port: 8080 }
+     Use cases: one-off config, test fixtures, returning ad-hoc data from
+     a function without polluting the package with a named type.
+
+  Q8. What is the zero value of a struct?
+  ────────────────────────────────────────
+  A: All fields are initialized to their respective zero values:
+     0 for numbers, "" for strings, false for bool, nil for pointers/maps/slices.
+     Structs in Go are always usable at their zero value (design principle).
+
+  Q9. How does Go achieve polymorphism without inheritance?
+  ──────────────────────────────────────────────────────────
+  A: Through interfaces. Any struct that implements all methods of an interface
+     satisfies it implicitly (no "implements" declaration). Multiple structs can
+     implement the same interface, enabling polymorphic behavior through
+     interface variables.
+
+  Q10. Explain the difference between `var p Person` and `p := &Person{}`
+  ────────────────────────────────────────────────────────────────────────
+  A: `var p Person` declares a Person VALUE with all zero fields.
+     `p := &Person{}` declares a *Person POINTER to a zero-value Person.
+     The pointer form is preferred when the struct needs to be mutated via
+     methods, passed efficiently (no copy), or assigned to an interface.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PART B — INTERMEDIATE (Medior+)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Q11. What happens when you copy a struct that contains a slice?
+  ──────────────────────────────────────────────────────────────────
+  A: A SHALLOW copy is made — the slice header (pointer, length, cap) is copied,
+     but both structs share the same underlying array. Modifying elements via
+     one copy affects the other. To truly isolate, perform a DEEP copy:
+     use `copy(newSlice, original.Slice)`.
+
+  Q12. When would you embed a pointer vs embed a value in a struct?
+  ──────────────────────────────────────────────────────────────────
+  A: Embed VALUE when the embedded struct is small, always present, and you want
+     to share zero value initialization.
+     Embed POINTER when the embedded struct is optional (nil = not set), large,
+     or needs to be shared/mutated across multiple structs.
+
+  Q13. Can an interface variable be nil even if the contained pointer is nil?
+  ───────────────────────────────────────────────────────────────────────────
+  A: YES — the "nil interface trap". An interface is nil only if BOTH its type
+     and value are nil. If you assign a nil *T to an interface, the interface has
+     type info (*T) but nil value — so interface != nil. Fix: return plain `nil`
+     instead of a typed nil pointer.
+
+  Q14. What is the `fmt.Stringer` interface and how does a struct implement it?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: fmt.Stringer has one method: `String() string`. Implementing it lets
+     the struct control how it prints with fmt.Println, %v, %s.
+     Add: `func (t MyType) String() string { return fmt.Sprintf("...") }`
+
+  Q15. What are the rules for exported vs unexported struct fields?
+  ─────────────────────────────────────────────────────────────────
+  A: Fields starting with UPPERCASE are exported (accessible from other packages).
+     Fields starting with lowercase are unexported (package-private).
+     json.Marshal, gob, reflect — all skip unexported fields unless custom
+     marshaling is implemented.
+
+  Q16. Explain the Functional Options pattern. Why is it preferred?
+  ──────────────────────────────────────────────────────────────────
+  A: Functional Options uses `type Option func(*T)` to apply settings to a struct.
+     Pros: backward compatible (add options without breaking API), self-documenting,
+     default values supported, zero caller boilerplate for unused options.
+     Alternative patterns (config struct, variadic args) are more brittle.
+
+  Q17. How does struct embedding differ from having a named field of that type?
+  ──────────────────────────────────────────────────────────────────────────────
+  A: With embedding: fields/methods of the inner type are PROMOTED — you access
+     them directly (outer.Field vs outer.Inner.Field).
+     Embedding also satisfies interfaces: if inner implements an interface,
+     outer struct automatically satisfies it too (unless it overrides the methods).
+     Named field provides NO promotion — just composition.
+
+  Q18. What is the Builder pattern in Go, and when should you use it?
+  ───────────────────────────────────────────────────────────────────
+  A: Builder uses method chaining where each method returns `*Builder`, allowing:
+     q.Where("x").Limit(10).OrderBy("name").Build()
+     Best for constructing complex objects step-by-step (SQL queries,
+     HTTP requests, configuration objects) where order matters or steps are
+     optional. Pair with a terminal `.Build()` method.
+
+  Q19. How do you make a struct thread-safe?
+  ───────────────────────────────────────────
+  A: Embed `sync.RWMutex` (for read-heavy) or `sync.Mutex` (write-heavy).
+     Lock before reading/writing, unlock via defer. CRITICAL: never copy a struct
+     containing a mutex — always pass by pointer. sync.Map is an alternative for
+     map-heavy concurrent access.
+
+  Q20. What is struct padding and how does it affect performance?
+  ───────────────────────────────────────────────────────────────
+  A: Go aligns fields to their natural boundaries (int64 at 8-byte boundary, etc.).
+     Gaps = padding bytes = wasted memory. For cache-sensitive code, order fields
+     from largest to smallest type to minimize padding. Use `unsafe.Sizeof()` and
+     tools like `fieldalignment` (go vet) to detect and fix inefficient layouts.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  PART C — EXPERIENCED LEVEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Q21. How do generics improve struct design in Go 1.18+?
+  ────────────────────────────────────────────────────────
+  A: Generic structs (type Stack[T any] struct) eliminate code duplication for
+     container types, result wrappers, etc. Type safety is preserved at compile
+     time without runtime reflection costs. Use type constraints for more
+     specific behavior: `[T comparable]`, `[T Number]`.
+
+  Q22. How would you implement a custom JSON marshaler for a struct?
+  ───────────────────────────────────────────────────────────────────
+  A: Implement `MarshalJSON() ([]byte, error)` and/or
+     `UnmarshalJSON(data []byte) error` on the struct.
+     Useful for: custom date formats, flattening nested structs, adding
+     computed fields, encrypting sensitive fields.
+
+     func (u User) MarshalJSON() ([]byte, error) {
+         type Alias User
+         return json.Marshal(&struct {
+             Alias
+             CreatedAt string `json:"created_at"`
+         }{
+             Alias:     Alias(u),
+             CreatedAt: u.CreatedAt.Format("2006-01-02"),
+         })
+     }
+
+  Q23. What is the difference between `sync.Mutex` and `sync.RWMutex`?
+  ─────────────────────────────────────────────────────────────────────
+  A: Mutex: full exclusive lock — only one goroutine at a time (reads AND writes).
+     RWMutex: multiple concurrent READERS allowed, but writes are exclusive.
+     Prefer RWMutex when reads heavily outnumber writes (e.g., cache lookup).
+
+  Q24. How would you implement the Repository pattern using interfaces and structs?
+  ─────────────────────────────────────────────────────────────────────────────────
+  A:
+     type UserRepository interface {
+         FindByID(id int) (*User, error)
+         Save(u *User) error
+         Delete(id int) error
+     }
+     type PostgresUserRepo struct { db *sql.DB }
+     func (r *PostgresUserRepo) FindByID(id int) (*User, error) { ... }
+     type MockUserRepo struct { users map[int]*User }
+     func (r *MockUserRepo) FindByID(id int) (*User, error) { ... }
+     // Service depends on interface — swappable in tests
+
+  Q25. Explain how `go vet`'s `copylocks` check relates to structs.
+  ──────────────────────────────────────────────────────────────────
+  A: `copylocks` detects when a struct containing a sync.Mutex/RWMutex/WaitGroup
+     is copied by value. Since mutexes must not be copied after first use
+     (copying duplicates the lock state), go vet warns: "assignment copies lock
+     value". Fix by passing pointers instead of values.
+
+  Q26. What is interface embedding and how does it relate to struct design?
+  ─────────────────────────────────────────────────────────────────────────
+  A: Interfaces can embed other interfaces, composing them:
+     type ReadWriter interface { Reader; Writer }
+     Structs implementing ReadWriter must satisfy both Reader AND Writer.
+     Also, embedding an interface IN a struct lets you inject behavior:
+     type Service struct { Logger } — Logger can be any Logger implementation.
+
+  Q27. How do you handle circular struct references?
+  ───────────────────────────────────────────────────
+  A: Use pointers for at least one side of the cycle:
+     type Node struct { Value int; Next *Node }  — singly linked list
+     Without pointer, infinite size at compile time (compile error).
+     For serialization, mark one pointer with `json:"-"` to avoid infinite loops.
+
+  Q28. What is a "zero-value friendly" struct and why does it matter?
+  ───────────────────────────────────────────────────────────────────
+  A: A struct where the zero value is a valid, useful state — no init call needed.
+     Example: `sync.Mutex{}` works immediately; `bytes.Buffer{}` works immediately.
+     Design principle from Rob Pike. Avoid: requiring explicit New() just to set
+     a boolean from false→true or a counter from 0→start. Simplifies API.
+
+  Q29. How does struct layout affect CPU cache performance?
+  ──────────────────────────────────────────────────────────
+  A: Modern CPUs load data in cache lines (~64 bytes). Hot fields accessed
+     together should be in the SAME struct (spatial locality). False sharing
+     occurs when two goroutines modify different fields that share a cache line —
+     they invalidate each other's cache. Fix: add padding between hot fields,
+     or use separate structs with `//nolint:golint // padding` comments.
+
+  Q30. What are some ways to reduce allocations when working with structs?
+  ─────────────────────────────────────────────────────────────────────────
+  A: • Use sync.Pool to reuse structs instead of allocating new ones.
+     • Prefer value receivers for small, immutable structs (stays on stack).
+     • Pre-allocate slices of structs with known capacity.
+     • Use struct embedding instead of nested pointer fields.
+     • Profile with pprof (heap profile) to identify hot allocation paths.
+     • Use `//go:noescape` and inlining hints for performance-critical code.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

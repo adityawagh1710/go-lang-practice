@@ -1,0 +1,258 @@
+# 🚀 Go Lang Struct 
+==========================================================
+
+📌 WHAT IS A STRUCT?
+----------------------------------------------------------
+Struct is a composite data type in Go used to group related fields.
+
+👉 Similar to classes in other languages (but no inheritance)
+👉 Used for modeling real-world entities
+
+----------------------------------------------------------
+🔹 BASIC STRUCT DECLARATION
+----------------------------------------------------------
+
+type User struct {
+    ID    int
+    Name  string
+    Email string
+}
+
+----------------------------------------------------------
+🔹 INITIALIZATION METHODS
+----------------------------------------------------------
+
+1. Zero Value Initialization
+--------------------------------
+var u User
+
+2. Named Fields (Recommended)
+--------------------------------
+u := User{
+    ID:    1,
+    Name:  "Aditya",
+    Email: "aditya@gmail.com",
+}
+
+3. Positional (Avoid in real-world)
+--------------------------------
+u := User{1, "Aditya", "aditya@gmail.com"}
+
+4. Pointer Initialization
+--------------------------------
+u := &User{
+    ID:   1,
+    Name: "Pointer User",
+}
+
+----------------------------------------------------------
+🔹 ACCESS & MODIFY FIELDS
+----------------------------------------------------------
+
+u.Name = "Updated Name"
+fmt.Println(u.Email)
+
+----------------------------------------------------------
+🔹 STRUCT WITH METHODS
+----------------------------------------------------------
+
+type User struct {
+    Name string
+}
+
+func (u User) Greet() string {
+    return "Hello " + u.Name
+}
+
+👉 Value Receiver → works on copy
+
+----------------------------------------------------------
+🔹 POINTER RECEIVER (IMPORTANT)
+----------------------------------------------------------
+
+func (u *User) UpdateName(newName string) {
+    u.Name = newName
+}
+
+👉 Needed when:
+   ✔ modifying struct
+   ✔ avoiding copies (performance)
+
+----------------------------------------------------------
+🔹 EMBEDDED STRUCTS (COMPOSITION)
+----------------------------------------------------------
+
+type Address struct {
+    City string
+}
+
+type User struct {
+    Name string
+    Address   // embedded
+}
+
+u := User{
+    Name: "Aditya",
+    Address: Address{
+        City: "Pune",
+    },
+}
+
+fmt.Println(u.City) // direct access
+
+👉 Composition > Inheritance
+
+----------------------------------------------------------
+🔹 TAGS (VERY IMPORTANT IN REAL PROJECTS)
+----------------------------------------------------------
+
+type User struct {
+    ID    int    `json:"id"`
+    Name  string `json:"name"`
+}
+
+👉 Used in:
+   ✔ JSON serialization
+   ✔ DB mapping
+   ✔ Validation
+
+----------------------------------------------------------
+🔹 ANONYMOUS STRUCTS
+----------------------------------------------------------
+
+u := struct {
+    Name string
+    Age  int
+}{
+    Name: "Temp",
+    Age:  25,
+}
+
+👉 Useful for:
+   ✔ quick responses
+   ✔ API payloads
+
+----------------------------------------------------------
+🔹 STRUCT COMPARISON
+----------------------------------------------------------
+
+u1 := User{1, "A"}
+u2 := User{1, "A"}
+
+fmt.Println(u1 == u2) // true
+
+👉 Only works if all fields are comparable
+
+----------------------------------------------------------
+🔹 NESTED STRUCTS
+----------------------------------------------------------
+
+type Order struct {
+    ID   int
+    User User
+}
+
+----------------------------------------------------------
+🔹 STRUCT WITH SLICE / MAP
+----------------------------------------------------------
+
+type Team struct {
+    Name    string
+    Members []User
+}
+
+----------------------------------------------------------
+🔹 BEST PRACTICES (EXPERIENCED LEVEL)
+----------------------------------------------------------
+
+✔ Use pointer receivers for large structs
+✔ Keep structs small & focused
+✔ Use composition over inheritance
+✔ Avoid exporting unnecessary fields
+✔ Use tags properly for APIs
+✔ Group related behavior (methods)
+
+----------------------------------------------------------
+🔹 REAL-WORLD EXAMPLE (API MODEL)
+----------------------------------------------------------
+
+type Product struct {
+    ID    int     `json:"id"`
+    Name  string  `json:"name"`
+    Price float64 `json:"price"`
+}
+
+func (p *Product) ApplyDiscount(percent float64) {
+    p.Price -= p.Price * percent / 100
+}
+
+----------------------------------------------------------
+🔥 ADVANCED CONCEPTS
+----------------------------------------------------------
+
+1. Struct as Dependency Injection
+--------------------------------
+type Service struct {
+    Repo Repository
+}
+
+2. Struct Immutability Pattern
+--------------------------------
+👉 Use private fields + constructor
+
+type User struct {
+    name string
+}
+
+func NewUser(name string) User {
+    return User{name: name}
+}
+
+3. Struct Copy Pitfall
+--------------------------------
+u2 := u1  // copy, not reference
+
+----------------------------------------------------------
+🎯 INTERVIEW QUESTIONS
+----------------------------------------------------------
+
+🟢 BASIC
+--------------------------------
+1. What is struct in Go?
+2. Difference between struct and map?
+3. What are zero values in struct?
+
+🟡 MID LEVEL
+--------------------------------
+4. Value vs Pointer receiver?
+5. What is struct embedding?
+6. How JSON tags work?
+7. Can struct be compared?
+
+🔴 ADVANCED
+--------------------------------
+8. Why Go prefers composition over inheritance?
+9. How memory is handled in structs?
+10. Struct copy vs reference pitfalls?
+11. How to design scalable struct models?
+12. When to use pointer vs value receiver?
+
+----------------------------------------------------------
+💡 COMMON MISTAKES
+----------------------------------------------------------
+
+❌ Using value receiver when modification needed
+❌ Large struct passed by value (performance issue)
+❌ Ignoring struct tags in APIs
+❌ Overusing nested structs (complexity)
+
+----------------------------------------------------------
+📌 SUMMARY
+----------------------------------------------------------
+
+✔ Struct = core building block in Go
+✔ Methods + structs = behavior
+✔ Pointer receivers = performance + mutation
+✔ Composition = Go design philosophy
+
+==========================================================
