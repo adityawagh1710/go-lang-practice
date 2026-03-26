@@ -18,6 +18,8 @@ func (p *Person) HaveBirthday() {
 }
 
 func main() {
+	fmt.Println("=======================NORMAL STRUCT AND POINTER=============")
+
 	person := Person{Name: "Charlie", Age: 28}
 	fmt.Println(person)      // value receiver works on value
 	(&person).HaveBirthday() // or just:
@@ -29,7 +31,7 @@ func main() {
 	fmt.Println(person)
 	fmt.Println(person2)
 
-	fmt.Println("====================================================")
+	fmt.Println("======================EMBWDDED==============================")
 
 	// Creating with pointers
 	email := "alice@example.com"
@@ -49,4 +51,21 @@ func main() {
 	fmt.Printf("%+v\n", u) // This may still show addresses
 	fmt.Println(u)         // This will now use the clean String() method above
 	fmt.Println(u.Posts)
+
+	fmt.Println("=====================POINTER CONSTRUCT======================")
+
+	emp, err := NewEmp("Aditya", -1)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	fmt.Println(emp)
+	emp2, _ := NewEmp("Aditya", 14)
+	fmt.Println(emp2)
+
+	fmt.Println("=====================ENCAPSULATED===========================")
+
+	trup := NewTrup("ENCAPSULATED")   // constructor
+	fmt.Println(trup.GetName()) // method call
 }

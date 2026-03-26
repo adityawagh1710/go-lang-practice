@@ -22,19 +22,19 @@ type UserSettings struct {
 	Notifications bool
 }
 
-// Custom String() method – This is your "sprint" behavior
 func (u User) String() string {
 	emailStr := "<nil>"
+
 	if u.Email != nil {
 		emailStr = *u.Email
 	}
 
 	settingsStr := "<nil>"
+
 	if u.Settings != nil {
 		settingsStr = fmt.Sprintf("%+v", *u.Settings)
 	}
 
-	// This line shows actual Post content
 	postsStr := "[]"
 	if len(u.Posts) > 0 {
 		var postList []string
