@@ -1,0 +1,192 @@
+GO LANG CLOSURES - COMPLETE NOTES   
+====================================================================
+
+1. What are Closures in Go?
+---------------------------
+- A closure is a function (usually anonymous) that "closes over" or captures variables from its surrounding (outer) lexical scope.
+- The inner function can access and modify those variables even after the outer function has returned.
+- Closures allow functions to maintain private state without using global variables.
+- In Go, closures are built on top of anonymous functions (function literals).
+- Closures are first-class citizens — they can be assigned to variables, passed as arguments, or returned from functions.
+
+Key Point:
+- Variables are captured by reference (not copied). Changes made inside the closure affect the original variable.
+
+2. Anonymous Functions (Function Literals)
+------------------------------------------
+- Functions without a name.
+- Defined using the `func` keyword followed directly by parameters and body.
+- Often used to create closures.
+
+Syntax:
+func() returnType {
+    // body
+}
+
+3. Basic Closure Example - Counter
+----------------------------------
+func createCounter() func() int {
+    count := 0                  // variable from outer scope
+    return func() int {         // this anonymous function is a closure
+        count++                 // modifies the captured variable
+        return count
+    }
+}
+
+Usage:
+counter1 := createCounter()
+fmt.Println(counter1()) // 1
+fmt.Println(counter1()) // 2
+
+counter2 := createCounter() // independent state
+fmt.Println(counter2())     // 1
+
+4. Closure Capturing Variables
+------------------------------
+- Closures capture variables by reference.
+- Be careful with loop variables (classic gotcha in older Go versions).
+
+Example with loop (safe in Go 1.22+ due to per-iteration variables):
+for i := 0; i < 3; i++ {
+    go func() {
+        fmt.Println(i)   // safely captures current i
+    }()
+}
+
+Pre-1.22 common mistake (all goroutines printed the same final value):
+for i := 0; i < 3; i++ {
+    go func(val int) {      // pass as parameter to avoid capture issue
+        fmt.Println(val)
+    }(i)
+}
+
+5. Function that Returns a Closure (Factory Pattern)
+----------------------------------------------------
+func multiplier(factor int) func(int) int {
+    return func(x int) int {
+        return x * factor   // captures 'factor'
+    }
+}
+
+Usage:
+double := multiplier(2)
+triple := multiplier(3)
+fmt.Println(double(5))  // 10
+fmt.Println(triple(5))  // 15
+
+6. Closures with Multiple Captured Variables
+--------------------------------------------
+func priceCalculator(taxRate float64) func(float64) float64 {
+    basePrice := 100.0
+    return func(price float64) float64 {
+        return price*basePrice + (price * taxRate)
+    }
+}
+
+7. Important Gotchas & Best Practices
+-------------------------------------
+- Closures share the same variables if created in the same scope.
+- Avoid capturing loop variables directly in goroutines (use parameters or Go 1.22+ behavior).
+- Keep closures small and focused for readability.
+- Test closures independently as they maintain hidden state.
+- Closures can lead to memory leaks if they keep large objects alive longer than expected.
+
+8. Complete Working Examples (Copy-Paste Ready)
+-----------------------------------------------
+package main
+import "fmt"
+
+func createCounter() func() int {
+    count := 0
+    return func() int {
+        count++
+        return count
+    }
+}
+
+func multiplier(factor int) func(int) int {
+    return func(x int) int {
+        return x * factor
+    }
+}
+
+func main() {
+    // Counter example
+    counter := createCounter()
+    fmt.Println(counter()) // 1
+    fmt.Println(counter()) // 2
+    fmt.Println(counter()) // 3
+
+    // Multiplier example
+    double := multiplier(2)
+    triple := multiplier(3)
+    fmt.Println(double(10)) // 20
+    fmt.Println(triple(10)) // 30
+
+    // Simple anonymous function (not a full closure)
+    add := func(a, b int) int {
+        return a + b
+    }
+    fmt.Println(add(5, 7))  // 12
+}
+
+=======================================================================
+Interview Questions (with short answers for quick revision)
+============================================================
+
+1. What is a closure in Go?
+   → A function (often anonymous) that captures and remembers variables from its surrounding lexical scope even after the outer function has returned.
+
+2. What is the difference between an anonymous function and a closure?
+   → Anonymous function = function without a name. Closure = anonymous function that captures variables from outer scope.
+
+3. How do closures capture variables in Go? By value or by reference?
+   → By reference. The closure shares the same variable, so modifications inside affect the original.
+
+4. Why are closures useful in Go?
+   → To maintain private state, create function factories, implement middleware, callbacks, and avoid global variables.
+
+5. What is a common gotcha when using closures inside loops with goroutines?
+   → All goroutines may capture the same final value of the loop variable. Solution: pass the variable as a parameter or use Go 1.22+ behavior.
+
+6. Can a closure modify variables from the outer scope?
+   → Yes, because variables are captured by reference.
+
+7. How can you create independent counters using closures?
+   → Call the outer factory function multiple times. Each call creates its own captured variable instance.
+
+8. Can you pass a closure as an argument to another function?
+   → Yes. Functions (including closures) are first-class citizens in Go.
+
+9. What happens if two closures capture the same outer variable?
+   → They share the variable. Changes made by one affect the other.
+
+10. Give a real-world use case of closures in Go.
+    → HTTP middleware (wrapping handlers), database connection factories, custom sorters with sort.Slice, or rate limiters.
+
+11. Are closures in Go the same as in JavaScript?
+    → Concept is similar, but Go is statically typed and compiled. Capture semantics (reference) are the same.
+
+12. How do you avoid the loop variable capture issue in closures?
+    → Pass the loop variable as a parameter to the anonymous function.
+
+13. Can a closure outlive the function that created it?
+    → Yes. That's the main power of closures — the captured variables stay alive as long as the closure is accessible.
+
+14. What is the output of this code?
+    func main() {
+        x := 10
+        f := func() { fmt.Println(x) }
+        x = 20
+        f()
+    }
+    → Output: 20  (because x is captured by reference)
+
+15. Bonus Tricky Question:
+    Explain why the following creates independent states:
+    counter1 := createCounter()
+    counter2 := createCounter()
+    → Each call to createCounter() creates a new local 'count' variable in its own scope.
+
+Save this file as golang_closures_notes.txt
+Perfect for offline revision and interviews!

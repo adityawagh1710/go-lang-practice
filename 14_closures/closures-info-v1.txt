@@ -1,0 +1,208 @@
+GO LANG CLOSURES - COMPLETE NOTES 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. WHAT IS A CLOSURE?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   ✔ A closure is a function that captures variables
+   from its outer scope.
+
+✔ It remembers values even after outer function ends.
+
+👉 Closure = Function + Captured State
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. BASIC EXAMPLE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+package main
+
+import "fmt"
+
+func main() {
+x := 10
+
+```
+add := func(y int) int {
+    return x + y
+}
+
+fmt.Println(add(5)) // 15
+```
+
+}
+
+✔ Inner function uses outer variable `x`
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. CLOSURE WITH OUTER FUNCTION ⭐
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+func counter() func() int {
+count := 0
+
+```
+return func() int {
+    count++
+    return count
+}
+```
+
+}
+
+func main() {
+c := counter()
+
+```
+fmt.Println(c()) // 1
+fmt.Println(c()) // 2
+```
+
+}
+
+✔ State (`count`) persists across calls
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. INDEPENDENT CLOSURES ⭐
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+func main() {
+c1 := counter()
+c2 := counter()
+
+```
+fmt.Println(c1()) // 1
+fmt.Println(c1()) // 2
+
+fmt.Println(c2()) // 1
+```
+
+}
+
+✔ Each closure has its own memory
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5. CLOSURE WITH PARAMETERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+func adder(x int) func(int) int {
+return func(y int) int {
+return x + y
+}
+}
+
+func main() {
+add10 := adder(10)
+fmt.Println(add10(5)) // 15
+}
+
+✔ Function factory pattern
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6. DATA HIDING (ENCAPSULATION)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+func bankAccount(balance int) func(int) int {
+return func(amount int) int {
+balance += amount
+return balance
+}
+}
+
+func main() {
+acc := bankAccount(100)
+
+```
+fmt.Println(acc(50))  // 150
+fmt.Println(acc(-20)) // 130
+```
+
+}
+
+✔ Private state without struct
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7. LOOP PITFALL (IMPORTANT) ⚠
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+❌ WRONG:
+for i := 0; i < 3; i++ {
+go func() {
+fmt.Println(i)
+}()
+}
+
+👉 Problem: same value printed
+
+✅ CORRECT:
+for i := 0; i < 3; i++ {
+i := i
+go func() {
+fmt.Println(i)
+}()
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+8. CLOSURE + GOROUTINES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+for i := 1; i <= 3; i++ {
+go func(n int) {
+fmt.Println(n)
+}(i)
+}
+
+✔ Pass variable explicitly
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+9. MULTIPLE CLOSURES RETURN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+func operations(x int) (func(int) int, func(int) int) {
+add := func(y int) int { return x + y }
+mul := func(y int) int { return x * y }
+
+```
+return add, mul
+```
+
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+10. CLOSURE vs ANONYMOUS FUNCTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✔ Anonymous:
+func() {}
+
+✔ Closure:
+func() { fmt.Println(x) }
+
+👉 Closure captures outer variable
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+11. MEMORY BEHAVIOR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✔ Captured variables may move to heap
+✔ Lifetime = closure lifetime
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+INTERVIEW QUESTIONS 🎯
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. What is a closure in Go?
+2. Closure vs anonymous function?
+3. How does closure maintain state?
+4. Closure behavior in loops?
+5. Why loop bug happens?
+6. How to fix closure in goroutines?
+7. Are closures thread-safe?
+8. Can closures cause memory leaks?
+9. When to use closures?
+10. Can closures replace structs?
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REAL-WORLD USE CASES 🚀
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✔ Middleware (HTTP handlers)
+✔ Counters / Rate limiting
+✔ Caching systems
+✔ Function factories
+✔ Encapsulation of state
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ADVANCED TIP ⭐
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👉 Closures capture VARIABLES (reference),
+not VALUES → leads to loop issues
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -1,0 +1,1384 @@
+GO LANG CLOSURES - COMPLETE NOTES 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  INDEX
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1.  What is a Closure?
+  2.  How Closures Capture Variables
+  3.  Closure vs Regular Function
+  4.  Closures Returning Closures
+  5.  Closures as Function Arguments
+  6.  Stateful Closures (Counter, Accumulator)
+  7.  Shared State Between Closures
+  8.  The Loop Variable Gotcha  ★ Most Common Interview Trap
+  9.  Closures with Goroutines
+  10. Closures with defer
+  11. Closures with Pointers
+  12. Practical Patterns (Middleware, Memoization, Once)
+  13. Closures vs Java Lambdas — Side-by-Side
+  14. Common Mistakes & Best Practices
+  15. Interview Questions & Answers
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  1. WHAT IS A CLOSURE?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DEFINITION:
+  A closure is a function that REMEMBERS and has access to variables
+  from its OUTER (enclosing) scope — even after that outer scope has finished
+  executing.
+
+  The function "closes over" the variables it references from outside itself.
+  Those variables are called "free variables" or "captured variables."
+
+SIMPLE MENTAL MODEL:
+  closure = anonymous function + captured environment (the variables it holds onto)
+
+  ┌──────────────────────────────────────────────────┐
+  │  outer function                                  │
+  │    x := 10          ← captured variable         │
+  │                                                  │
+  │    return func() {                               │
+  │        fmt.Println(x)  ← uses x from outer     │
+  │    }                                             │
+  └──────────────────────────────────────────────────┘
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE — The simplest possible closure
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+func main() {
+    message := "Hello, Aditya!"  // variable in outer scope
+
+    greet := func() {
+        fmt.Println(message)     // closes over 'message'
+    }
+
+    greet()         // Hello, Aditya!
+    message = "Hi there!"
+    greet()         // Hi there!  ← sees the UPDATED value (by reference)
+}
+
+KEY OBSERVATION:
+  When 'message' changed, greet() saw the new value.
+  Go closures capture variables BY REFERENCE, not by value.
+  (Unlike Java lambdas which require effectively final variables)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  2. HOW CLOSURES CAPTURE VARIABLES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CAPTURE BY REFERENCE (default in Go):
+  The closure holds a reference to the original variable.
+  If the variable changes, the closure sees the new value.
+
+CAPTURE BY VALUE (achieved by passing as argument):
+  You pass the value as an argument to the inner function.
+  Changes outside do NOT affect the closure's copy.
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE — By reference vs by value
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+func main() {
+    x := 5
+
+    // ── Capture by REFERENCE ──────────────────────────────
+    byRef := func() {
+        fmt.Println("byRef sees x =", x)
+    }
+
+    // ── Capture by VALUE (argument) ───────────────────────
+    byVal := func(snapshot int) func() {
+        return func() {
+            fmt.Println("byVal sees x =", snapshot)
+        }
+    }(x) // x is passed and copied at this moment
+
+    x = 99
+
+    byRef() // byRef sees x = 99  ← updated value
+    byVal() // byVal sees x = 5   ← original snapshot
+}
+
+──────────────────────────────────────────────────────────────────────────────────
+WHAT GETS CAPTURED?
+──────────────────────────────────────────────────────────────────────────────────
+
+  ✔ Local variables from the enclosing function
+  ✔ Function parameters of the enclosing function
+  ✔ Variables from any outer scope (nested closures)
+  ✘ Package-level variables are NOT "captured" — they're just accessed globally
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  3. CLOSURE vs REGULAR FUNCTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Feature                  Regular Function         Closure
+  ───────────────────────────────────────────────────────────────────────────
+  Has a name               Yes                      Usually not (anonymous)
+  Captures outer vars      No                       Yes — its key feature
+  Holds state              No (stateless)           Yes — via captured vars
+  Defined at package level Yes                      Usually inside a function
+  Called independently     Yes                      Yes
+  Can be assigned to var   Yes                      Yes
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE — Regular function has NO memory; closure DOES
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+// Regular function — no memory between calls
+func addFixed(x int) int {
+    return x + 10
+}
+
+// Closure factory — each returned function remembers its own 'base'
+func makeAdder(base int) func(int) int {
+    return func(x int) int {
+        return base + x   // 'base' is captured
+    }
+}
+
+func main() {
+    add10 := makeAdder(10)
+    add20 := makeAdder(20)
+
+    fmt.Println(add10(5))   // 15  (10 + 5)
+    fmt.Println(add20(5))   // 25  (20 + 5)
+    fmt.Println(addFixed(5))// 15  (always 10 + 5, no flexibility)
+}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  4. CLOSURES RETURNING CLOSURES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+A function can return another function (closure).
+Each call to the outer function produces an INDEPENDENT closure
+with its OWN copy of the captured variables.
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 1 — Multiplier factory
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+func multiplier(factor int) func(int) int {
+    return func(n int) int {
+        return n * factor   // 'factor' is captured
+    }
+}
+
+func main() {
+    double := multiplier(2)
+    triple := multiplier(3)
+    tenX   := multiplier(10)
+
+    fmt.Println(double(5))  // 10
+    fmt.Println(triple(5))  // 15
+    fmt.Println(tenX(5))    // 50
+
+    // Each closure has its own independent 'factor'
+}
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 2 — Greeting factory
+──────────────────────────────────────────────────────────────────────────────────
+
+func makeGreeter(greeting string) func(string) string {
+    return func(name string) string {
+        return greeting + ", " + name + "!"
+    }
+}
+
+func main() {
+    hello  := makeGreeter("Hello")
+    namaste := makeGreeter("Namaste")
+    hey    := makeGreeter("Hey")
+
+    fmt.Println(hello("Aditya"))    // Hello, Aditya!
+    fmt.Println(namaste("Rahul"))   // Namaste, Rahul!
+    fmt.Println(hey("Priya"))       // Hey, Priya!
+}
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 3 — Power function factory
+──────────────────────────────────────────────────────────────────────────────────
+
+import "math"
+
+func powerOf(exp float64) func(float64) float64 {
+    return func(base float64) float64 {
+        return math.Pow(base, exp)
+    }
+}
+
+func main() {
+    square := powerOf(2)
+    cube   := powerOf(3)
+    sqrt   := powerOf(0.5)
+
+    fmt.Println(square(4))  // 16
+    fmt.Println(cube(3))    // 27
+    fmt.Println(sqrt(16))   // 4
+}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  5. CLOSURES AS FUNCTION ARGUMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Closures are frequently passed as arguments to higher-order functions.
+This is the Go equivalent of Java's lambda expressions.
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 1 — Sort with custom comparator (like Java Comparator)
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "sort"
+)
+
+type Employee struct {
+    Name   string
+    Salary int
+}
+
+func main() {
+    employees := []Employee{
+        {"Charlie", 70000},
+        {"Aditya",  90000},
+        {"Bob",     60000},
+    }
+
+    // Sort by salary ascending — closure captures nothing here
+    sort.Slice(employees, func(i, j int) bool {
+        return employees[i].Salary < employees[j].Salary
+    })
+
+    for _, e := range employees {
+        fmt.Printf("%-10s %d\n", e.Name, e.Salary)
+    }
+    // Bob        60000
+    // Charlie    70000
+    // Aditya     90000
+}
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 2 — Closure capturing outer variable while used as argument
+──────────────────────────────────────────────────────────────────────────────────
+
+func applyAll(nums []int, fn func(int) int) []int {
+    result := make([]int, len(nums))
+    for i, v := range nums {
+        result[i] = fn(v)
+    }
+    return result
+}
+
+func main() {
+    bonus := 500 // captured by the closure
+
+    addBonus := func(salary int) int {
+        return salary + bonus  // closes over 'bonus'
+    }
+
+    salaries := []int{50000, 60000, 70000}
+    updated  := applyAll(salaries, addBonus)
+    fmt.Println(updated) // [50500 60500 70500]
+
+    // Change bonus and create new closure
+    bonus = 1000
+    updated2 := applyAll(salaries, func(salary int) int {
+        return salary + bonus  // closes over updated 'bonus'
+    })
+    fmt.Println(updated2) // [51000 61000 71000]
+}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  6. STATEFUL CLOSURES — Counter, Accumulator, Sequence Generator
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The most powerful use of closures: encapsulating private mutable state
+without needing a struct or class.
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 1 — Counter (the classic closure demo)
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+func makeCounter() func() int {
+    count := 0           // private state, not accessible from outside
+    return func() int {
+        count++
+        return count
+    }
+}
+
+func main() {
+    counterA := makeCounter()
+    counterB := makeCounter()
+
+    fmt.Println(counterA()) // 1
+    fmt.Println(counterA()) // 2
+    fmt.Println(counterA()) // 3
+
+    fmt.Println(counterB()) // 1  ← independent state
+    fmt.Println(counterB()) // 2
+
+    fmt.Println(counterA()) // 4  ← counterA continues from where it left off
+}
+
+KEY POINT: counterA and counterB each own their own 'count'.
+           They do NOT share it. This is private encapsulated state.
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 2 — Counter with reset (multiple operations on same state)
+──────────────────────────────────────────────────────────────────────────────────
+
+func makeCounter() (increment func(), decrement func(), reset func(), value func() int) {
+    count := 0
+
+    increment = func() { count++ }
+    decrement = func() { count-- }
+    reset     = func() { count = 0 }
+    value     = func() int { return count }
+
+    return
+}
+
+func main() {
+    inc, dec, rst, val := makeCounter()
+
+    inc(); inc(); inc()
+    fmt.Println(val()) // 3
+
+    dec()
+    fmt.Println(val()) // 2
+
+    rst()
+    fmt.Println(val()) // 0
+}
+
+NOTE: All four closures share the SAME 'count' variable.
+      This is intentional shared state between related closures.
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 3 — Running total accumulator
+──────────────────────────────────────────────────────────────────────────────────
+
+func makeAccumulator() func(int) int {
+    total := 0
+    return func(n int) int {
+        total += n
+        return total
+    }
+}
+
+func main() {
+    acc := makeAccumulator()
+    fmt.Println(acc(10)) // 10
+    fmt.Println(acc(20)) // 30
+    fmt.Println(acc(5))  // 35
+}
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 4 — ID sequence generator
+──────────────────────────────────────────────────────────────────────────────────
+
+func makeIDGenerator(prefix string) func() string {
+    id := 0
+    return func() string {
+        id++
+        return fmt.Sprintf("%s-%04d", prefix, id)
+    }
+}
+
+func main() {
+    userID  := makeIDGenerator("USR")
+    orderID := makeIDGenerator("ORD")
+
+    fmt.Println(userID())  // USR-0001
+    fmt.Println(userID())  // USR-0002
+    fmt.Println(orderID()) // ORD-0001
+    fmt.Println(userID())  // USR-0003
+    fmt.Println(orderID()) // ORD-0002
+}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  7. SHARED STATE BETWEEN CLOSURES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Two or more closures CAN intentionally share the same captured variable.
+Changes made by one closure are visible to the other.
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE — Bank account simulation
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "errors"
+    "fmt"
+)
+
+func newBankAccount(initial float64) (deposit func(float64),
+                                     withdraw func(float64) error,
+                                     balance func() float64) {
+    amount := initial  // shared state
+
+    deposit = func(n float64) {
+        amount += n
+        fmt.Printf("Deposited %.2f | Balance: %.2f\n", n, amount)
+    }
+
+    withdraw = func(n float64) error {
+        if n > amount {
+            return errors.New("insufficient funds")
+        }
+        amount -= n
+        fmt.Printf("Withdrew  %.2f | Balance: %.2f\n", n, amount)
+        return nil
+    }
+
+    balance = func() float64 {
+        return amount
+    }
+
+    return
+}
+
+func main() {
+    deposit, withdraw, balance := newBankAccount(1000.0)
+
+    deposit(500)
+    deposit(200)
+
+    if err := withdraw(300); err != nil {
+        fmt.Println("Error:", err)
+    }
+
+    if err := withdraw(2000); err != nil {
+        fmt.Println("Error:", err) // Error: insufficient funds
+    }
+
+    fmt.Printf("Final balance: %.2f\n", balance())
+}
+
+// Output:
+// Deposited 500.00 | Balance: 1500.00
+// Deposited 200.00 | Balance: 1700.00
+// Withdrew  300.00 | Balance: 1400.00
+// Error: insufficient funds
+// Final balance: 1400.00
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  8. THE LOOP VARIABLE GOTCHA  ★ MOST IMPORTANT — Always Asked in Interviews
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+THE PROBLEM:
+  When you create closures inside a loop, all closures share the SAME loop
+  variable. By the time any closure executes, the loop has finished and the
+  variable holds its final value.
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE — Wrong output
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+func main() {
+    funcs := make([]func(), 5)
+
+    for i := 0; i < 5; i++ {
+        funcs[i] = func() {
+            fmt.Println(i) // ALL capture the same 'i'
+        }
+    }
+
+    for _, f := range funcs {
+        f()
+    }
+}
+
+// Expected: 0 1 2 3 4
+// Actual:   5 5 5 5 5  ← WRONG! All see final value of i
+
+WHY?
+  'i' is declared ONCE for the entire loop.
+  All five closures capture a reference to that single 'i'.
+  After the loop: i = 5.
+  When closures run: they all read i = 5.
+
+──────────────────────────────────────────────────────────────────────────────────
+FIX 1 — Shadow with a new variable per iteration (most idiomatic)
+──────────────────────────────────────────────────────────────────────────────────
+
+for i := 0; i < 5; i++ {
+    i := i  // New 'i' scoped to this iteration — shadows the outer i
+    funcs[i] = func() {
+        fmt.Println(i) // captures THIS iteration's i
+    }
+}
+// Output: 0 1 2 3 4 ✔
+
+──────────────────────────────────────────────────────────────────────────────────
+FIX 2 — Pass as argument (IIFE)
+──────────────────────────────────────────────────────────────────────────────────
+
+for i := 0; i < 5; i++ {
+    funcs[i] = func(n int) func() {
+        return func() { fmt.Println(n) }
+    }(i) // i is passed by VALUE at call time
+}
+// Output: 0 1 2 3 4 ✔
+
+──────────────────────────────────────────────────────────────────────────────────
+FIX 3 — Use a separate variable explicitly
+──────────────────────────────────────────────────────────────────────────────────
+
+for i := 0; i < 5; i++ {
+    val := i // new variable for each iteration
+    funcs[i] = func() {
+        fmt.Println(val)
+    }
+}
+// Output: 0 1 2 3 4 ✔
+
+──────────────────────────────────────────────────────────────────────────────────
+NOTE — Go 1.22+ change
+──────────────────────────────────────────────────────────────────────────────────
+
+  Go 1.22 (released Feb 2024) changed loop variable semantics.
+  In Go 1.22+, each iteration of a for loop creates a NEW variable.
+  So the gotcha no longer applies in Go 1.22+ by default.
+
+  However:
+  - Many codebases still use Go 1.21 or earlier
+  - Interviewers WILL still ask about this
+  - Understanding WHY it happened is important regardless
+
+──────────────────────────────────────────────────────────────────────────────────
+SAME GOTCHA WITH range
+──────────────────────────────────────────────────────────────────────────────────
+
+// ❌ WRONG (pre Go 1.22)
+names := []string{"Aditya", "Rahul", "Priya"}
+var funcs []func()
+for _, name := range names {
+    funcs = append(funcs, func() {
+        fmt.Println(name) // all print "Priya"
+    })
+}
+
+// ✅ FIX
+for _, name := range names {
+    name := name
+    funcs = append(funcs, func() {
+        fmt.Println(name)
+    })
+}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  9. CLOSURES WITH GOROUTINES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The loop variable gotcha is ESPECIALLY dangerous with goroutines because
+goroutines are asynchronous — by the time they run, the loop has finished.
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE — Wrong goroutine closure
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "sync"
+)
+
+func main() {
+    var wg sync.WaitGroup
+
+    // ❌ WRONG
+    for i := 0; i < 5; i++ {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            fmt.Println(i) // data race + captures same i
+        }()
+    }
+    wg.Wait()
+    // May print: 5 5 5 5 5 (or any combination due to race)
+}
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE — Correct goroutine closure
+──────────────────────────────────────────────────────────────────────────────────
+
+func main() {
+    var wg sync.WaitGroup
+
+    // ✅ CORRECT — pass i as argument
+    for i := 0; i < 5; i++ {
+        wg.Add(1)
+        go func(n int) {
+            defer wg.Done()
+            fmt.Println(n)
+        }(i)
+    }
+    wg.Wait()
+    // Prints 0–4 in some order (goroutines run concurrently)
+}
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE — Closure over a channel (producer pattern)
+──────────────────────────────────────────────────────────────────────────────────
+
+func makeProducer(ch chan<- int) func(int) {
+    return func(val int) {
+        ch <- val
+    }
+}
+
+func main() {
+    ch := make(chan int, 5)
+    produce := makeProducer(ch)
+
+    for i := 1; i <= 5; i++ {
+        produce(i)
+    }
+    close(ch)
+
+    for v := range ch {
+        fmt.Println(v) // 1 2 3 4 5
+    }
+}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  10. CLOSURES WITH DEFER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+defer + closure is a powerful combination.
+The closure captures variables by reference, so it can see their FINAL values
+just before the function returns.
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 1 — defer closure sees final value
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+func main() {
+    x := 0
+
+    defer func() {
+        fmt.Println("deferred closure sees x =", x) // sees final x
+    }()
+
+    x = 100
+    fmt.Println("before return, x =", x)
+}
+
+// Output:
+// before return, x = 100
+// deferred closure sees x = 100
+
+COMPARE: defer with a direct call (not closure) captures argument IMMEDIATELY:
+    defer fmt.Println(x) // captures x=0 at the defer statement — prints 0
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 2 — Closure modifying named return value via defer
+──────────────────────────────────────────────────────────────────────────────────
+
+func divide(a, b float64) (result float64, err error) {
+    defer func() {
+        if r := recover(); r != nil {
+            err = fmt.Errorf("recovered: %v", r)
+            result = 0
+        }
+    }()
+
+    result = a / b
+    return
+}
+
+func main() {
+    r, err := divide(10, 2)
+    fmt.Println(r, err)  // 5 <nil>
+
+    r, err = divide(10, 0)
+    fmt.Println(r, err)  // NaN <nil> (Go doesn't panic on float /0)
+}
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE 3 — Timing a function with closure + defer
+──────────────────────────────────────────────────────────────────────────────────
+
+import "time"
+
+func timeIt(name string) func() {
+    start := time.Now()
+    return func() {
+        fmt.Printf("%s took %v\n", name, time.Since(start))
+    }
+}
+
+func doHeavyWork() {
+    defer timeIt("doHeavyWork")() // note the extra () — calls and defers the returned func
+
+    time.Sleep(100 * time.Millisecond)
+    fmt.Println("work done")
+}
+
+func main() {
+    doHeavyWork()
+    // work done
+    // doHeavyWork took 100.Xms
+}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  11. CLOSURES WITH POINTERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Closures always capture variables by reference (they hold a pointer to the
+variable internally). This is important to understand when closures modify
+struct fields or slice elements.
+
+──────────────────────────────────────────────────────────────────────────────────
+EXAMPLE — Closure modifying struct via pointer
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+type Config struct {
+    MaxRetries int
+    Timeout    int
+    Debug      bool
+}
+
+// Option pattern — each option is a closure that modifies Config
+type Option func(*Config)
+
+func withMaxRetries(n int) Option {
+    return func(c *Config) {
+        c.MaxRetries = n
+    }
+}
+
+func withTimeout(ms int) Option {
+    return func(c *Config) {
+        c.Timeout = ms
+    }
+}
+
+func withDebug() Option {
+    return func(c *Config) {
+        c.Debug = true
+    }
+}
+
+func newConfig(opts ...Option) *Config {
+    cfg := &Config{MaxRetries: 3, Timeout: 5000, Debug: false}
+    for _, opt := range opts {
+        opt(cfg)  // each closure modifies the shared cfg
+    }
+    return cfg
+}
+
+func main() {
+    cfg := newConfig(
+        withMaxRetries(5),
+        withTimeout(3000),
+        withDebug(),
+    )
+    fmt.Printf("%+v\n", *cfg)
+    // {MaxRetries:5 Timeout:3000 Debug:true}
+}
+
+NOTE: This is the "Functional Options Pattern" — widely used in production Go
+      (e.g., grpc, cobra, zap logger). Each option is a closure modifying config.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  12. PRACTICAL PATTERNS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+──────────────────────────────────────────────────────────────────────────────────
+PATTERN 1 — Middleware / Handler wrapping (HTTP pattern)
+──────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+type HandlerFunc func(request string) string
+
+// Middleware wraps a handler — returns a new handler closure
+func withLogging(handler HandlerFunc) HandlerFunc {
+    return func(request string) string {
+        fmt.Println("LOG: incoming request:", request)
+        response := handler(request)
+        fmt.Println("LOG: response:", response)
+        return response
+    }
+}
+
+func withAuth(token string, handler HandlerFunc) HandlerFunc {
+    return func(request string) string {
+        if token == "" {
+            return "401 Unauthorized"
+        }
+        return handler(request) // token is captured
+    }
+}
+
+func helloHandler(request string) string {
+    return "Hello from " + request
+}
+
+func main() {
+    handler := withLogging(withAuth("secret-token", helloHandler))
+    resp := handler("GET /hello")
+    fmt.Println("Final:", resp)
+}
+
+──────────────────────────────────────────────────────────────────────────────────
+PATTERN 2 — Memoization (cache expensive results)
+──────────────────────────────────────────────────────────────────────────────────
+
+func memoize(fn func(int) int) func(int) int {
+    cache := make(map[int]int)  // captured by the returned closure
+
+    return func(n int) int {
+        if val, ok := cache[n]; ok {
+            fmt.Printf("cache hit for %d\n", n)
+            return val
+        }
+        result := fn(n)
+        cache[n] = result
+        return result
+    }
+}
+
+func slowSquare(n int) int {
+    // imagine this is slow (DB call, API, etc.)
+    return n * n
+}
+
+func main() {
+    fastSquare := memoize(slowSquare)
+
+    fmt.Println(fastSquare(4))  // computed: 16
+    fmt.Println(fastSquare(4))  // cache hit: 16
+    fmt.Println(fastSquare(5))  // computed: 25
+    fmt.Println(fastSquare(5))  // cache hit: 25
+}
+
+──────────────────────────────────────────────────────────────────────────────────
+PATTERN 3 — Once (execute exactly one time, like sync.Once)
+──────────────────────────────────────────────────────────────────────────────────
+
+func makeOnce(fn func()) func() {
+    done := false
+    return func() {
+        if !done {
+            fn()
+            done = true
+        }
+    }
+}
+
+func main() {
+    initDB := makeOnce(func() {
+        fmt.Println("DB initialized!")
+    })
+
+    initDB() // DB initialized!
+    initDB() // (nothing)
+    initDB() // (nothing)
+}
+
+──────────────────────────────────────────────────────────────────────────────────
+PATTERN 4 — Pipeline / Compose (chain transformations)
+──────────────────────────────────────────────────────────────────────────────────
+
+import "strings"
+
+type StringFn func(string) string
+
+func compose(fns ...StringFn) StringFn {
+    return func(s string) string {
+        for _, fn := range fns {
+            s = fn(s)
+        }
+        return s
+    }
+}
+
+func main() {
+    trim    := StringFn(strings.TrimSpace)
+    upper   := StringFn(strings.ToUpper)
+    exclaim := StringFn(func(s string) string { return s + "!" })
+
+    process := compose(trim, upper, exclaim)
+
+    fmt.Println(process("  hello world  ")) // HELLO WORLD!
+    fmt.Println(process("  go closures "))  // GO CLOSURES!
+}
+
+──────────────────────────────────────────────────────────────────────────────────
+PATTERN 5 — Retry logic with configurable policy
+──────────────────────────────────────────────────────────────────────────────────
+
+import (
+    "errors"
+    "fmt"
+    "time"
+)
+
+func withRetry(attempts int, delay time.Duration, fn func() error) func() error {
+    return func() error {
+        var lastErr error
+        for i := 0; i < attempts; i++ {
+            if err := fn(); err == nil {
+                return nil
+            } else {
+                lastErr = err
+                fmt.Printf("Attempt %d failed: %v — retrying in %v\n", i+1, err, delay)
+                time.Sleep(delay)
+            }
+        }
+        return fmt.Errorf("all %d attempts failed: %w", attempts, lastErr)
+    }
+}
+
+func main() {
+    calls := 0
+    unreliable := func() error {
+        calls++
+        if calls < 3 {
+            return errors.New("service unavailable")
+        }
+        return nil
+    }
+
+    retryable := withRetry(5, 10*time.Millisecond, unreliable)
+    if err := retryable(); err != nil {
+        fmt.Println("Error:", err)
+    } else {
+        fmt.Println("Succeeded after", calls, "calls")
+    }
+}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  13. CLOSURES vs JAVA LAMBDAS — SIDE BY SIDE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Feature                    Go Closure                  Java Lambda
+  ───────────────────────────────────────────────────────────────────────────────
+  Capture mechanism          By reference (always)       Effectively final only
+  Can mutate outer var?      Yes                         No (must be final/eff.final)
+  Return a closure           func() func() {...}         Supplier<Supplier<T>>
+  Statefulness               Natural (captures mutables) Needs AtomicXxx or array hack
+  Typed signature            func(T) R (defined inline)  Predicate<T>, Function<T,R>
+  Custom functional type     type F func(T) R            @FunctionalInterface interface
+  Loop gotcha                Yes (pre Go 1.22)           No (lambdas must use finals)
+  IIFE                       func(){ }()                 No equivalent
+  Method on function type    Yes                         No
+
+──────────────────────────────────────────────────────────────────────────────────
+JAVA vs GO — Counter example
+──────────────────────────────────────────────────────────────────────────────────
+
+  ── JAVA ─────────────────────────────────────────────────────────────────────
+  // Java lambdas CANNOT capture mutable local vars — compile error!
+  int count = 0;
+  Runnable r = () -> { count++; };  // ERROR: count must be effectively final
+
+  // Java workaround: use an array or AtomicInteger
+  int[] count = {0};
+  Runnable r = () -> { count[0]++; };
+  r.run(); r.run();
+  System.out.println(count[0]); // 2
+
+  ── GO ───────────────────────────────────────────────────────────────────────
+  // Go closures CAN capture and mutate local variables — no restriction
+  count := 0
+  inc := func() { count++ }
+  inc(); inc()
+  fmt.Println(count) // 2  — simple and natural
+
+──────────────────────────────────────────────────────────────────────────────────
+JAVA vs GO — Factory pattern
+──────────────────────────────────────────────────────────────────────────────────
+
+  ── JAVA ─────────────────────────────────────────────────────────────────────
+  Function<Integer, Function<Integer, Integer>> adder =
+      x -> y -> x + y;
+  Function<Integer, Integer> add5 = adder.apply(5);
+  System.out.println(add5.apply(3)); // 8
+
+  ── GO ───────────────────────────────────────────────────────────────────────
+  adder := func(x int) func(int) int {
+      return func(y int) int { return x + y }
+  }
+  add5 := adder(5)
+  fmt.Println(add5(3)) // 8
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  14. COMMON MISTAKES & BEST PRACTICES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  MISTAKE 1 — Sharing loop variable (pre Go 1.22)
+  ─────────────────────────────────────────────────
+  ❌  for i := 0; i < 5; i++ { go func() { use(i) }() }
+  ✅  for i := 0; i < 5; i++ { go func(n int) { use(n) }(i) }
+
+  MISTAKE 2 — Expecting closure to snapshot a value
+  ──────────────────────────────────────────────────
+  ❌  x := 5; f := func() { print(x) }; x = 99; f() // prints 99, not 5
+  ✅  x := 5; f := func(v int) func() { return func() { print(v) } }(x)
+      x = 99; f() // prints 5
+
+  MISTAKE 3 — Memory leak via closure holding large objects
+  ──────────────────────────────────────────────────────────
+  ❌  data := loadHugeSlice()
+      process := func() { use(data[0]) } // holds ALL of data in memory
+  ✅  first := data[0]
+      process := func() { use(first) }   // only holds what's needed
+      data = nil                          // allow GC to collect the rest
+
+  MISTAKE 4 — Race condition with shared closure state (no mutex)
+  ───────────────────────────────────────────────────────────────
+  ❌  count := 0
+      for i := 0; i < 10; i++ {
+          go func() { count++ }()  // DATA RACE — concurrent write
+      }
+  ✅  Use sync.Mutex or sync/atomic:
+      var mu sync.Mutex
+      go func() { mu.Lock(); count++; mu.Unlock() }()
+
+  BEST PRACTICES:
+  ✔ Prefer passing values explicitly when possible — makes data flow clearer
+  ✔ Name your function types for clarity: type Handler func(string) string
+  ✔ Keep closures short — if they grow complex, extract to a named function
+  ✔ Be aware of what a closure captures — document it if non-obvious
+  ✔ In goroutines, always pass loop variables as arguments, not via capture
+  ✔ Use the race detector: go run -race main.go
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  15. INTERVIEW QUESTIONS & ANSWERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  CONCEPTUAL                                                                ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Q1.  What is a closure in Go?
+
+A:   A closure is a function (usually anonymous) that references variables
+     from its enclosing scope. Those variables are "captured" and remain
+     accessible even after the enclosing function has returned. The closure
+     and its captured variables form a single unit that retains state across
+     multiple calls.
+
+──────────────────────────────────────────────────────────────────────────────
+
+Q2.  What does it mean that Go closures capture variables by reference?
+
+A:   The closure holds a reference (pointer) to the original variable,
+     not a copy of its value at the time the closure was created.
+     If the variable changes after the closure is created, the closure
+     sees the updated value.
+
+     x := 1
+     f := func() { fmt.Println(x) }
+     x = 42
+     f() // prints 42, not 1
+
+──────────────────────────────────────────────────────────────────────────────
+
+Q3.  How is a Go closure different from a Go regular function?
+
+A:   A regular function is stateless — it has no memory between calls
+     unless you pass state via parameters or use package-level variables.
+     A closure carries its own private state via captured variables.
+     Each invocation of the outer function produces an independent closure
+     with its own copy of the captured variables.
+
+──────────────────────────────────────────────────────────────────────────────
+
+Q4.  What is a free variable in the context of closures?
+
+A:   A free variable is a variable that is used inside a closure but is
+     not defined inside it — it comes from an outer scope. The closure
+     "closes over" these free variables, which is where the name comes from.
+
+     func makeAdder(x int) func(int) int {
+         return func(y int) int { return x + y }
+         //                              ^ x is a free variable
+     }
+
+══════════════════════════════════════════════════════════════════════════════
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  TRICKY BEHAVIOR                                                           ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Q5.  What will this print? Explain why.
+
+     funcs := make([]func(), 3)
+     for i := 0; i < 3; i++ {
+         funcs[i] = func() { fmt.Println(i) }
+     }
+     for _, f := range funcs {
+         f()
+     }
+
+A:   It prints 3, 3, 3 (in Go < 1.22).
+     All three closures capture the SAME 'i' variable by reference.
+     After the loop finishes, i = 3. When the closures run, they all
+     read the current value of i, which is 3.
+
+     Fix: shadow i per iteration — i := i — or pass i as an argument.
+
+──────────────────────────────────────────────────────────────────────────────
+
+Q6.  What is the difference between these two defers? What does each print?
+
+     x := 10
+     defer fmt.Println(x)         // A
+     defer func() { fmt.Println(x) }() // B
+     x = 99
+
+A:   A prints 10. Arguments to defer are evaluated IMMEDIATELY at the defer
+     statement. So x=10 is captured as a value at that moment.
+
+     B prints 99. The closure captures x by reference. When the deferred
+     closure executes, it reads x at that time, which is 99.
+
+──────────────────────────────────────────────────────────────────────────────
+
+Q7.  Are two closures created from the same factory function independent?
+
+A:   Yes. Each call to the factory creates a new closure with its own
+     independent copy of the captured variables.
+
+     c1 := makeCounter()
+     c2 := makeCounter()
+     c1(); c1(); c1() // c1's count = 3
+     c2()             // c2's count = 1 — independent
+
+──────────────────────────────────────────────────────────────────────────────
+
+Q8.  Can multiple closures share the same captured variable? When is this useful?
+
+A:   Yes. If multiple closures are created in the same scope and reference
+     the same variable, they share it. This is intentionally used to
+     implement related operations on shared state:
+
+     amount := 0
+     deposit  := func(n int) { amount += n }
+     withdraw := func(n int) { amount -= n }
+     balance  := func() int  { return amount }
+
+     deposit and withdraw and balance all operate on the same 'amount'.
+     This is a lightweight alternative to a struct with methods.
+
+══════════════════════════════════════════════════════════════════════════════
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  PRACTICAL                                                                 ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Q9.  Write a closure-based counter that supports increment, decrement, and reset.
+
+A:   func makeCounter() (inc, dec, reset func(), val func() int) {
+         n := 0
+         inc   = func() { n++ }
+         dec   = func() { n-- }
+         reset = func() { n = 0 }
+         val   = func() int { return n }
+         return
+     }
+
+     inc, dec, reset, val := makeCounter()
+     inc(); inc(); inc()
+     fmt.Println(val()) // 3
+     dec()
+     fmt.Println(val()) // 2
+     reset()
+     fmt.Println(val()) // 0
+
+──────────────────────────────────────────────────────────────────────────────
+
+Q10. Implement memoization using a closure.
+
+A:   func memoize(fn func(int) int) func(int) int {
+         cache := map[int]int{}
+         return func(n int) int {
+             if v, ok := cache[n]; ok {
+                 return v
+             }
+             result := fn(n)
+             cache[n] = result
+             return result
+         }
+     }
+
+     The map is captured by the returned closure and persists across calls.
+
+──────────────────────────────────────────────────────────────────────────────
+
+Q11. How would you fix the loop closure bug in goroutines?
+
+A:   Pass the loop variable as a function argument:
+
+     for i := 0; i < 5; i++ {
+         go func(n int) {
+             fmt.Println(n)
+         }(i)  // i is evaluated and copied at this point
+     }
+
+     Or shadow per iteration:
+     for i := 0; i < 5; i++ {
+         i := i
+         go func() { fmt.Println(i) }()
+     }
+
+──────────────────────────────────────────────────────────────────────────────
+
+Q12. What is the Functional Options Pattern and how do closures enable it?
+
+A:   The Functional Options Pattern uses closures (each typed as func(*Config))
+     to configure a struct. Each option is a small closure that modifies
+     exactly one field.
+
+     type Option func(*Config)
+
+     func withTimeout(ms int) Option {
+         return func(c *Config) { c.Timeout = ms }
+     }
+
+     func newServer(opts ...Option) *Server {
+         cfg := defaultConfig()
+         for _, o := range opts { o(cfg) }
+         return &Server{cfg: cfg}
+     }
+
+     newServer(withTimeout(3000), withDebug())
+
+     Benefits: extensible, avoids large parameter lists, self-documenting.
+
+══════════════════════════════════════════════════════════════════════════════
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  ADVANCED                                                                  ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Q13. Can closures cause memory leaks? How?
+
+A:   Yes. A closure keeps ALL captured variables alive as long as the closure
+     itself is reachable. If you capture a large slice or map but only use
+     a small part of it, the rest can't be GC'd.
+
+     ❌ data := loadHugeData()
+        fn := func() { use(data[0]) } // entire 'data' kept in memory
+
+     ✅ first := data[0]
+        fn := func() { use(first) }   // only 'first' is retained
+        data = nil                     // rest can be collected
+
+──────────────────────────────────────────────────────────────────────────────
+
+Q14. What changed in Go 1.22 regarding closures and loop variables?
+
+A:   Before Go 1.22, a for loop created ONE variable per loop and all
+     loop iterations reused it. Closures capturing the loop variable
+     all shared the same underlying variable.
+
+     In Go 1.22+, each loop ITERATION creates its own copy of the variable.
+     The loop variable gotcha no longer applies for range-based loops.
+
+     However, understanding the pre-1.22 behavior is still important for:
+     - Working with older codebases
+     - Interview discussions
+     - Understanding WHY the fix works
+
+──────────────────────────────────────────────────────────────────────────────
+
+Q15. How do closures compare to objects/structs for encapsulating state?
+
+A:   Both achieve data encapsulation, but differ in style:
+
+     Closure approach — lightweight, functional:
+       count := 0
+       inc := func() { count++ }
+       val := func() int { return count }
+
+     Struct approach — explicit, OOP-style:
+       type Counter struct { count int }
+       func (c *Counter) Inc() { c.count++ }
+       func (c *Counter) Val() int { return c.count }
+
+     Use closures when: logic is simple, short-lived, or you want functional style.
+     Use structs when: state is complex, you need interfaces, or the type is reused.
+     Both are idiomatic Go — choose based on clarity and context.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  QUICK REFERENCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Pattern                    Code Skeleton
+  ─────────────────────────────────────────────────────────────────────────────
+  Simple closure             f := func() { use(x) }
+  Factory / return closure   func make() func() T { x:=v; return func() T { ... } }
+  Stateful counter           count:=0; return func() int { count++; return count }
+  Shared state               x:=0; a:=func(){ x++ }; b:=func() int { return x }
+  Loop fix (arg)             go func(n int) { use(n) }(i)
+  Loop fix (shadow)          i:=i; go func() { use(i) }()
+  Memoize                    cache:=map[K]V{}; return func(k K) V { ... }
+  Middleware wrap             return func(req) { log(); next(req); log() }
+  Functional option           type Opt func(*Cfg); return func(c *Cfg) { c.X = v }
+  Timer with defer            defer timeIt("name")()
+  Once                        done:=false; return func() { if !done { fn(); done=true } }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
