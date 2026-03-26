@@ -12,23 +12,28 @@ func increment(inc int) {
 	println("inc:\tValue Of[", inc, "]\tAddr Of[", &inc, "]")
 }
 
+func changePtr(ptr *int) {
+	// `*int` → pointer to int
+	*ptr = 10
+}
+
 func main() {
-	x, y := 10, 20
-
-	fmt.Printf("Before: x=%d, y=%d\n", x, y)
-
 	// "Pass by ref"
+	x, y := 10, 20
+	fmt.Printf("Before: x=%d, y=%d\n", x, y)
 	swap(&x, &y)
-
-	fmt.Printf("After:  x=%d, y=%d\n", x, y)
-
-	count := 10
+	fmt.Printf("After : x=%d, y=%d\n", x, y)
 
 	// Display the "value of" and "address of" count.
-	println("count:\tValue Of[", count, "]\tAddr Of[", &count, "]")
-
 	// "Pass by value" of the count.
-	increment(count)
-
+	count := 10
 	println("count:\tValue Of[", count, "]\tAddr Of[", &count, "]")
+	increment(count)
+	println("count:\tValue Of[", count, "]\tAddr Of[", &count, "]")
+
+	// `*int` → pointer to int
+	ptr := new(int)
+	fmt.Println("Before change ptr", *ptr)
+	changePtr(ptr)
+	fmt.Println("After change ptr", *ptr)
 }
