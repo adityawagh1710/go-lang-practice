@@ -85,4 +85,11 @@ func main() {
 	// Call each retrieve function for each concrete type.
 	retrieveFile(f)
 	retrievePipe(p)
+
+	fmt.Println("==========Example 4 switches INTERFACE==========")
+
+	myPrintln("Hello, world")
+	myPrintln(12345)
+	myPrintln(3.14159)
+	myPrintln(true)
 }
