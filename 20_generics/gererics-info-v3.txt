@@ -1,0 +1,1236 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 🚀 Go Lang GENERICS 
+════════════════════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│  TABLE OF CONTENTS                                                              │
+│  ─────────────────                                                              │
+│  [01]  What Are Generics? (+ Java Comparison)                                   │
+│  [02]  Type Parameters & Type Constraints                                       │
+│  [03]  Generic Functions                                                        │
+│  [04]  Generic Structs                                                          │
+│  [05]  Generic Interfaces (Type Sets)                                           │
+│  [06]  Multiple Type Parameters                                                 │
+│  [07]  Built-in Constraints (constraints package)                               │
+│  [08]  Union Constraints & Tilde (~) Operator                                   │
+│  [09]  Generic Methods & Receiver Limitations                                   │
+│  [10]  Type Inference                                                           │
+│  [11]  Comparable Constraint                                                    │
+│  [12]  Real-World Patterns (Stack, Map, Filter, Reduce)                         │
+│  [13]  Advanced Patterns (Optional, Result, Pipeline)                           │
+│  [14]  Generics vs Interface{} / any                                            │
+│  [15]  Common Pitfalls & Gotchas                                                │
+│  [16]  Interview Q&A — Medior Level                                             │
+│  [17]  Interview Q&A — Experienced Level                                        │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+
+════════════════════════════════════════════════════════════════════════════════════
+  [01]  WHAT ARE GENERICS?  (Go 1.18+, Released March 2022)
+════════════════════════════════════════════════════════════════════════════════════
+
+  Generics allow you to write code that works with ANY type while
+  maintaining COMPILE-TIME type safety. No casting, no runtime panics.
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  BEFORE Generics (Go ≤ 1.17)  vs  AFTER Generics (Go ≥ 1.18)  │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ── BEFORE (no generics): Duplicate code per type ──
+  func SumInts(nums []int) int {
+      total := 0
+      for _, v := range nums {
+          total += v
+      }
+      return total
+  }
+
+  func SumFloat64s(nums []float64) float64 {
+      total := 0.0
+      for _, v := range nums {
+          total += v
+      }
+      return total
+  }
+
+  ── AFTER (with generics): One function, all numeric types ──
+  func Sum[T int | float64](nums []T) T {
+      var total T
+      for _, v := range nums {
+          total += v
+      }
+      return total
+  }
+
+  ╔══════════════════════════════════════════════════════╗
+  ║  Java Comparison:                                    ║
+  ║  Java:  <T extends Number> T sum(List<T> list)       ║
+  ║  Go:    func Sum[T Number](list []T) T               ║
+  ║  Key diff: Go uses "type sets" not class hierarchy   ║
+  ╚══════════════════════════════════════════════════════╝
+
+
+════════════════════════════════════════════════════════════════════════════════════
+  [02]  TYPE PARAMETERS & TYPE CONSTRAINTS
+════════════════════════════════════════════════════════════════════════════════════
+
+  SYNTAX:  func FuncName[TypeParam Constraint](args) returnType
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  ANATOMY OF A GENERIC FUNCTION                                       │
+  │                                                                      │
+  │  func   Min  [T   constraints.Ordered]  (a, b T)  T  {               │
+  │  ──────  ───  ─   ─────────────────────  ──────   ─                  │
+  │  keyword name  └─ type param name        args    return              │
+  │                    └─ constraint                                     │
+  └──────────────────────────────────────────────────────────────────────┘
+
+  ── EXAMPLE: MinVal — finds the smaller of two values ──
+  import "golang.org/x/exp/constraints"
+
+  func MinVal[T constraints.Ordered](a, b T) T {
+      if a < b {
+          return a
+      }
+      return b
+  }
+
+  func main() {
+      fmt.Println(MinVal(3, 7))       // → 3     (int inferred)
+      fmt.Println(MinVal(3.14, 2.71)) // → 2.71  (float64 inferred)
+      fmt.Println(MinVal("apple", "banana")) // → "apple" (string)
+  }
+
+  ┌────────────────────────────────────────────────────────────┐
+  │  CONSTRAINT TABLE                                          │
+  │  ────────────────────────────────────────────────────      │
+  │  Constraint           │ Allows                             │
+  │  ─────────────────────┼──────────────────────────────      │
+  │  any                  │ All types (alias for interface{})  │
+  │  comparable           │ Types that support == and !=       │
+  │  constraints.Ordered  │ Types that support <, >, <=, >=    │
+  │  constraints.Integer  │ All integer types                  │
+  │  constraints.Float    │ All float types                    │
+  │  constraints.Number   │ Integer + Float                    │
+  │  constraints.Signed   │ Signed integers only               │
+  │  constraints.Unsigned │ Unsigned integers only             │
+  └────────────────────────────────────────────────────────────┘
+
+
+════════════════════════════════════════════════════════════════════════════════════
+  [03]  GENERIC FUNCTIONS
+════════════════════════════════════════════════════════════════════════════════════
+
+  ── EXAMPLE 1: Contains — checks if a slice has an element ──
+  // T must be comparable to use ==
+  func Contains[T comparable](slice []T, elem T) bool {
+      for _, v := range slice {
+          if v == elem {
+              return true
+          }
+      }
+      return false
+  }
+
+  Usage:
+      fmt.Println(Contains([]int{1, 2, 3}, 2))         // → true
+      fmt.Println(Contains([]string{"go", "java"}, "rust")) // → false
+
+  ── EXAMPLE 2: Keys — extract map keys as slice ──
+  func Keys[K comparable, V any](m map[K]V) []K {
+      keys := make([]K, 0, len(m))
+      for k := range m {
+          keys = append(keys, k)
+      }
+      return keys
+  }
+
+  Usage:
+      scores := map[string]int{"Alice": 90, "Bob": 85}
+      fmt.Println(Keys(scores)) // → ["Alice", "Bob"] (order varies)
+
+  ── EXAMPLE 3: Map (Transform a slice) ──
+  // Like Java's Stream.map()
+  func Map[T, R any](slice []T, fn func(T) R) []R {
+      result := make([]R, len(slice))
+      for i, v := range slice {
+          result[i] = fn(v)
+      }
+      return result
+  }
+
+  Usage:
+      nums := []int{1, 2, 3, 4, 5}
+      doubled := Map(nums, func(n int) int { return n * 2 })
+      // → [2, 4, 6, 8, 10]
+
+      strs := Map(nums, func(n int) string { return fmt.Sprintf("num%d", n) })
+      // → ["num1", "num2", "num3", "num4", "num5"]
+
+  ── EXAMPLE 4: Filter ──
+  // Like Java's Stream.filter()
+  func Filter[T any](slice []T, predicate func(T) bool) []T {
+      var result []T
+      for _, v := range slice {
+          if predicate(v) {
+              result = append(result, v)
+          }
+      }
+      return result
+  }
+
+  Usage:
+      evens := Filter([]int{1,2,3,4,5,6}, func(n int) bool { return n%2 == 0 })
+      // → [2, 4, 6]
+
+  ── EXAMPLE 5: Reduce ──
+  // Like Java's Stream.reduce()
+  func Reduce[T, R any](slice []T, initial R, fn func(R, T) R) R {
+      acc := initial
+      for _, v := range slice {
+          acc = fn(acc, v)
+      }
+      return acc
+  }
+
+  Usage:
+      sum := Reduce([]int{1, 2, 3, 4, 5}, 0, func(acc, n int) int { return acc + n })
+      // → 15
+
+
+════════════════════════════════════════════════════════════════════════════════════
+  [04]  GENERIC STRUCTS
+════════════════════════════════════════════════════════════════════════════════════
+
+  ── EXAMPLE 1: Generic Stack (like Java's Stack<T>) ──
+  type Stack[T any] struct {
+      items []T
+  }
+
+  func (s *Stack[T]) Push(item T) {
+      s.items = append(s.items, item)
+  }
+
+  func (s *Stack[T]) Pop() (T, bool) {
+      var zero T  // zero value of T
+      if len(s.items) == 0 {
+          return zero, false
+      }
+      last := s.items[len(s.items)-1]
+      s.items = s.items[:len(s.items)-1]
+      return last, true
+  }
+
+  func (s *Stack[T]) Peek() (T, bool) {
+      var zero T
+      if len(s.items) == 0 {
+          return zero, false
+      }
+      return s.items[len(s.items)-1], true
+  }
+
+  func (s *Stack[T]) Size() int {
+      return len(s.items)
+  }
+
+  Usage:
+      // Integer stack
+      intStack := &Stack[int]{}
+      intStack.Push(10)
+      intStack.Push(20)
+      intStack.Push(30)
+      val, ok := intStack.Pop()   // val=30, ok=true
+
+      // String stack
+      strStack := &Stack[string]{}
+      strStack.Push("Go")
+      strStack.Push("Generics")
+      top, _ := strStack.Peek()   // top="Generics"
+
+  ── EXAMPLE 2: Generic Pair (Tuple) ──
+  type Pair[A, B any] struct {
+      First  A
+      Second B
+  }
+
+  func NewPair[A, B any](first A, second B) Pair[A, B] {
+      return Pair[A, B]{First: first, Second: second}
+  }
+
+  Usage:
+      p1 := NewPair("Alice", 30)       // Pair[string, int]
+      p2 := NewPair(3.14, true)        // Pair[float64, bool]
+      fmt.Println(p1.First, p1.Second) // Alice 30
+
+  ── EXAMPLE 3: Generic Cache ──
+  type Cache[K comparable, V any] struct {
+      store map[K]V
+  }
+
+  func NewCache[K comparable, V any]() *Cache[K, V] {
+      return &Cache[K, V]{store: make(map[K]V)}
+  }
+
+  func (c *Cache[K, V]) Set(key K, val V) {
+      c.store[key] = val
+  }
+
+  func (c *Cache[K, V]) Get(key K) (V, bool) {
+      val, ok := c.store[key]
+      return val, ok
+  }
+
+  Usage:
+      cache := NewCache[string, int]()
+      cache.Set("age", 25)
+      age, found := cache.Get("age")  // age=25, found=true
+
+
+════════════════════════════════════════════════════════════════════════════════════
+  [05]  GENERIC INTERFACES (TYPE SETS)
+════════════════════════════════════════════════════════════════════════════════════
+
+  ◆ In Go generics, interfaces define TYPE SETS — a set of types that
+    satisfy the interface. This is different from traditional interfaces
+    which define method sets.
+
+  ── DEFINING A CUSTOM CONSTRAINT INTERFACE ──
+
+  // Number groups all numeric types
+  type Number interface {
+      int | int8 | int16 | int32 | int64 |
+      uint | uint8 | uint16 | uint32 | uint64 |
+      float32 | float64
+  }
+
+  func Sum[T Number](nums []T) T {
+      var total T
+      for _, v := range nums {
+          total += v
+      }
+      return total
+  }
+
+  ── INTERFACE WITH BOTH TYPE SET AND METHODS ──
+  // Stringer with specific underlying types
+  type Printable interface {
+      int | string | float64  // type set
+      String() string          // method set  ← NOTE: practical use is rare
+  }
+
+  // More common pattern: method-only constraint
+  type Stringer interface {
+      String() string
+  }
+
+  func PrintAll[T Stringer](items []T) {
+      for _, item := range items {
+          fmt.Println(item.String())
+      }
+  }
+
+  ╔══════════════════════════════════════════════════════════╗
+  ║  Java Comparison:                                        ║
+  ║  Java uses bounded wildcards:                            ║
+  ║    <T extends Comparable<T>>                             ║
+  ║    <T extends Number & Serializable>                     ║
+  ║                                                          ║
+  ║  Go uses type sets in interfaces:                        ║
+  ║    interface { int | float64 }                           ║
+  ║    interface { comparable; String() string }             ║
+  ╚══════════════════════════════════════════════════════════╝
+
+
+════════════════════════════════════════════════════════════════════════════════════
+  [06]  MULTIPLE TYPE PARAMETERS
+════════════════════════════════════════════════════════════════════════════════════
+
+  ── EXAMPLE: ZipToMap — combine two slices into a map ──
+  func ZipToMap[K comparable, V any](keys []K, vals []V) map[K]V {
+      if len(keys) != len(vals) {
+          panic("keys and vals must have same length")
+      }
+      result := make(map[K]V, len(keys))
+      for i, k := range keys {
+          result[k] = vals[i]
+      }
+      return result
+  }
+
+  Usage:
+      names  := []string{"Alice", "Bob", "Charlie"}
+      scores := []int{90, 85, 92}
+      m := ZipToMap(names, scores)
+      // → map["Alice":90 "Bob":85 "Charlie":92]
+
+  ── EXAMPLE: Convert — transform type with a converter func ──
+  func Convert[From, To any](items []From, convert func(From) To) []To {
+      result := make([]To, len(items))
+      for i, item := range items {
+          result[i] = convert(item)
+      }
+      return result
+  }
+
+  Usage:
+      ints   := []int{1, 2, 3}
+      floats := Convert(ints, func(i int) float64 { return float64(i) })
+      // → [1.0, 2.0, 3.0]
+
+  ── EXAMPLE: MapValues — transform map values ──
+  func MapValues[K comparable, V, R any](m map[K]V, fn func(V) R) map[K]R {
+      result := make(map[K]R, len(m))
+      for k, v := range m {
+          result[k] = fn(v)
+      }
+      return result
+  }
+
+  Usage:
+      prices := map[string]float64{"apple": 1.5, "banana": 0.75}
+      doubled := MapValues(prices, func(p float64) float64 { return p * 2 })
+      // → map["apple":3.0 "banana":1.5]
+
+
+════════════════════════════════════════════════════════════════════════════════════
+  [07]  BUILT-IN CONSTRAINTS (golang.org/x/exp/constraints)
+════════════════════════════════════════════════════════════════════════════════════
+
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  IMPORT:  "golang.org/x/exp/constraints"                         │
+  │  (Note: cmp package in Go 1.21 has Ordered built-in)             │
+  └──────────────────────────────────────────────────────────────────┘
+
+  ── Ordered: supports <, >, <=, >= ──
+  // All integers, floats, and string
+  func Max[T constraints.Ordered](a, b T) T {
+      if a > b {
+          return a
+      }
+      return b
+  }
+
+  ── Integer: all int types ──
+  func IsPrime[T constraints.Integer](n T) bool {
+      if n < 2 { return false }
+      for i := T(2); i*i <= n; i++ {
+          if n%i == 0 { return false }
+      }
+      return true
+  }
+
+  ── Complex: complex64, complex128 ──
+  // constraints.Complex, constraints.Float, constraints.Signed, etc.
+
+  ── Go 1.21 cmp package (stdlib) ──
+  import "cmp"
+
+  func SortSlice[T cmp.Ordered](s []T) {
+      // cmp.Ordered is now part of standard library
+      slices.Sort(s) // from "slices" package in Go 1.21
+  }
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Go 1.21 NEW STDLIB PACKAGES                                 │
+  │  ─────────────────────────────────────────────────           │
+  │  "slices"  → slices.Sort, slices.Contains, slices.Map...     │
+  │  "maps"    → maps.Keys, maps.Values, maps.Clone...           │
+  │  "cmp"     → cmp.Ordered, cmp.Compare, cmp.Or...             │
+  └──────────────────────────────────────────────────────────────┘
+
+
+════════════════════════════════════════════════════════════════════════════════════
+  [08]  UNION CONSTRAINTS & TILDE (~) OPERATOR
+════════════════════════════════════════════════════════════════════════════════════
+
+  ◆ WITHOUT ~:  only the exact type satisfies the constraint
+  ◆ WITH ~T:    T AND all types with T as underlying type
+
+  ── PROBLEM without ~ ──
+  type MyInt int  // custom type with underlying type 'int'
+
+  type JustInt interface { int }  // NO tilde
+
+  func Double[T JustInt](v T) T { return v * 2 }
+
+  var x MyInt = 5
+  Double(x)  // ✗ COMPILE ERROR: MyInt does not implement JustInt
+
+  ── SOLUTION with ~ ──
+  type AnyInt interface { ~int }  // tilde: int AND any type based on int
+
+  func Double[T AnyInt](v T) T { return v * 2 }
+
+  var x MyInt = 5
+  Double(x)  // ✓ WORKS! MyInt has underlying type int
+
+  ── REAL WORLD EXAMPLE: Custom string types ──
+  type UserID   string
+  type ProductID string
+  type OrderID   string
+
+  // StringLike constraint: any type with underlying type string
+  type StringLike interface { ~string }
+
+  func ToUpper[T StringLike](s T) T {
+      return T(strings.ToUpper(string(s)))
+  }
+
+  Usage:
+      uid := UserID("user-123")
+      upper := ToUpper(uid)  // UserID("USER-123") — type is preserved!
+
+  ── UNION EXAMPLE: Numeric operations ──
+  type Numeric interface {
+      ~int | ~int32 | ~int64 | ~float32 | ~float64
+  }
+
+  func Abs[T Numeric](v T) T {
+      if v < 0 {
+          return -v
+      }
+      return v
+  }
+
+  ╔══════════════════════════════════════════════════╗
+  ║  ~ vs no ~ Summary:                              ║
+  ║  int       → only the built-in int type          ║
+  ║  ~int      → int + type MyInt int + any int alias║
+  ╚══════════════════════════════════════════════════╝
+
+
+════════════════════════════════════════════════════════════════════════════════════
+  [09]  GENERIC METHODS & RECEIVER LIMITATIONS
+════════════════════════════════════════════════════════════════════════════════════
+
+  ◆ IMPORTANT RULE: Methods CANNOT introduce new type parameters.
+    Type parameters must be declared on the struct/type, not the method.
+
+  ── VALID: Type param on struct, used in method ──
+  type Box[T any] struct {
+      Value T
+  }
+
+  // OK: uses T from Box definition
+  func (b Box[T]) Get() T {
+      return b.Value
+  }
+
+  func (b *Box[T]) Set(v T) {
+      b.Value = v
+  }
+
+  ── INVALID: Cannot add new type param on method ──
+  // ✗ COMPILE ERROR — Go does NOT allow this
+  func (b Box[T]) Transform[R any](fn func(T) R) R {
+      return fn(b.Value)
+  }
+
+  ── WORKAROUND: Use a standalone generic function ──
+  // ✓ Use package-level function instead
+  func Transform[T, R any](b Box[T], fn func(T) R) R {
+      return fn(b.Value)
+  }
+
+  Usage:
+      b := Box[int]{Value: 42}
+      result := Transform(b, func(n int) string {
+          return fmt.Sprintf("value is %d", n)
+      })
+      // → "value is 42"
+
+  ╔══════════════════════════════════════════════════════════╗
+  ║  Java Comparison:                                        ║
+  ║  Java: class Box<T> { <R> R transform(Function<T,R> f)} ║
+  ║  Go: Methods can't add type params. Use functions.       ║
+  ╚══════════════════════════════════════════════════════════╝
+
+
+════════════════════════════════════════════════════════════════════════════════════
+  [10]  TYPE INFERENCE
+════════════════════════════════════════════════════════════════════════════════════
+
+  ◆ Go can INFER type arguments in many cases — you don't need to
+    explicitly specify them.
+
+  ── Type inference from arguments ──
+  func First[T any](slice []T) (T, bool) {
+      var zero T
+      if len(slice) == 0 {
+          return zero, false
+      }
+      return slice[0], true
+  }
+
+  // ✓ Inferred — Go sees []int, infers T = int
+  v, ok := First([]int{1, 2, 3})
+
+  // ✓ Explicit — same result
+  v, ok := First[int]([]int{1, 2, 3})
+
+  ── When you MUST specify type explicitly ──
+  // When return type can't be inferred from args
+  func Zero[T any]() T {
+      var zero T
+      return zero
+  }
+
+  z := Zero[int]()     // ✓ Must specify int
+  z := Zero()          // ✗ Can't infer T without an argument
+
+  // When you want a specific interface type
+  var s []fmt.Stringer = Make[fmt.Stringer](5)
+
+  ── Partial type inference ──
+  // Go infers what it can, you specify the rest
+  func Pair[A, B any](a A, b B) (A, B) {
+      return a, b
+  }
+
+  x, y := Pair(42, "hello")  // inferred: A=int, B=string
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  TYPE INFERENCE RULES:                                      │
+  │  1. Inferred from function arguments (most common)          │
+  │  2. Inferred from return type assignment                    │
+  │  3. NOT inferred from return type alone                     │
+  │  4. Type params used only in return must be explicit        │
+  └─────────────────────────────────────────────────────────────┘
+
+
+════════════════════════════════════════════════════════════════════════════════════
+  [11]  COMPARABLE CONSTRAINT
+════════════════════════════════════════════════════════════════════════════════════
+
+  ◆ comparable = types that support == and != operators
+  ◆ Includes: int, float, string, bool, pointer, array, struct (with comparable fields)
+  ◆ EXCLUDES: slices, maps, functions (not comparable in Go)
+
+  ── EXAMPLE: Generic Set ──
+  type Set[T comparable] struct {
+      items map[T]struct{}  // struct{} uses zero memory
+  }
+
+  func NewSet[T comparable]() *Set[T] {
+      return &Set[T]{items: make(map[T]struct{})}
+  }
+
+  func (s *Set[T]) Add(item T) {
+      s.items[item] = struct{}{}
+  }
+
+  func (s *Set[T]) Has(item T) bool {
+      _, ok := s.items[item]
+      return ok
+  }
+
+  func (s *Set[T]) Remove(item T) {
+      delete(s.items, item)
+  }
+
+  func (s *Set[T]) Size() int {
+      return len(s.items)
+  }
+
+  func (s *Set[T]) Intersection(other *Set[T]) *Set[T] {
+      result := NewSet[T]()
+      for item := range s.items {
+          if other.Has(item) {
+              result.Add(item)
+          }
+      }
+      return result
+  }
+
+  Usage:
+      s1 := NewSet[int]()
+      s1.Add(1); s1.Add(2); s1.Add(3)
+
+      s2 := NewSet[int]()
+      s2.Add(2); s2.Add(3); s2.Add(4)
+
+      inter := s1.Intersection(s2)  // {2, 3}
+
+  ╔════════════════════════════════════════════════════════════╗
+  ║  GOTCHA: interface{} / any is comparable as a constraint   ║
+  ║  BUT may PANIC at runtime if interface holds non-comparable║
+  ║  value and you use == on it.                               ║
+  ║  Use comparable constraint for compile-time safety.        ║
+  ╚════════════════════════════════════════════════════════════╝
+
+
+════════════════════════════════════════════════════════════════════════════════════
+  [12]  REAL-WORLD PATTERNS
+════════════════════════════════════════════════════════════════════════════════════
+
+  ── PATTERN 1: Generic Repository Interface ──
+  type Repository[T any, ID comparable] interface {
+      FindByID(id ID) (T, error)
+      FindAll() ([]T, error)
+      Save(entity T) error
+      Delete(id ID) error
+  }
+
+  type User struct {
+      ID   int
+      Name string
+      Email string
+  }
+
+  // Concrete implementation
+  type UserRepo struct {
+      db map[int]User
+  }
+
+  func (r *UserRepo) FindByID(id int) (User, error) {
+      u, ok := r.db[id]
+      if !ok {
+          return User{}, fmt.Errorf("user %d not found", id)
+      }
+      return u, nil
+  }
+  // ... implements Repository[User, int]
+
+  ── PATTERN 2: Generic Option/Maybe Type ──
+  // Like Java's Optional<T>
+  type Option[T any] struct {
+      value *T
+  }
+
+  func Some[T any](v T) Option[T] {
+      return Option[T]{value: &v}
+  }
+
+  func None[T any]() Option[T] {
+      return Option[T]{}
+  }
+
+  func (o Option[T]) IsPresent() bool {
+      return o.value != nil
+  }
+
+  func (o Option[T]) Get() (T, bool) {
+      if o.value == nil {
+          var zero T
+          return zero, false
+      }
+      return *o.value, true
+  }
+
+  func (o Option[T]) OrElse(def T) T {
+      if o.value == nil {
+          return def
+      }
+      return *o.value
+  }
+
+  Usage:
+      name := Some("Alice")
+      fmt.Println(name.OrElse("Unknown"))  // Alice
+
+      empty := None[string]()
+      fmt.Println(empty.OrElse("Unknown")) // Unknown
+
+  ── PATTERN 3: Generic Result Type (Error handling) ──
+  // Like Rust's Result<T, E>
+  type Result[T any] struct {
+      value T
+      err   error
+  }
+
+  func Ok[T any](v T) Result[T] {
+      return Result[T]{value: v}
+  }
+
+  func Err[T any](err error) Result[T] {
+      return Result[T]{err: err}
+  }
+
+  func (r Result[T]) IsOk() bool       { return r.err == nil }
+  func (r Result[T]) Unwrap() T        { return r.value }
+  func (r Result[T]) Error() error     { return r.err }
+
+  func (r Result[T]) OrElse(def T) T {
+      if r.err != nil { return def }
+      return r.value
+  }
+
+  Usage:
+      func divide(a, b float64) Result[float64] {
+          if b == 0 {
+              return Err[float64](errors.New("division by zero"))
+          }
+          return Ok(a / b)
+      }
+
+      res := divide(10, 2)
+      if res.IsOk() {
+          fmt.Println(res.Unwrap()) // 5.0
+      }
+
+
+════════════════════════════════════════════════════════════════════════════════════
+  [13]  ADVANCED PATTERNS
+════════════════════════════════════════════════════════════════════════════════════
+
+  ── ADVANCED 1: Generic Pipeline (Functional Composition) ──
+  type Pipeline[T any] struct {
+      data []T
+  }
+
+  func From[T any](data []T) Pipeline[T] {
+      return Pipeline[T]{data: data}
+  }
+
+  func (p Pipeline[T]) Filter(fn func(T) bool) Pipeline[T] {
+      var result []T
+      for _, v := range p.data {
+          if fn(v) {
+              result = append(result, v)
+          }
+      }
+      return Pipeline[T]{data: result}
+  }
+
+  func (p Pipeline[T]) ForEach(fn func(T)) {
+      for _, v := range p.data {
+          fn(v)
+      }
+  }
+
+  func (p Pipeline[T]) ToSlice() []T {
+      return p.data
+  }
+
+  Usage:
+      result := From([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}).
+          Filter(func(n int) bool { return n%2 == 0 }).
+          Filter(func(n int) bool { return n > 4 }).
+          ToSlice()
+      // → [6, 8, 10]
+
+  ── ADVANCED 2: Type-Safe Event Bus ──
+  type EventBus[T any] struct {
+      handlers []func(T)
+      mu       sync.RWMutex
+  }
+
+  func (eb *EventBus[T]) Subscribe(handler func(T)) {
+      eb.mu.Lock()
+      defer eb.mu.Unlock()
+      eb.handlers = append(eb.handlers, handler)
+  }
+
+  func (eb *EventBus[T]) Publish(event T) {
+      eb.mu.RLock()
+      defer eb.mu.RUnlock()
+      for _, h := range eb.handlers {
+          go h(event)
+      }
+  }
+
+  type UserCreatedEvent struct {
+      UserID int
+      Name   string
+  }
+
+  Usage:
+      bus := &EventBus[UserCreatedEvent]{}
+      bus.Subscribe(func(e UserCreatedEvent) {
+          fmt.Printf("User created: %s\n", e.Name)
+      })
+      bus.Publish(UserCreatedEvent{UserID: 1, Name: "Alice"})
+
+  ── ADVANCED 3: Recursive Generic Constraint ──
+  // Constraint that type implements comparison with itself
+  type Ordered[T any] interface {
+      CompareTo(other T) int
+  }
+
+  func Sort[T Ordered[T]](items []T) {
+      // insertion sort for brevity
+      for i := 1; i < len(items); i++ {
+          for j := i; j > 0 && items[j].CompareTo(items[j-1]) < 0; j-- {
+              items[j], items[j-1] = items[j-1], items[j]
+          }
+      }
+  }
+
+  ── ADVANCED 4: Generic Middleware (HTTP handler pattern) ──
+  type Middleware[Req, Resp any] func(Req) (Resp, error)
+
+  func Chain[Req, Mid, Resp any](
+      first  Middleware[Req, Mid],
+      second Middleware[Mid, Resp],
+  ) Middleware[Req, Resp] {
+      return func(req Req) (Resp, error) {
+          mid, err := first(req)
+          if err != nil {
+              var zero Resp
+              return zero, err
+          }
+          return second(mid)
+      }
+  }
+
+
+════════════════════════════════════════════════════════════════════════════════════
+  [14]  GENERICS vs interface{} / any
+════════════════════════════════════════════════════════════════════════════════════
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  COMPARISON: interface{} / any   vs   Generics                       │
+  │  ──────────────────────────────────────────────────────────────────  │
+  │  Aspect          │  interface{}          │  Generics [T]             │
+  │  ────────────────┼───────────────────────┼────────────────────────   │
+  │  Type safety     │  Runtime only         │  Compile time ✓           │
+  │  Type assertion  │  Required             │  Not needed               │
+  │  Performance     │  Heap allocation      │  No boxing (faster)       │
+  │  Code clarity    │  Type assertions messy│  Clean                    │
+  │  Flexibility     │  Maximum (any type)   │  Constrained              │
+  │  Binary size     │  Smaller              │  Can be larger            │
+  └──────────────────────────────────────────────────────────────────────┘
+
+  ── BAD: Using interface{} (old pattern) ──
+  func OldContains(slice []interface{}, elem interface{}) bool {
+      for _, v := range slice {
+          if v == elem {
+              return true
+          }
+      }
+      return false
+  }
+  // Caller must do:
+  items := []interface{}{1, 2, 3}  // boilerplate
+  OldContains(items, 2)            // works but ugly
+
+  ── GOOD: Using Generics (new pattern) ──
+  func Contains[T comparable](slice []T, elem T) bool {
+      for _, v := range slice {
+          if v == elem {
+              return true
+          }
+      }
+      return false
+  }
+  // Caller:
+  Contains([]int{1, 2, 3}, 2)  // clean, type-safe!
+
+  ── WHEN TO STILL USE interface{} / any ──
+  ◆ When you truly need ANY type (e.g., fmt.Println variadic args)
+  ◆ When you need runtime polymorphism (traditional interface pattern)
+  ◆ When working with reflection
+  ◆ When the type constraint is "behavior" (methods), not "type"
+
+  ── WHEN TO USE GENERICS ──
+  ◆ Data structures (Stack, Queue, Set, Tree)
+  ◆ Utility functions (Map, Filter, Reduce, Contains)
+  ◆ When duplicating code per type
+  ◆ When type assertions are required for correctness
+
+
+════════════════════════════════════════════════════════════════════════════════════
+  [15]  COMMON PITFALLS & GOTCHAS
+════════════════════════════════════════════════════════════════════════════════════
+
+  ── PITFALL 1: Cannot use type switch on generic type ──
+  func Describe[T any](v T) string {
+      // ✗ INVALID: cannot type-switch on generic T
+      switch v.(type) {
+      case int:   return "int"
+      case string: return "string"
+      }
+      return "unknown"
+  }
+
+  // ✓ WORKAROUND: use interface{} or reflect
+  func Describe[T any](v T) string {
+      switch any(v).(type) {  // cast to any first
+      case int:    return "int"
+      case string: return "string"
+      }
+      return "unknown"
+  }
+
+  ── PITFALL 2: Zero value handling ──
+  func First[T any](s []T) T {
+      // if slice is empty, this returns zero value of T
+      // which is 0 for int, "" for string, nil for pointer
+      if len(s) == 0 {
+          var zero T
+          return zero
+      }
+      return s[0]
+  }
+  // Better: return (T, bool) tuple like the map pattern
+
+  ── PITFALL 3: Methods cannot add new type params ──
+  type Container[T any] struct { val T }
+
+  // ✗ INVALID
+  func (c Container[T]) Map[R any](fn func(T) R) R { ... }
+
+  // ✓ VALID: package-level function
+  func MapContainer[T, R any](c Container[T], fn func(T) R) R { ... }
+
+  ── PITFALL 4: Interface with type union can't be used as value ──
+  type Number interface { int | float64 }
+
+  // ✗ INVALID: Number is a constraint, not a regular interface
+  var x Number = 42
+
+  // ✓ VALID: use as constraint only
+  func Sum[T Number](nums []T) T { ... }
+
+  ── PITFALL 5: Pointer receivers with generic types ──
+  type MyList[T any] struct { items []T }
+
+  // Careful: calling methods on value vs pointer receiver
+  func (l *MyList[T]) Add(item T) {  // pointer receiver
+      l.items = append(l.items, item)
+  }
+
+  list := MyList[int]{}  // value
+  list.Add(1)            // ✓ Go auto-takes address if addressable
+
+  // But:
+  func process[T any](list MyList[T]) { // passed by value
+      list.Add(1)  // ✓ compiles but won't affect original
+  }
+
+
+════════════════════════════════════════════════════════════════════════════════════
+  [16]  INTERVIEW Q&A — MEDIOR LEVEL  ◆
+════════════════════════════════════════════════════════════════════════════════════
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  Q1: What are generics in Go and when were they introduced?         │
+  └──────────────────────────────────────────────────────────────────────┘
+  A: Generics were introduced in Go 1.18 (March 2022). They allow writing
+     functions, methods, and types that can work with multiple types while
+     maintaining compile-time type safety. Before generics, code was
+     duplicated per type or used interface{} with type assertions.
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  Q2: What is a type parameter and type constraint?                  │
+  └──────────────────────────────────────────────────────────────────────┘
+  A: A type parameter is a placeholder for a type, declared in square
+     brackets: func Foo[T Constraint](). A constraint defines what
+     operations are valid on T. E.g., comparable allows ==, Ordered
+     allows <, >, any allows any type.
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  Q3: What is the difference between any and comparable?             │
+  └──────────────────────────────────────────────────────────────────────┘
+  A: 'any' is an alias for interface{} and allows any type.
+     'comparable' restricts to types that support == and !=.
+     Slices, maps, and functions are NOT comparable.
+     Use comparable when you need to use T as a map key or use ==.
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  Q4: What does the ~ (tilde) operator do in constraints?            │
+  └──────────────────────────────────────────────────────────────────────┘
+  A: ~ means "underlying type". ~int matches int and any custom type
+     with underlying type int (e.g., type MyInt int).
+     Without ~, only the exact type matches.
+     Example: interface{ ~string } matches string, UserID, ProductID etc.
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  Q5: Can you define a method with a new type parameter in Go?       │
+  └──────────────────────────────────────────────────────────────────────┘
+  A: No. Methods cannot introduce new type parameters. Type parameters
+     must be declared on the type (struct/interface). Methods can only
+     use type parameters already declared on their receiver type.
+     Workaround: use package-level generic functions.
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  Q6: What is type inference in Go generics?                         │
+  └──────────────────────────────────────────────────────────────────────┘
+  A: Go can often infer type arguments from function arguments, so you
+     don't need to write them explicitly.
+     e.g., Contains([]int{1,2,3}, 2) — Go infers T=int.
+     But when type params only appear in return types, you must specify
+     them explicitly: Zero[int]().
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  Q7: Write a generic function to find the maximum in a slice        │
+  └──────────────────────────────────────────────────────────────────────┘
+  A:
+  import "golang.org/x/exp/constraints"
+
+  func Max[T constraints.Ordered](s []T) (T, bool) {
+      var zero T
+      if len(s) == 0 {
+          return zero, false
+      }
+      max := s[0]
+      for _, v := range s[1:] {
+          if v > max {
+              max = v
+          }
+      }
+      return max, true
+  }
+
+
+════════════════════════════════════════════════════════════════════════════════════
+  [17]  INTERVIEW Q&A — EXPERIENCED LEVEL  ◆◆
+════════════════════════════════════════════════════════════════════════════════════
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  Q1: How do Go generics differ from Java generics internally?        │
+  └──────────────────────────────────────────────────────────────────────┘
+  A: Java uses TYPE ERASURE — generic type information is erased at
+     compile time and replaced with Object. All generic instances share
+     one implementation at runtime.
+
+     Go uses a combination of STENCILING (GC Shapes) — similar types
+     share implementations (e.g., all pointer types share one), while
+     types with different "GC shapes" (like int vs float64) get separate
+     implementations. This avoids heap allocation overhead but may
+     increase binary size for many distinct type instantiations.
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  Q2: What are type sets and how do they differ from method sets?     │
+  └──────────────────────────────────────────────────────────────────────┘
+  A: In Go, interfaces now serve dual purpose:
+     - As VALUE types: interfaces define METHOD SETS (behavior)
+     - As CONSTRAINTS: interfaces define TYPE SETS (which types qualify)
+
+     A type set is the set of all types that satisfy an interface.
+     interface{ int | float64 } defines a type set of exactly 2 types.
+     interface{ ~string } defines a type set of all string-based types.
+     Only type-set interfaces can be used as generic constraints —
+     they CANNOT be used as regular variable types (value types).
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  Q3: Explain the performance tradeoffs of generics vs interface{}    │
+  └──────────────────────────────────────────────────────────────────────┘
+  A:
+  interface{} / any:
+  - Requires boxing: primitive types are heap-allocated as interface values
+  - Every method call requires vtable lookup (indirect dispatch)
+  - More runtime overhead, GC pressure
+  - Runtime panics possible from bad type assertions
+
+  Generics:
+  - No boxing for concrete types — values passed directly
+  - Method calls can be inlined (direct dispatch)
+  - Better performance especially for numeric/primitive types
+  - Compile-time type safety, no runtime panics from type errors
+  - Tradeoff: can increase binary size (multiple instantiations)
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  Q4: When should you NOT use generics?                               │
+  └──────────────────────────────────────────────────────────────────────┘
+  A: Avoid generics when:
+  1. Behavior polymorphism is better modeled with interfaces
+     (e.g., io.Reader — you want any type that can Read(), not a
+     specific type)
+  2. The function only works on one type — no need for abstraction
+  3. You need to introspect type at runtime (use reflect/any instead)
+  4. You're writing a simple one-off function — generics add cognitive
+     overhead that may not be worth it
+  5. When type-specific optimizations are needed per type
+
+  Rule of thumb: "Don't use generics just because you can."
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  Q5: Implement a thread-safe generic cache with TTL                  │
+  └──────────────────────────────────────────────────────────────────────┘
+  A:
+  type entry[V any] struct {
+      value     V
+      expiresAt time.Time
+  }
+
+  type TTLCache[K comparable, V any] struct {
+      mu    sync.RWMutex
+      store map[K]entry[V]
+      ttl   time.Duration
+  }
+
+  func NewTTLCache[K comparable, V any](ttl time.Duration) *TTLCache[K, V] {
+      return &TTLCache[K, V]{
+          store: make(map[K]entry[V]),
+          ttl:   ttl,
+      }
+  }
+
+  func (c *TTLCache[K, V]) Set(key K, val V) {
+      c.mu.Lock()
+      defer c.mu.Unlock()
+      c.store[key] = entry[V]{value: val, expiresAt: time.Now().Add(c.ttl)}
+  }
+
+  func (c *TTLCache[K, V]) Get(key K) (V, bool) {
+      c.mu.RLock()
+      defer c.mu.RUnlock()
+      e, ok := c.store[key]
+      if !ok || time.Now().After(e.expiresAt) {
+          var zero V
+          return zero, false
+      }
+      return e.value, true
+  }
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  Q6: How does Go handle the "zero value" problem in generics?        │
+  └──────────────────────────────────────────────────────────────────────┘
+  A: Every type in Go has a zero value (0 for int, "" for string, nil for
+     pointers). In generic code, you get the zero value with:
+       var zero T
+     This is safe and always valid.
+
+     Problem arises when zero is a valid value and you need to
+     distinguish "no value" from "zero value". Solutions:
+     1. Return (T, bool) — idiomatic Go pattern
+     2. Use Option[T] / *T to represent absence
+     3. Use a sentinel error value
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  Q7: Can interfaces with type unions be used as regular types?       │
+  └──────────────────────────────────────────────────────────────────────┘
+  A: No. Interfaces containing union elements (int | float64) or tilde
+     types (~int) are CONSTRAINT-ONLY interfaces. They:
+     - CAN be used as type parameter constraints
+     - CANNOT be used as variable types
+     - CANNOT be used in interface{} assignments
+     
+     This is a deliberate restriction to keep the language consistent:
+     if you had var x interface{int|float64}, what operations would
+     be valid on x without knowing which type it is?
+
+  ┌──────────────────────────────────────────────────────────────────────┐
+  │  Q8: Design a generic retry mechanism with backoff                   │
+  └──────────────────────────────────────────────────────────────────────┘
+  A:
+  type RetryConfig struct {
+      MaxAttempts int
+      Backoff     time.Duration
+  }
+
+  func Retry[T any](cfg RetryConfig, fn func() (T, error)) (T, error) {
+      var (
+          result T
+          err    error
+      )
+      for attempt := 0; attempt < cfg.MaxAttempts; attempt++ {
+          result, err = fn()
+          if err == nil {
+              return result, nil
+          }
+          if attempt < cfg.MaxAttempts-1 {
+              time.Sleep(cfg.Backoff * time.Duration(attempt+1))
+          }
+      }
+      return result, fmt.Errorf("all %d attempts failed: %w", cfg.MaxAttempts, err)
+  }
+
+  Usage:
+      cfg := RetryConfig{MaxAttempts: 3, Backoff: 100 * time.Millisecond}
+      data, err := Retry(cfg, func() ([]byte, error) {
+          return fetchFromAPI("https://example.com/data")
+      })
+
+

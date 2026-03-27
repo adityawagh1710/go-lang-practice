@@ -1,0 +1,276 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 🚀 Go Lang GENERICS 
+════════════════════════════════════════════════════════════════════════════════════
+
+## 📌 1. What are Generics in Go?
+
+Generics (introduced in **Go 1.18**) allow you to write **type-safe reusable code** without duplicating logic for different types.
+
+👉 Before generics:
+
+* You had to use `interface{}` (unsafe, requires type assertions)
+
+👉 With generics:
+
+* You get **compile-time type safety + reusability**
+
+========================
+
+## 📌 2. Basic Syntax
+
+```go
+func Print[T any](value T) {
+	fmt.Println(value)
+}
+```
+
+### 🔍 Explanation:
+
+* `T` → type parameter
+* `any` → constraint (means any type)
+
+========================
+
+## 📌 3. Calling Generic Functions
+
+```go
+func main() {
+	Print
+	Print[string]("Hello Generics")
+}
+```
+
+👉 Type can also be inferred:
+
+```go
+Print(100)       // int inferred
+Print("GoLang")  // string inferred
+```
+
+========================
+
+## 📌 4. Multiple Type Parameters
+
+```go
+func Pair[K any, V any](key K, value V) {
+	fmt.Println(key, value)
+}
+```
+
+```go
+Pair[string, int]("age", 25)
+```
+
+========================
+
+## 📌 5. Type Constraints
+
+Constraints define **what types are allowed**
+
+### Example:
+
+```go
+func Add[T int | float64](a, b T) T {
+	return a + b
+}
+```
+
+👉 Only `int` and `float64` allowed
+
+========================
+
+## 📌 6. Using `comparable`
+
+```go
+func IsEqual[T comparable](a, b T) bool {
+	return a == b
+}
+```
+
+👉 `comparable` allows:
+
+* int, string, bool, pointers, structs (if comparable)
+
+========================
+
+## 📌 7. Custom Constraints (Advanced)
+
+```go
+type Number interface {
+	int | float64
+}
+
+func Sum[T Number](a, b T) T {
+	return a + b
+}
+```
+
+========================
+
+## 📌 8. Generic Structs
+
+```go
+type Box[T any] struct {
+	value T
+}
+
+func (b Box[T]) Get() T {
+	return b.value
+}
+```
+
+```go
+box := Box[int]{value: 100}
+fmt.Println(box.Get())
+```
+
+========================
+
+## 📌 9. Generic Methods (Important)
+
+```go
+type Stack[T any] struct {
+	items []T
+}
+
+func (s *Stack[T]) Push(item T) {
+	s.items = append(s.items, item)
+}
+
+func (s *Stack[T]) Pop() T {
+	last := len(s.items) - 1
+	item := s.items[last]
+	s.items = s.items[:last]
+	return item
+}
+```
+
+========================
+
+## 📌 10. Real-World Example (Utility Function)
+
+```go
+func Filter[T any](items []T, fn func(T) bool) []T {
+	var result []T
+	for _, item := range items {
+		if fn(item) {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+```
+
+```go
+nums := []int{1, 2, 3, 4}
+
+even := Filter(nums, func(n int) bool {
+	return n%2 == 0
+})
+
+fmt.Println(even) // [2 4]
+```
+
+========================
+
+## 📌 11. When to Use Generics
+
+✅ Use when:
+
+* Same logic for multiple types
+* Avoid duplication
+* Writing libraries/utilities
+* Data structures (Stack, Queue, Cache)
+
+❌ Avoid when:
+
+* Logic is type-specific
+* Adds unnecessary complexity
+
+========================
+
+## 📌 12. Generics vs Interfaces
+
+| Feature     | Generics       | Interfaces            |
+| ----------- | -------------- | --------------------- |
+| Type Safety | Compile-time   | Runtime (type assert) |
+| Performance | Better         | Slight overhead       |
+| Flexibility | Less dynamic   | More dynamic          |
+| Use Case    | Algorithms, DS | Behavior abstraction  |
+
+========================
+
+## 📌 13. Common Mistakes
+
+❌ Overusing generics
+❌ Complex constraints → unreadable code
+❌ Replacing interfaces blindly
+❌ Forgetting type inference
+
+========================
+
+## 📌 14. Performance Insight
+
+* Generics are **monomorphized** (compiled per type)
+* Faster than `interface{}`
+* No runtime casting needed
+
+========================
+
+## 📌 15. Interview Questions 🔥
+
+### 🧠 Basic
+
+1. What are generics in Go?
+2. Why were generics introduced?
+3. Difference between `any` and `interface{}`?
+
+### ⚙️ Intermediate
+
+4. What are type constraints?
+5. What is `comparable`?
+6. How does type inference work?
+
+### 🚀 Advanced
+
+7. Generics vs Interfaces — when to use?
+8. How does Go implement generics internally?
+9. Can you write a generic data structure?
+10. What are limitations of generics?
+
+========================
+
+## 📌 16. Hands-On Practice Tasks
+
+✅ Implement:
+
+* Generic Stack
+* Generic Queue
+* Generic Map filter
+* Generic Reduce function
+
+========================
+
+## 📌 17. Pro Tips (Experienced Dev Level)
+
+💡 Prefer simple constraints
+💡 Keep APIs clean and readable
+💡 Use generics in libraries, not everywhere
+💡 Combine generics + interfaces smartly
+💡 Benchmark critical paths
+
+========================
+
+## 🎯 Final Summary
+
+✔ Generics = Reusable + Type-safe code
+✔ Best for utilities & data structures
+✔ Not a replacement for interfaces
+✔ Use wisely → avoid over-engineering
+
+========================
+
+🔥 **Golden Rule:**
+"Use generics to remove duplication, not to show cleverness."
+
+===============================================================
