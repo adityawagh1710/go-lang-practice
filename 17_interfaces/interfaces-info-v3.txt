@@ -1,0 +1,886 @@
+============================================================
+# 🚀 Go Lang INTERFACE 
+============================================================
+  ┌─────────────────────────────────────────────────────────┐
+  │   SECTION 1 ❯  WHAT IS AN INTERFACE IN GO?              │ 
+  └─────────────────────────────────────────────────────────┘
+
+  ➤ An interface in Go is a TYPE that defines a set of METHOD SIGNATURES.
+  ➤ Any type that implements ALL methods of the interface IMPLICITLY satisfies it.
+  ➤ No "implements" keyword needed — this is called STRUCTURAL TYPING (duck typing).
+  ➤ Interfaces enable POLYMORPHISM in Go's type system.
+
+  🔑 KEY CONCEPT: "If it walks like a duck and quacks like a duck, it's a duck."
+
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  SYNTAX                                                          │
+  │                                                                  │
+  │  type InterfaceName interface {                                  │
+  │      MethodOne(param type) returnType                            │
+  │      MethodTwo() (returnType, error)                             │
+  │  }                                                               │
+  └──────────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─────────────────────────────────────────────────────────┐
+  │   SECTION 2 ❯  BASIC INTERFACE (MEDIOR LEVEL)          │
+  └─────────────────────────────────────────────────────────┘
+
+  ▸ EXAMPLE 1: Simple Shape Interface
+
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  package main                                                    │
+  │                                                                  │
+  │  import (                                                        │
+  │      "fmt"                                                       │
+  │      "math"                                                      │
+  │  )                                                               │
+  │                                                                  │
+  │  // 🔷 Define the interface                                      │
+  │  type Shape interface {                                          │
+  │      Area() float64                                              │
+  │      Perimeter() float64                                         │
+  │  }                                                               │
+  │                                                                  │
+  │  // 🔶 Circle struct                                             │
+  │  type Circle struct {                                            │
+  │      Radius float64                                              │
+  │  }                                                               │
+  │                                                                  │
+  │  func (c Circle) Area() float64 {                                │
+  │      return math.Pi * c.Radius * c.Radius                       │
+  │  }                                                               │
+  │  func (c Circle) Perimeter() float64 {                          │
+  │      return 2 * math.Pi * c.Radius                              │
+  │  }                                                               │
+  │                                                                  │
+  │  // 🔶 Rectangle struct                                          │
+  │  type Rectangle struct {                                         │
+  │      Width, Height float64                                       │
+  │  }                                                               │
+  │                                                                  │
+  │  func (r Rectangle) Area() float64 {                            │
+  │      return r.Width * r.Height                                   │
+  │  }                                                               │
+  │  func (r Rectangle) Perimeter() float64 {                       │
+  │      return 2 * (r.Width + r.Height)                            │
+  │  }                                                               │
+  │                                                                  │
+  │  // 🔷 Polymorphic function using interface                      │
+  │  func printShapeInfo(s Shape) {                                  │
+  │      fmt.Printf("Area: %.2f | Perimeter: %.2f\n",               │
+  │                 s.Area(), s.Perimeter())                         │
+  │  }                                                               │
+  │                                                                  │
+  │  func main() {                                                   │
+  │      c := Circle{Radius: 5}                                      │
+  │      r := Rectangle{Width: 4, Height: 6}                        │
+  │                                                                  │
+  │      printShapeInfo(c)  // Area: 78.54 | Perimeter: 31.42       │
+  │      printShapeInfo(r)  // Area: 24.00 | Perimeter: 20.00       │
+  │  }                                                               │
+  └──────────────────────────────────────────────────────────────────┘
+
+  ✅ WHAT TO NOTE:
+     • Circle and Rectangle NEVER said "implements Shape"
+     • Go automatically satisfies the interface if all methods match
+     • printShapeInfo() works for ANY type that satisfies Shape
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─────────────────────────────────────────────────────────┐
+  │   SECTION 3 ❯  POINTER vs VALUE RECEIVERS              │
+  └─────────────────────────────────────────────────────────┘
+
+  ⚠️  CRITICAL GOTCHA: Pointer receivers vs value receivers affect
+      whether a type satisfies an interface!
+
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  type Animal interface {                                         │
+  │      Speak() string                                              │
+  │  }                                                               │
+  │                                                                  │
+  │  type Dog struct{ Name string }                                  │
+  │                                                                  │
+  │  // ✅ Pointer receiver                                          │
+  │  func (d *Dog) Speak() string {                                  │
+  │      return "Woof! I am " + d.Name                              │
+  │  }                                                               │
+  │                                                                  │
+  │  func main() {                                                   │
+  │      var a Animal                                                │
+  │                                                                  │
+  │      // ✅ Works — pointer satisfies Animal                      │
+  │      a = &Dog{Name: "Bruno"}                                     │
+  │      fmt.Println(a.Speak())                                      │
+  │                                                                  │
+  │      // ❌ Compile error — Dog value does NOT satisfy Animal     │
+  │      // a = Dog{Name: "Bruno"}                                   │
+  │  }                                                               │
+  └──────────────────────────────────────────────────────────────────┘
+
+  📋 RULES TABLE:
+  ┌──────────────────────┬────────────────┬────────────────┐
+  │  Method Receiver     │  Value (T)     │  Pointer (*T)  │
+  ├──────────────────────┼────────────────┼────────────────┤
+  │  Value receiver      │   ✅ Satisfies │   ✅ Satisfies  │
+  │  Pointer receiver    │   ❌ Does NOT  │   ✅ Satisfies  │
+  └──────────────────────┴────────────────┴────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─────────────────────────────────────────────────────────┐
+  │   SECTION 4 ❯  THE EMPTY INTERFACE:  interface{}       │
+  └─────────────────────────────────────────────────────────┘
+
+  ➤ interface{} (or `any` in Go 1.18+) has ZERO methods.
+  ➤ Every type in Go implicitly satisfies it.
+  ➤ Used when you don't know the type at compile time (like Java's Object).
+
+  ▸ EXAMPLE: Storing any value
+
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  func describe(i interface{}) {                                  │
+  │      fmt.Printf("Value: %v | Type: %T\n", i, i)                 │
+  │  }                                                               │
+  │                                                                  │
+  │  func main() {                                                   │
+  │      describe(42)                // Value: 42    | Type: int    │
+  │      describe("hello")           // Value: hello | Type: string │
+  │      describe(true)              // Value: true  | Type: bool   │
+  │      describe([]int{1, 2, 3})    // Value: [1 2 3] | Type:...  │
+  │  }                                                               │
+  │                                                                  │
+  │  // Go 1.18+ preferred syntax                                    │
+  │  func describeNew(i any) {                                       │
+  │      fmt.Printf("%v (%T)\n", i, i)                              │
+  │  }                                                               │
+  └──────────────────────────────────────────────────────────────────┘
+
+  ⚠️  CAUTION: Overusing empty interface defeats Go's type safety.
+              Use it only when truly necessary (e.g., JSON, generics).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─────────────────────────────────────────────────────────┐
+  │   SECTION 5 ❯  TYPE ASSERTION                          │
+  └─────────────────────────────────────────────────────────┘
+
+  ➤ Type assertion extracts the CONCRETE VALUE from an interface variable.
+  ➤ Syntax:  value := interfaceVar.(ConcreteType)
+  ➤ Two forms: UNSAFE (panics) and SAFE (comma-ok idiom)
+
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  var i interface{} = "Hello, Gopher!"                           │
+  │                                                                  │
+  │  // ✅ Safe type assertion (comma-ok pattern)                    │
+  │  s, ok := i.(string)                                            │
+  │  if ok {                                                         │
+  │      fmt.Println("String value:", s)  // Hello, Gopher!        │
+  │  }                                                               │
+  │                                                                  │
+  │  // ❌ Unsafe — panics if type doesn't match                    │
+  │  // n := i.(int)  → panic: interface conversion                 │
+  │                                                                  │
+  │  // Real-world: Extract from Shape interface                     │
+  │  var s Shape = Circle{Radius: 3}                                │
+  │  if c, ok := s.(Circle); ok {                                   │
+  │      fmt.Println("It's a circle with radius:", c.Radius)       │
+  │  }                                                               │
+  └──────────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─────────────────────────────────────────────────────────┐
+  │   SECTION 6 ❯  TYPE SWITCH                             │
+  └─────────────────────────────────────────────────────────┘
+
+  ➤ Type switch = switch statement that branches on the DYNAMIC TYPE of an interface.
+  ➤ Cleaner than chained type assertions.
+
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  func classify(i interface{}) string {                          │
+  │      switch v := i.(type) {                                     │
+  │      case int:                                                   │
+  │          return fmt.Sprintf("int: %d", v)                       │
+  │      case string:                                                │
+  │          return fmt.Sprintf("string: %q", v)                    │
+  │      case bool:                                                  │
+  │          return fmt.Sprintf("bool: %t", v)                      │
+  │      case []int:                                                 │
+  │          return fmt.Sprintf("int slice len=%d", len(v))         │
+  │      case Shape:                                                 │
+  │          return fmt.Sprintf("Shape area=%.2f", v.Area())        │
+  │      default:                                                    │
+  │          return fmt.Sprintf("unknown type: %T", v)              │
+  │      }                                                           │
+  │  }                                                               │
+  │                                                                  │
+  │  func main() {                                                   │
+  │      fmt.Println(classify(42))                                   │
+  │      fmt.Println(classify("Go"))                                 │
+  │      fmt.Println(classify(Circle{Radius: 2}))                   │
+  │  }                                                               │
+  └──────────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─────────────────────────────────────────────────────────┐
+  │   SECTION 7 ❯  INTERFACE COMPOSITION (EMBEDDING)       │
+  └─────────────────────────────────────────────────────────┘
+
+  ➤ Interfaces can EMBED other interfaces — building larger contracts from smaller ones.
+  ➤ This is Go's approach to extending behavior (no inheritance).
+
+  ▸ EXAMPLE: Building an io-style system
+
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  type Reader interface {                                         │
+  │      Read(p []byte) (n int, err error)                          │
+  │  }                                                               │
+  │                                                                  │
+  │  type Writer interface {                                         │
+  │      Write(p []byte) (n int, err error)                         │
+  │  }                                                               │
+  │                                                                  │
+  │  // 🔷 Composed interface — must implement BOTH Read AND Write  │
+  │  type ReadWriter interface {                                     │
+  │      Reader                                                      │
+  │      Writer                                                      │
+  │  }                                                               │
+  │                                                                  │
+  │  // A more complex example                                       │
+  │  type Logger interface {                                         │
+  │      Log(msg string)                                             │
+  │  }                                                               │
+  │                                                                  │
+  │  type AuditLogger interface {                                    │
+  │      Logger                  // Embeds Logger                   │
+  │      AuditTrail() []string                                      │
+  │  }                                                               │
+  │                                                                  │
+  │  type FileAuditLogger struct {                                   │
+  │      logs []string                                               │
+  │  }                                                               │
+  │                                                                  │
+  │  func (f *FileAuditLogger) Log(msg string) {                    │
+  │      f.logs = append(f.logs, msg)                               │
+  │      fmt.Println("[LOG]", msg)                                   │
+  │  }                                                               │
+  │                                                                  │
+  │  func (f *FileAuditLogger) AuditTrail() []string {              │
+  │      return f.logs                                               │
+  │  }                                                               │
+  └──────────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─────────────────────────────────────────────────────────┐
+  │   SECTION 8 ❯  NIL INTERFACE vs NIL POINTER TRAP 🪤   │
+  └─────────────────────────────────────────────────────────┘
+
+  ⚠️  ONE OF THE MOST COMMON BUGS IN GO — experienced devs must know this!
+
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  type MyError struct{ msg string }                              │
+  │  func (e *MyError) Error() string { return e.msg }              │
+  │                                                                  │
+  │  // ❌ BUG: returns non-nil interface wrapping nil pointer!      │
+  │  func buggyFunc() error {                                        │
+  │      var p *MyError = nil     // nil pointer                    │
+  │      return p                 // interface{type=*MyError, val=nil}│
+  │  }                                                               │
+  │                                                                  │
+  │  func main() {                                                   │
+  │      err := buggyFunc()                                          │
+  │      if err != nil {                                             │
+  │          fmt.Println("This WILL print — bug!")                  │
+  │      }                                                           │
+  │  }                                                               │
+  │                                                                  │
+  │  // ✅ CORRECT: Return nil interface directly                    │
+  │  func correctFunc() error {                                      │
+  │      var p *MyError = nil                                        │
+  │      if p == nil {                                               │
+  │          return nil   // pure nil interface                      │
+  │      }                                                           │
+  │      return p                                                    │
+  │  }                                                               │
+  └──────────────────────────────────────────────────────────────────┘
+
+  📌 INTERNALS: An interface has TWO parts: (type, value)
+     • A nil interface:         (nil, nil)     → == nil is TRUE
+     • Wrapped nil pointer:     (*MyError, nil) → == nil is FALSE  ← TRAP!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─────────────────────────────────────────────────────────┐
+  │   SECTION 9 ❯  REAL-WORLD PATTERNS (EXPERIENCED)       │
+  └─────────────────────────────────────────────────────────┘
+
+  ═══════════════════════════════════════════════════
+  PATTERN 1: DEPENDENCY INJECTION via Interface
+  ═══════════════════════════════════════════════════
+
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  // 🔷 Define interface for repository layer                    │
+  │  type UserRepository interface {                                 │
+  │      FindByID(id int) (*User, error)                            │
+  │      Save(u *User) error                                        │
+  │      Delete(id int) error                                       │
+  │  }                                                               │
+  │                                                                  │
+  │  // 🔶 Production implementation                                │
+  │  type PostgresUserRepo struct { db *sql.DB }                    │
+  │                                                                  │
+  │  func (r *PostgresUserRepo) FindByID(id int) (*User, error) {   │
+  │      // real DB query...                                        │
+  │      return &User{ID: id}, nil                                  │
+  │  }                                                               │
+  │  func (r *PostgresUserRepo) Save(u *User) error { return nil }  │
+  │  func (r *PostgresUserRepo) Delete(id int) error { return nil } │
+  │                                                                  │
+  │  // 🔶 Mock for unit testing                                    │
+  │  type MockUserRepo struct {                                      │
+  │      users map[int]*User                                        │
+  │  }                                                               │
+  │  func (m *MockUserRepo) FindByID(id int) (*User, error) {       │
+  │      u, ok := m.users[id]                                       │
+  │      if !ok { return nil, fmt.Errorf("not found") }             │
+  │      return u, nil                                              │
+  │  }                                                               │
+  │  func (m *MockUserRepo) Save(u *User) error { ... }             │
+  │  func (m *MockUserRepo) Delete(id int) error { ... }            │
+  │                                                                  │
+  │  // 🔷 Service depends on interface, not concrete type          │
+  │  type UserService struct {                                       │
+  │      repo UserRepository                                        │
+  │  }                                                               │
+  │                                                                  │
+  │  func NewUserService(repo UserRepository) *UserService {        │
+  │      return &UserService{repo: repo}                            │
+  │  }                                                               │
+  │                                                                  │
+  │  func (s *UserService) GetUser(id int) (*User, error) {         │
+  │      return s.repo.FindByID(id)                                 │
+  │  }                                                               │
+  └──────────────────────────────────────────────────────────────────┘
+
+  ═══════════════════════════════════════════════════
+  PATTERN 2: STRATEGY PATTERN
+  ═══════════════════════════════════════════════════
+
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  type SortStrategy interface {                                   │
+  │      Sort(data []int) []int                                     │
+  │  }                                                               │
+  │                                                                  │
+  │  type BubbleSort struct{}                                        │
+  │  func (b BubbleSort) Sort(data []int) []int { /* ... */ }       │
+  │                                                                  │
+  │  type QuickSort struct{}                                         │
+  │  func (q QuickSort) Sort(data []int) []int { /* ... */ }        │
+  │                                                                  │
+  │  type Sorter struct {                                            │
+  │      strategy SortStrategy                                      │
+  │  }                                                               │
+  │                                                                  │
+  │  func (s *Sorter) SetStrategy(st SortStrategy) {                │
+  │      s.strategy = st                                            │
+  │  }                                                               │
+  │                                                                  │
+  │  func (s *Sorter) Execute(data []int) []int {                   │
+  │      return s.strategy.Sort(data)                               │
+  │  }                                                               │
+  │                                                                  │
+  │  func main() {                                                   │
+  │      sorter := &Sorter{}                                         │
+  │      data := []int{5, 2, 8, 1, 9}                               │
+  │                                                                  │
+  │      sorter.SetStrategy(BubbleSort{})                           │
+  │      fmt.Println(sorter.Execute(data))                          │
+  │                                                                  │
+  │      sorter.SetStrategy(QuickSort{})                            │
+  │      fmt.Println(sorter.Execute(data))                          │
+  │  }                                                               │
+  └──────────────────────────────────────────────────────────────────┘
+
+  ═══════════════════════════════════════════════════
+  PATTERN 3: MIDDLEWARE / DECORATOR CHAIN
+  ═══════════════════════════════════════════════════
+
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  type HTTPHandler interface {                                    │
+  │      Handle(req string) string                                  │
+  │  }                                                               │
+  │                                                                  │
+  │  type BaseHandler struct{}                                       │
+  │  func (b BaseHandler) Handle(req string) string {               │
+  │      return "Response for: " + req                              │
+  │  }                                                               │
+  │                                                                  │
+  │  // 🔷 Logging middleware wraps any HTTPHandler                  │
+  │  type LoggingMiddleware struct {                                 │
+  │      next HTTPHandler                                           │
+  │  }                                                               │
+  │                                                                  │
+  │  func (l LoggingMiddleware) Handle(req string) string {         │
+  │      fmt.Println("[LOG] Incoming:", req)                        │
+  │      resp := l.next.Handle(req)                                 │
+  │      fmt.Println("[LOG] Outgoing:", resp)                       │
+  │      return resp                                                │
+  │  }                                                               │
+  │                                                                  │
+  │  // 🔷 Auth middleware                                           │
+  │  type AuthMiddleware struct {                                    │
+  │      next HTTPHandler                                           │
+  │  }                                                               │
+  │                                                                  │
+  │  func (a AuthMiddleware) Handle(req string) string {            │
+  │      if req == "admin" {                                        │
+  │          return a.next.Handle(req)                              │
+  │      }                                                          │
+  │      return "403 Unauthorized"                                  │
+  │  }                                                               │
+  │                                                                  │
+  │  func main() {                                                   │
+  │      // Stack: Auth → Logging → BaseHandler                     │
+  │      handler := AuthMiddleware{                                  │
+  │          next: LoggingMiddleware{                                │
+  │              next: BaseHandler{},                               │
+  │          },                                                     │
+  │      }                                                          │
+  │      fmt.Println(handler.Handle("admin"))                       │
+  │      fmt.Println(handler.Handle("guest"))                       │
+  │  }                                                               │
+  └──────────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─────────────────────────────────────────────────────────┐
+  │   SECTION 10 ❯  INTERFACE + GENERICS (Go 1.18+)        │
+  └─────────────────────────────────────────────────────────┘
+
+  ➤ In Go 1.18+, interfaces can be used as TYPE CONSTRAINTS in generics.
+  ➤ This is a new role for interfaces beyond polymorphism!
+
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  // 🔷 Interface as a type constraint                           │
+  │  type Number interface {                                         │
+  │      int | int64 | float32 | float64                            │
+  │  }                                                               │
+  │                                                                  │
+  │  func Sum[T Number](nums []T) T {                               │
+  │      var total T                                                 │
+  │      for _, n := range nums {                                   │
+  │          total += n                                             │
+  │      }                                                           │
+  │      return total                                                │
+  │  }                                                               │
+  │                                                                  │
+  │  func main() {                                                   │
+  │      ints := []int{1, 2, 3, 4, 5}                               │
+  │      floats := []float64{1.1, 2.2, 3.3}                        │
+  │      fmt.Println(Sum(ints))    // 15                            │
+  │      fmt.Println(Sum(floats))  // 6.6                           │
+  │  }                                                               │
+  │                                                                  │
+  │  // 🔷 Combining method constraints + type set                  │
+  │  type Stringer interface {                                       │
+  │      String() string                                            │
+  │  }                                                               │
+  │                                                                  │
+  │  func PrintAll[T Stringer](items []T) {                         │
+  │      for _, item := range items {                               │
+  │          fmt.Println(item.String())                             │
+  │      }                                                           │
+  │  }                                                               │
+  └──────────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─────────────────────────────────────────────────────────┐
+  │   SECTION 11 ❯  INTERFACE BEST PRACTICES               │
+  └─────────────────────────────────────────────────────────┘
+
+  ╔═══════════════════════════════════════════════════════════╗
+  ║   ✅  DO                      ❌  DON'T                   ║
+  ╠═══════════════════════════════════════════════════════════╣
+  ║  Keep interfaces small        Create bloated interfaces   ║
+  ║  (1–3 methods ideal)          with 10+ methods            ║
+  ║                                                           ║
+  ║  Accept interfaces,           Return interfaces           ║
+  ║  return structs               from constructors           ║
+  ║                                                           ║
+  ║  Define interface where       Define interface at         ║
+  ║  it's USED (consumer side)    implementation side         ║
+  ║                                                           ║
+  ║  Use comma-ok assertion       Use bare type assertions    ║
+  ║  s, ok := i.(Type)            s := i.(Type) [panics!]     ║
+  ║                                                           ║
+  ║  Use generics for type-safe   Use interface{} for         ║
+  ║  collections (Go 1.18+)       homogenous collections      ║
+  ╚═══════════════════════════════════════════════════════════╝
+
+  🏆 GO PROVERB: "The bigger the interface, the weaker the abstraction."
+                 — Rob Pike
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─────────────────────────────────────────────────────────┐
+  │   SECTION 12 ❯  STDLIB IMPORTANT INTERFACES            │
+  └─────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────┬─────────────────────────────────────────┐
+  │  Interface           │  Method(s) & Package                   │
+  ├──────────────────────┼─────────────────────────────────────────┤
+  │  error               │  Error() string  (builtin)             │
+  │  fmt.Stringer        │  String() string                        │
+  │  io.Reader           │  Read(p []byte) (n int, err error)      │
+  │  io.Writer           │  Write(p []byte) (n int, err error)     │
+  │  io.Closer           │  Close() error                          │
+  │  io.ReadWriter       │  Reader + Writer (embedded)             │
+  │  sort.Interface      │  Len(), Less(i,j int), Swap(i,j int)   │
+  │  http.Handler        │  ServeHTTP(w ResponseWriter, r *Request)│
+  │  json.Marshaler      │  MarshalJSON() ([]byte, error)          │
+  │  json.Unmarshaler    │  UnmarshalJSON([]byte) error            │
+  └──────────────────────┴─────────────────────────────────────────┘
+
+  ▸ Implementing fmt.Stringer:
+
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  type Point struct{ X, Y int }                                   │
+  │                                                                  │
+  │  func (p Point) String() string {                                │
+  │      return fmt.Sprintf("Point(%d, %d)", p.X, p.Y)               │
+  │  }                                                               │
+  │                                                                  │
+  │  func main() {                                                   │
+  │      p := Point{3, 4}                                            │
+  │      fmt.Println(p)  // Point(3, 4) — auto-called by fmt!        │
+  │  }                                                               │
+  └──────────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─────────────────────────────────────────────────────────┐
+  │   SECTION 13 ❯  INTERFACE INTERNALS (DEEP DIVE)        │
+  └─────────────────────────────────────────────────────────┘
+
+  ➤ Under the hood, an interface value is a TWO-WORD data structure:
+
+  ┌──────────────────────────────────────────────────────────────────┐
+  │                                                                  │
+  │    Interface Variable                                            │
+  │   ┌──────────────────┬──────────────────┐                        │
+  │   │   TYPE  pointer  │  VALUE  pointer  │                        │
+  │   │  (points to type │  (points to the  │                        │
+  │   │   descriptor)    │   actual data)   │                        │
+  │   └──────────────────┴──────────────────┘                        │
+  │                                                                  │
+  │   When both fields are nil  →  interface == nil  ✅              │
+  │   When type is non-nil but value is nil  →  != nil  ⚠️           │
+  │                                                                  │
+  └──────────────────────────────────────────────────────────────────┘
+
+  ➤ Method dispatch: Go uses an ITABLE (interface table) to dispatch calls.
+     • Each interface/type pair has a pre-computed itable at compile time.
+     • Method calls via interface are slightly slower than direct calls (one indirection).
+     • This is negligible in almost all real-world use cases.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║                                                                                  ║
+║   ❓  I N T E R V I E W   Q U E S T I O N S  &  A N S W E R S  ❓                ║
+║                 ~ Medior to Experienced Level ~                                  ║
+║                                                                                  ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   MEDIOR-LEVEL QUESTIONS (Q1–Q12)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Q1. What is an interface in Go?                                │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  A. An interface is a named type that defines a set of method  │
+  │     signatures. Any type that implements all those methods     │
+  │     automatically satisfies the interface — implicitly,        │
+  │     without any explicit declaration. This is called           │
+  │     structural typing or duck typing.                          │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Q2. How does Go differ from Java/C# in interface              │
+  │      implementation?                                           │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  A. Java/C# require EXPLICIT implementation (`implements`      │
+  │     / `:` keyword). Go uses IMPLICIT implementation — if a    │
+  │     type has all the required methods, it satisfies the        │
+  │     interface. No keyword needed. This allows types from       │
+  │     external packages to satisfy your interfaces.             │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Q3. What is the empty interface and when should you use it?   │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  A. interface{} (or `any` in Go 1.18+) is satisfied by every  │
+  │     type since it has no methods. Use it when the type is      │
+  │     truly unknown at compile time (e.g., JSON decoding,        │
+  │     generic containers before Go 1.18). Avoid overusing it    │
+  │     as it removes compile-time type safety.                    │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Q4. What is a type assertion? What is the comma-ok pattern?   │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  A. A type assertion extracts the concrete value from an       │
+  │     interface: val, ok := i.(T)                                │
+  │     The comma-ok pattern prevents a panic — if the assertion   │
+  │     fails, ok is false and val is the zero value for T.        │
+  │     Without comma-ok, a failed assertion causes a panic.       │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Q5. What is a type switch?                                    │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  A. A type switch (switch v := i.(type)) branches on the       │
+  │     dynamic type of an interface value. Each case checks for  │
+  │     a specific concrete type. It's cleaner than chained        │
+  │     type assertions when checking multiple types.             │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Q6. Can interfaces be composed in Go?                         │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  A. Yes! Interfaces can embed other interfaces, forming a      │
+  │     composed interface that requires implementing all methods  │
+  │     from all embedded interfaces. Example: io.ReadWriter       │
+  │     embeds io.Reader and io.Writer.                            │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Q7. What does "accept interfaces, return structs" mean?       │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  A. It's a Go idiom: function parameters should accept         │
+  │     interface types (flexible, testable), but constructors     │
+  │     and factory functions should return concrete struct        │
+  │     types (so callers know the full capabilities). This        │
+  │     avoids premature abstraction on the return side.           │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Q8. Difference between value receiver and pointer receiver    │
+  │      for interface satisfaction?                               │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  A. If a method is defined with a pointer receiver (*T), only  │
+  │     *T satisfies the interface — T does not. If defined with   │
+  │     a value receiver (T), both T and *T satisfy the            │
+  │     interface. Always use pointer receivers when the method    │
+  │     needs to modify state.                                     │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Q9. What is fmt.Stringer and how does fmt.Println use it?     │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  A. fmt.Stringer is a stdlib interface with one method:        │
+  │     String() string. When fmt.Println (or Printf with %v/%s)  │
+  │     encounters a value that implements Stringer, it calls      │
+  │     String() automatically. It's Go's equivalent of Java's    │
+  │     toString().                                                │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Q10. How do you check if a value implements an interface      │
+  │       at compile time?                                         │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  A. Use a blank identifier assignment:                         │
+  │     var _ MyInterface = (*MyStruct)(nil)                       │
+  │     This is a compile-time check — if MyStruct doesn't         │
+  │     satisfy MyInterface, the code won't compile.               │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Q11. Where should you define interfaces — at the consumer     │
+  │       or producer side?                                        │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  A. At the CONSUMER (usage) side. In Go, you don't define an  │
+  │     interface in the package that implements it; you define it │
+  │     in the package that needs it. This keeps packages         │
+  │     decoupled — the implementation knows nothing about your   │
+  │     interface.                                                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Q12. Can a struct implement multiple interfaces in Go?        │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  A. Yes. A struct can satisfy any number of interfaces as long │
+  │     as it implements all the required methods for each. There  │
+  │     is no limit, and there is no need to declare this          │
+  │     explicitly.                                                │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   EXPERIENCED-LEVEL QUESTIONS (Q13–Q25)
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Q13. Explain the nil interface trap with an example.          │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  A. A nil interface has both type and value as nil (nil, nil). │
+  │     But if you assign a nil pointer of a concrete type to an  │
+  │     interface, the interface is NOT nil — it has type info.    │
+  │     var p *MyErr = nil; var e error = p → e != nil is TRUE!   │
+  │     Fix: return nil directly, not a nil typed pointer.        │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Q14. What is an itable and how does interface method          │
+  │       dispatch work internally?                                │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  A. An itable (interface table) is a data structure linking    │
+  │     interface methods to their concrete implementations.       │
+  │     Each (interface, type) pair has one itable generated at    │
+  │     compile/link time. Interface dispatch = one pointer        │
+  │     dereference + itable lookup — slightly slower than direct  │
+  │     calls, but negligible in practice.                         │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Q15. How are interfaces used in the Dependency Injection      │
+  │       pattern in Go?                                           │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  A. Define a small interface at the call site (consumer).      │
+  │     Inject the concrete dependency via constructor/function    │
+  │     parameter. In production, pass the real impl; in tests,   │
+  │     pass a mock. This decouples components and makes code      │
+  │     testable without frameworks.                               │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Q16. How do Go 1.18 generics relate to interfaces?            │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  A. In Go 1.18+, interfaces serve a dual purpose: (1) their   │
+  │     original role as polymorphic types, and (2) as type        │
+  │     constraints for generics using union type elements         │
+  │     (e.g., int | float64). Type parameter constraints let you │
+  │     write type-safe generic functions without interface{}      │
+  │     boxing.                                                    │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Q17. What is the Decorator pattern in Go using interfaces?    │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  A. A decorator wraps an interface implementation to add       │
+  │     behavior. The decorator struct holds a field of the        │
+  │     interface type and implements the same interface,          │
+  │     delegating to the inner impl while adding cross-cutting   │
+  │     concerns (logging, caching, auth). Used in HTTP middleware │
+  │     chains (e.g., net/http).                                   │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Q18. How would you implement a plugin/extensible system       │
+  │       in Go using interfaces?                                  │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  A. Define a Plugin interface with the required contract.      │
+  │     Maintain a registry (map[string]Plugin or []Plugin).       │
+  │     Each plugin registers itself. The core calls interface     │
+  │     methods without knowing concrete types. Combined with      │
+  │     init() functions, plugins can self-register.               │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Q19. What are interface pollution and how to avoid it?        │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  A. Interface pollution = defining interfaces prematurely or   │
+  │     with too many methods, making them hard to implement/mock. │
+  │     Avoid by: (1) not abstracting until you have 2+ impls,    │
+  │     (2) keeping interfaces to 1–3 methods, (3) defining them  │
+  │     at the consumer, not producer side.                        │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Q20. How does the sort.Interface work? Can you implement it?  │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  A. sort.Interface requires: Len() int, Less(i, j int) bool,   │
+  │     Swap(i, j int). You define these on your custom slice type │
+  │     then call sort.Sort(yourSlice). Go 1.21 added slices.Sort  │
+  │     with generics, but sort.Interface remains useful for       │
+  │     stable sorts and complex multi-key sorting.                │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Q21. Can you have a method on an interface type directly?     │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  A. No. Interfaces can only define method signatures, not      │
+  │     method implementations. You cannot add methods to an       │
+  │     interface type itself (unlike extension methods in C#).    │
+  │     Behavior must be defined on concrete types.                │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Q22. What is an interface upgrade pattern?                    │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  A. When a function accepts a small interface but optionally   │
+  │     uses a larger one if available. Example: http.ResponseWriter│
+  │     checks if the impl also satisfies http.Flusher:            │
+  │     if f, ok := w.(http.Flusher); ok { f.Flush() }            │
+  │     This allows optional enhancement without breaking the API. │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Q23. How do interfaces enable testing in Go without mocks     │
+  │       frameworks?                                              │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  A. Define a small interface for dependencies. In tests,       │
+  │     create a simple struct that implements the interface with  │
+  │     predictable behavior. Inject it via constructor. This      │
+  │     makes tests fast, deterministic, and free of external      │
+  │     dependencies — no frameworks like Mockito needed.         │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Q24. What happens when you store a large struct in an         │
+  │       interface? Any performance concern?                       │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  A. Interface values hold a pointer to the data. If you store  │
+  │     a value type (struct) in an interface, Go may allocate it  │
+  │     on the heap (escapes to heap), causing GC pressure. For    │
+  │     hot paths, prefer pointer types in interfaces to avoid     │
+  │     unnecessary heap allocations. Profiling with pprof helps  │
+  │     identify this.                                             │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  Q25. What is the difference between interface comparison      │
+  │       and reflect.DeepEqual for interfaces?                    │
+  ├─────────────────────────────────────────────────────────────────┤
+  │  A. Interface == compares both (type, value) pair. Two         │
+  │     interfaces are equal only if they have identical dynamic   │
+  │     types AND equal values. If the dynamic type is not         │
+  │     comparable (e.g., slice), == panics at runtime.            │
+  │     reflect.DeepEqual handles non-comparable types but is      │
+  │     slower and bypasses the type system.                       │
+  └─────────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─────────────────────────────────────────────────────────┐
+  │   QUICK REFERENCE CHEAT SHEET  🗂️                      │
+  └─────────────────────────────────────────────────────────┘
+
+  DEFINE INTERFACE:     type MyIface interface { DoThing() }
+  IMPLEMENT (auto):     func (s *MyStruct) DoThing() { ... }
+  USE AS PARAM:         func Process(m MyIface) { m.DoThing() }
+  EMPTY INTERFACE:      func f(v interface{}) / func f(v any)
+  TYPE ASSERTION:       val, ok := iface.(ConcreteType)
+  TYPE SWITCH:          switch v := i.(type) { case int: ... }
+  COMPOSE:              type RW interface { Reader; Writer }
+  COMPILE CHECK:        var _ MyIface = (*MyStruct)(nil)
+  UPGRADE PATTERN:      if ext, ok := base.(ExtendedIface); ok
+  GENERIC CONSTRAINT:   func F[T MyIface](v T) { v.DoThing() }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
