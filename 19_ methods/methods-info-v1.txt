@@ -1,0 +1,365 @@
+==========================================================
+# 🚀 Go Lang INTERFACE 
+==========================================================
+
+---
+
+# 📌 1. WHAT ARE METHODS IN GO?
+
+👉 A **method** is a function with a **receiver** (special argument before function name).
+
+### Syntax:
+
+```
+func (receiver Type) MethodName(params) returnType {
+    // logic
+}
+```
+
+---
+
+# 🧠 2. BASIC EXAMPLE
+
+```
+package main
+
+import "fmt"
+
+type User struct {
+	name string
+	age  int
+}
+
+// Method
+func (u User) Greet() {
+	fmt.Println("Hello,", u.name)
+}
+
+func main() {
+	u := User{name: "Aditya", age: 25}
+	u.Greet()
+}
+```
+
+✅ Output:
+
+```
+Hello, Aditya
+```
+
+---
+
+# ⚡ 3. VALUE RECEIVER vs POINTER RECEIVER
+
+## 🔹 VALUE RECEIVER (copy)
+
+```
+func (u User) UpdateName(newName string) {
+	u.name = newName
+}
+```
+
+👉 Does NOT modify original struct
+
+---
+
+## 🔹 POINTER RECEIVER (reference)
+
+```
+func (u *User) UpdateName(newName string) {
+	u.name = newName
+}
+```
+
+👉 Modifies original struct
+
+---
+
+## 🧪 Example
+
+```
+func main() {
+	u := User{name: "Aditya"}
+
+	u.UpdateName("Rahul")
+	fmt.Println(u.name)
+}
+```
+
+✔ With value receiver → `Aditya`
+✔ With pointer receiver → `Rahul`
+
+---
+
+# 🧠 4. WHEN TO USE POINTER RECEIVERS?
+
+✔ When modifying struct
+✔ Large structs (avoid copy)
+✔ Consistency across methods
+✔ Required for interfaces (important!)
+
+---
+
+# 📦 5. METHODS ON DIFFERENT TYPES
+
+## 🔹 On Struct
+
+```
+type Rectangle struct {
+	width, height float64
+}
+
+func (r Rectangle) Area() float64 {
+	return r.width * r.height
+}
+```
+
+---
+
+## 🔹 On Custom Types
+
+```
+type MyInt int
+
+func (m MyInt) Double() int {
+	return int(m * 2)
+}
+```
+
+---
+
+# 🔗 6. METHOD CHAINING (Fluent API)
+
+```
+type Counter struct {
+	value int
+}
+
+func (c *Counter) Increment() *Counter {
+	c.value++
+	return c
+}
+
+func (c *Counter) Add(n int) *Counter {
+	c.value += n
+	return c
+}
+```
+
+### Usage:
+
+```
+c := &Counter{}
+c.Increment().Add(5).Increment()
+```
+
+---
+
+# 🧩 7. METHODS & INTERFACES (CRITICAL)
+
+👉 Methods define interface implementation implicitly
+
+```
+type Shape interface {
+	Area() float64
+}
+
+type Circle struct {
+	radius float64
+}
+
+func (c Circle) Area() float64 {
+	return 3.14 * c.radius * c.radius
+}
+```
+
+✔ Circle automatically implements Shape
+
+---
+
+# ⚠️ POINTER RECEIVER GOTCHA
+
+```
+type Printer interface {
+	Print()
+}
+
+type Data struct{}
+
+func (d *Data) Print() {}
+```
+
+❌ This fails:
+
+```
+var p Printer = Data{}
+```
+
+✔ Correct:
+
+```
+var p Printer = &Data{}
+```
+
+---
+
+# 🔍 8. METHOD SET RULE (IMPORTANT FOR INTERVIEWS)
+
+| Type | Methods Available       |
+| ---- | ----------------------- |
+| T    | value methods only      |
+| *T   | value + pointer methods |
+
+---
+
+# 🧪 9. REAL-WORLD EXAMPLE (SERVICE STYLE)
+
+```
+type Account struct {
+	balance float64
+}
+
+func (a *Account) Deposit(amount float64) {
+	a.balance += amount
+}
+
+func (a *Account) Withdraw(amount float64) bool {
+	if a.balance < amount {
+		return false
+	}
+	a.balance -= amount
+	return true
+}
+```
+
+---
+
+# 🔥 10. EMBEDDING + METHODS (OOP-LIKE)
+
+```
+type Animal struct{}
+
+func (a Animal) Speak() {
+	fmt.Println("Some sound")
+}
+
+type Dog struct {
+	Animal
+}
+
+func (d Dog) Speak() {
+	fmt.Println("Bark")
+}
+```
+
+---
+
+# 🧠 11. METHODS ARE NOT INHERITANCE
+
+👉 Go uses **composition**, not inheritance
+👉 Methods are tied to types, not classes
+
+---
+
+# ⚡ 12. FUNCTION vs METHOD
+
+| Feature           | Function | Method |
+| ----------------- | -------- | ------ |
+| Receiver          | ❌        | ✅      |
+| Bound to type     | ❌        | ✅      |
+| OOP-like behavior | ❌        | ✅      |
+
+---
+
+# 🧪 13. ADVANCED PATTERN — FUNCTION AS METHOD WRAPPER
+
+```
+type Logger struct{}
+
+func Log(msg string) {
+	fmt.Println(msg)
+}
+
+func (l Logger) Info(msg string) {
+	Log("[INFO] " + msg)
+}
+```
+
+---
+
+# 🚨 14. COMMON MISTAKES
+
+❌ Mixing pointer + value receivers randomly
+❌ Expecting value receiver to modify struct
+❌ Forgetting interface method set rules
+❌ Using large structs with value receiver
+
+---
+
+# 💡 15. BEST PRACTICES
+
+✔ Use pointer receivers for consistency
+✔ Keep methods small and focused
+✔ Prefer composition over inheritance
+✔ Use interfaces for abstraction
+✔ Group methods logically
+
+---
+
+# 🎯 INTERVIEW QUESTIONS
+
+### 🟢 Basic
+
+1. What is a method in Go?
+2. Difference between function and method?
+3. What is a receiver?
+
+---
+
+### 🟡 Mid-Level
+
+4. Value vs pointer receiver?
+5. What is method set?
+6. Can methods be defined on non-struct types?
+7. How does Go implement interfaces?
+
+---
+
+### 🔴 Advanced
+
+8. Why pointer receiver required for interfaces sometimes?
+9. Explain method set with examples
+10. Can you override methods in Go?
+11. How method chaining works internally?
+12. Performance impact of receivers?
+
+---
+
+# 🧪 INTERVIEW CODING TASK
+
+👉 Implement a Bank system:
+
+* Deposit
+* Withdraw
+* CheckBalance
+* Use pointer receiver
+* Add interface for Account operations
+
+---
+
+# 🧠 FINAL SUMMARY
+
+✔ Methods = Functions + Receiver
+✔ Pointer receiver = modifies data
+✔ Interfaces depend on method sets
+✔ Go uses composition, not inheritance
+✔ Method design = key to clean architecture
+
+---
+
+# 🚀 PRO TIP (Experienced Dev)
+
+👉 Always decide receiver type FIRST before writing methods
+👉 Inconsistent receivers = real-world bugs + interface issues
+
+---

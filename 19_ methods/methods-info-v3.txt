@@ -1,0 +1,1072 @@
+==========================================================
+# 🚀 Go Lang INTERFACE 
+==========================================================
+
+  📌 Topics Covered:
+     [01]  Method Basics & Syntax
+     [02]  Value Receivers vs Pointer Receivers
+     [03]  Methods on Non-Struct Types
+     [04]  Method Sets & Interface Satisfaction
+     [05]  Promoted Methods (Embedding)
+     [06]  Methods vs Functions
+     [07]  Nil Receivers
+     [08]  Method Values & Method Expressions
+     [09]  Chaining Methods (Fluent API)
+     [10]  Advanced Patterns: Constructor, Option, Builder
+     [11]  Java vs Go Method Comparison
+     [12]  Interview Questions & Answers
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [01]  METHOD BASICS & SYNTAX
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  A method is a function with a RECEIVER argument.
+  Receiver sits between "func" keyword and method name.
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  SYNTAX:                                                    │
+  │  func (receiver ReceiverType) MethodName(params) returnType │
+  └─────────────────────────────────────────────────────────────┘
+
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  EXAMPLE 01 — Basic Method Declaration                      ║
+  ╚══════════════════════════════════════════════════════════════╝
+
+  package main
+
+  import "fmt"
+
+  // ── Struct definition ──────────────────────────────────────
+  type Rectangle struct {
+      Width  float64
+      Height float64
+  }
+
+  // ── Value Receiver Method ──────────────────────────────────
+  // "r" is a COPY of Rectangle — original is NOT modified
+  func (r Rectangle) Area() float64 {
+      return r.Width * r.Height
+  }
+
+  func (r Rectangle) Perimeter() float64 {
+      return 2 * (r.Width + r.Height)
+  }
+
+  func (r Rectangle) String() string {
+      return fmt.Sprintf("Rectangle(%.1f x %.1f)", r.Width, r.Height)
+  }
+
+  func main() {
+      rect := Rectangle{Width: 10, Height: 5}
+      fmt.Println(rect.String())      // → Rectangle(10.0 x 5.0)
+      fmt.Println(rect.Area())        // → 50
+      fmt.Println(rect.Perimeter())   // → 30
+  }
+
+  ──────────────────────────────────────────────────────────────
+  📝 NOTE:
+     • The receiver name is typically 1-2 letters (r, rect, s, p)
+     • Use the FIRST LETTER of the type name by convention
+     • Receiver appears in EVERY method of the type (not like Java's "this")
+  ──────────────────────────────────────────────────────────────
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [02]  VALUE RECEIVERS vs POINTER RECEIVERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌──────────────────────┬──────────────────────────────────────┐
+  │  Value Receiver      │  Pointer Receiver                    │
+  │  func (r Rect) ...   │  func (r *Rect) ...                  │
+  ├──────────────────────┼──────────────────────────────────────┤
+  │  Works on a COPY     │  Works on the ORIGINAL               │
+  │  Cannot modify state │  CAN modify state                    │
+  │  Safe for concurrency│  Must be careful in concurrency      │
+  │  Small structs OK    │  Large structs (avoid copying)       │
+  │  Immutable by nature │  Use when mutation is needed         │
+  └──────────────────────┴──────────────────────────────────────┘
+
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  EXAMPLE 02 — Value vs Pointer Receiver Difference          ║
+  ╚══════════════════════════════════════════════════════════════╝
+
+  type Counter struct {
+      count int
+  }
+
+  // ── Value Receiver: NO mutation ────────────────────────────
+  func (c Counter) IncrementValue() {
+      c.count++    // modifies the COPY — original unchanged!
+  }
+
+  // ── Pointer Receiver: MUTATES original ─────────────────────
+  func (c *Counter) IncrementPointer() {
+      c.count++    // modifies the ORIGINAL
+  }
+
+  func (c Counter) Value() int {
+      return c.count
+  }
+
+  func main() {
+      c := Counter{count: 0}
+
+      c.IncrementValue()          // no effect on c
+      fmt.Println(c.Value())      // → 0 (unchanged)
+
+      c.IncrementPointer()        // mutates c
+      fmt.Println(c.Value())      // → 1 (changed!)
+
+      // Go auto-dereferences — both work even on non-pointer variable
+      // Go translates: c.IncrementPointer()  →  (&c).IncrementPointer()
+  }
+
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  EXAMPLE 03 — Auto-dereferencing (Go's "magic")             ║
+  ╚══════════════════════════════════════════════════════════════╝
+
+  type Person struct {
+      Name string
+      Age  int
+  }
+
+  func (p *Person) Birthday() {
+      p.Age++
+  }
+
+  func main() {
+      // Case 1: variable — Go auto-takes address
+      p1 := Person{"Alice", 30}
+      p1.Birthday()              // Go calls (&p1).Birthday()
+      fmt.Println(p1.Age)        // → 31  ✓
+
+      // Case 2: pointer — works directly
+      p2 := &Person{"Bob", 25}
+      p2.Birthday()              // works directly
+      fmt.Println(p2.Age)        // → 26  ✓
+
+      // Case 3: non-addressable — COMPILE ERROR
+      // Person{"Charlie", 20}.Birthday()  // ❌ cannot take address of literal
+  }
+
+  ──────────────────────────────────────────────────────────────
+  🔑 RULE OF THUMB:
+     • If method READS only          → Value Receiver
+     • If method WRITES / MUTATES    → Pointer Receiver
+     • If type has a mutex/sync      → Always Pointer Receiver
+     • Be CONSISTENT within a type:
+       If ANY method uses *T, prefer *T for ALL methods
+  ──────────────────────────────────────────────────────────────
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [03]  METHODS ON NON-STRUCT TYPES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  In Go, you can define methods on ANY named type in the SAME package.
+  You CANNOT define methods on built-in types directly (use a type alias).
+
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  EXAMPLE 04 — Method on Named Primitive / Slice / Map Type  ║
+  ╚══════════════════════════════════════════════════════════════╝
+
+  package main
+
+  import (
+      "fmt"
+      "strings"
+  )
+
+  // ── Named type based on int ─────────────────────────────────
+  type Celsius float64
+  type Fahrenheit float64
+
+  func (c Celsius) ToFahrenheit() Fahrenheit {
+      return Fahrenheit(c*9/5 + 32)
+  }
+
+  func (f Fahrenheit) ToCelsius() Celsius {
+      return Celsius((f - 32) * 5 / 9)
+  }
+
+  // ── Named type based on string ──────────────────────────────
+  type Language string
+
+  func (l Language) IsValid() bool {
+      valid := []string{"Go", "Java", "Python", "Rust"}
+      for _, v := range valid {
+          if strings.EqualFold(string(l), v) {
+              return true
+          }
+      }
+      return false
+  }
+
+  func (l Language) Upper() Language {
+      return Language(strings.ToUpper(string(l)))
+  }
+
+  // ── Named type based on slice ───────────────────────────────
+  type IntSlice []int
+
+  func (s IntSlice) Sum() int {
+      total := 0
+      for _, v := range s {
+          total += v
+      }
+      return total
+  }
+
+  func (s IntSlice) Max() int {
+      if len(s) == 0 {
+          return 0
+      }
+      max := s[0]
+      for _, v := range s[1:] {
+          if v > max {
+              max = v
+          }
+      }
+      return max
+  }
+
+  func main() {
+      temp := Celsius(100)
+      fmt.Printf("%.1f°C = %.1f°F\n", temp, temp.ToFahrenheit()) // 100.0°C = 212.0°F
+
+      lang := Language("go")
+      fmt.Println(lang.IsValid())  // → true
+      fmt.Println(lang.Upper())    // → GO
+
+      nums := IntSlice{3, 1, 4, 1, 5, 9, 2, 6}
+      fmt.Println(nums.Sum())      // → 31
+      fmt.Println(nums.Max())      // → 9
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [04]  METHOD SETS & INTERFACE SATISFACTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  The METHOD SET of a type determines which interfaces it satisfies.
+
+  ┌──────────────────────┬──────────────────────────────────────┐
+  │  Type                │  Method Set                          │
+  ├──────────────────────┼──────────────────────────────────────┤
+  │  T   (value)         │  Methods with receiver T             │
+  │  *T  (pointer)       │  Methods with receiver T OR *T       │
+  └──────────────────────┴──────────────────────────────────────┘
+
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  EXAMPLE 05 — Interface Satisfaction with Method Sets       ║
+  ╚══════════════════════════════════════════════════════════════╝
+
+  type Animal interface {
+      Speak() string
+      Move()  string
+  }
+
+  type Dog struct {
+      Name string
+  }
+
+  // Value receiver — in method set of Dog AND *Dog
+  func (d Dog) Speak() string {
+      return fmt.Sprintf("%s says: Woof!", d.Name)
+  }
+
+  // Pointer receiver — ONLY in method set of *Dog
+  func (d *Dog) Move() string {
+      return fmt.Sprintf("%s runs!", d.Name)
+  }
+
+  func main() {
+      d := Dog{Name: "Rex"}
+
+      // ❌ Dog (value) does NOT satisfy Animal
+      //    because Move() has pointer receiver
+      // var a Animal = d    // COMPILE ERROR
+
+      // ✓ *Dog (pointer) satisfies Animal
+      //   *Dog has BOTH Speak() and Move()
+      var a Animal = &d       // ✓ works!
+      fmt.Println(a.Speak())  // → Rex says: Woof!
+      fmt.Println(a.Move())   // → Rex runs!
+  }
+
+  ──────────────────────────────────────────────────────────────
+  ⚠️  CRITICAL RULE:
+     If a type has even ONE method with a pointer receiver,
+     you must use *T to satisfy the interface — T alone won't work.
+  ──────────────────────────────────────────────────────────────
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [05]  PROMOTED METHODS (EMBEDDING)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  When you EMBED a type, its methods are PROMOTED to the outer type.
+  This is Go's way of achieving reuse — NOT inheritance.
+
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  EXAMPLE 06 — Method Promotion via Embedding                ║
+  ╚══════════════════════════════════════════════════════════════╝
+
+  type Engine struct {
+      Horsepower int
+      IsRunning  bool
+  }
+
+  func (e *Engine) Start() {
+      e.IsRunning = true
+      fmt.Printf("Engine started (%d HP)\n", e.Horsepower)
+  }
+
+  func (e *Engine) Stop() {
+      e.IsRunning = false
+      fmt.Println("Engine stopped")
+  }
+
+  func (e Engine) Status() string {
+      if e.IsRunning {
+          return "Running"
+      }
+      return "Stopped"
+  }
+
+  // ── Car embeds Engine ───────────────────────────────────────
+  type Car struct {
+      Engine          // embedded (anonymous field) — methods PROMOTED
+      Brand  string
+      Model  string
+  }
+
+  // Car can OVERRIDE embedded method
+  func (c *Car) Start() {
+      fmt.Printf("Car %s %s is starting...\n", c.Brand, c.Model)
+      c.Engine.Start()    // call the embedded type's method explicitly
+  }
+
+  func main() {
+      car := Car{
+          Engine: Engine{Horsepower: 200},
+          Brand:  "Toyota",
+          Model:  "Supra",
+      }
+
+      car.Start()             // calls Car.Start() (overridden)
+      fmt.Println(car.Status())   // calls Engine.Status() (promoted)
+      car.Stop()              // calls Engine.Stop() (promoted)
+
+      // Access embedded field directly
+      fmt.Println(car.Engine.IsRunning)  // false
+      fmt.Println(car.Horsepower)        // 200 (promoted field access)
+  }
+
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  EXAMPLE 07 — Embedding vs Inheritance (Java Comparison)    ║
+  ╚══════════════════════════════════════════════════════════════╝
+
+  // Java way (INHERITANCE):
+  // class Car extends Engine { ... }        // IS-A relationship
+
+  // Go way (EMBEDDING = COMPOSITION):
+  // Car has an Engine field (anonymous)     // HAS-A relationship
+  // Methods promoted, but Car is NOT Engine
+
+  type Logger struct{}
+
+  func (l Logger) Log(msg string) {
+      fmt.Printf("[LOG] %s\n", msg)
+  }
+
+  type Service struct {
+      Logger           // embed Logger — gets Log() for free
+      Name   string
+  }
+
+  func (s *Service) Run() {
+      s.Log(fmt.Sprintf("Starting service: %s", s.Name))  // use promoted Log()
+  }
+
+  func main() {
+      svc := Service{Name: "PaymentService"}
+      svc.Run()           // → [LOG] Starting service: PaymentService
+      svc.Log("done")     // → [LOG] done
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [06]  METHODS vs FUNCTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌────────────────────────┬────────────────────────────────────┐
+  │  Function              │  Method                            │
+  ├────────────────────────┼────────────────────────────────────┤
+  │  Standalone            │  Attached to a type (receiver)     │
+  │  func Add(a, b int)    │  func (c Calc) Add(a, b int)       │
+  │  Called: Add(1, 2)     │  Called: c.Add(1, 2)               │
+  │  Not in interface      │  Defines interface contract        │
+  │  No implicit context   │  Has implicit receiver (state)     │
+  └────────────────────────┴────────────────────────────────────┘
+
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  EXAMPLE 08 — Function vs Method                            ║
+  ╚══════════════════════════════════════════════════════════════╝
+
+  type Stack[T any] struct {
+      items []T
+  }
+
+  // Method: Push belongs to Stack
+  func (s *Stack[T]) Push(item T) {
+      s.items = append(s.items, item)
+  }
+
+  func (s *Stack[T]) Pop() (T, bool) {
+      var zero T
+      if len(s.items) == 0 {
+          return zero, false
+      }
+      n := len(s.items) - 1
+      item := s.items[n]
+      s.items = s.items[:n]
+      return item, true
+  }
+
+  func (s Stack[T]) Len() int {
+      return len(s.items)
+  }
+
+  // Function: standalone utility
+  func NewStack[T any]() *Stack[T] {
+      return &Stack[T]{}
+  }
+
+  func main() {
+      s := NewStack[int]()
+      s.Push(10)
+      s.Push(20)
+      s.Push(30)
+
+      fmt.Println(s.Len())     // → 3
+      val, ok := s.Pop()
+      fmt.Println(val, ok)     // → 30 true
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [07]  NIL RECEIVERS — ADVANCED PATTERN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  In Go, you CAN call a method on a nil pointer — if the method handles it.
+  This is used for safe default behaviors (e.g., linked lists, trees).
+
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  EXAMPLE 09 — Nil Receiver Safe Method                      ║
+  ╚══════════════════════════════════════════════════════════════╝
+
+  type Node struct {
+      Value int
+      Next  *Node
+  }
+
+  // Safe even when n is nil — handles gracefully
+  func (n *Node) String() string {
+      if n == nil {
+          return "nil"
+      }
+      return fmt.Sprintf("%d -> %s", n.Value, n.Next.String())
+  }
+
+  func (n *Node) Len() int {
+      if n == nil {
+          return 0
+      }
+      return 1 + n.Next.Len()
+  }
+
+  func main() {
+      // Build: 1 -> 2 -> 3 -> nil
+      list := &Node{1, &Node{2, &Node{3, nil}}}
+
+      fmt.Println(list.String())  // → 1 -> 2 -> 3 -> nil
+      fmt.Println(list.Len())     // → 3
+
+      var empty *Node
+      fmt.Println(empty.String()) // → nil (no panic!)
+      fmt.Println(empty.Len())    // → 0   (no panic!)
+  }
+
+  ──────────────────────────────────────────────────────────────
+  ⚠️  CAUTION:
+     Calling methods on a nil INTERFACE panics — it's different
+     from calling on a nil *T (concrete pointer).
+
+     var n *Node = nil
+     n.String()       // ✓ OK — method knows how to handle nil
+
+     var i fmt.Stringer = nil
+     i.String()       // ✗ PANIC — nil interface, no method dispatch
+  ──────────────────────────────────────────────────────────────
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [08]  METHOD VALUES & METHOD EXPRESSIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Go lets you store methods as first-class values:
+
+  ┌──────────────────────────┬────────────────────────────────────┐
+  │  Method Value            │  Method Expression                 │
+  │  bound to an instance    │  unbound — receiver is arg #1      │
+  │  v := obj.Method         │  v := Type.Method                  │
+  │  v()                     │  v(obj)                            │
+  └──────────────────────────┴────────────────────────────────────┘
+
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  EXAMPLE 10 — Method Values & Method Expressions            ║
+  ╚══════════════════════════════════════════════════════════════╝
+
+  type Greeter struct {
+      Name string
+  }
+
+  func (g Greeter) Hello() string {
+      return "Hello, " + g.Name + "!"
+  }
+
+  func (g Greeter) Greet(msg string) string {
+      return fmt.Sprintf("%s says: %s", g.Name, msg)
+  }
+
+  func main() {
+      g := Greeter{Name: "Alice"}
+
+      // ── METHOD VALUE (bound to g) ───────────────────────────
+      // Like a closure that captures g
+      hello := g.Hello          // type: func() string
+      fmt.Println(hello())      // → Hello, Alice!
+
+      greet := g.Greet          // type: func(string) string
+      fmt.Println(greet("Hi!")) // → Alice says: Hi!
+
+      // ── METHOD EXPRESSION (unbound) ─────────────────────────
+      // First argument becomes the receiver
+      helloExpr := Greeter.Hello      // type: func(Greeter) string
+      fmt.Println(helloExpr(g))       // → Hello, Alice!
+
+      greetExpr := Greeter.Greet      // type: func(Greeter, string) string
+      fmt.Println(greetExpr(g, "Yo")) // → Alice says: Yo
+
+      // ── Practical Use: passing method as callback ───────────
+      names := []string{"Alice", "Bob", "Charlie"}
+      greeters := make([]func() string, len(names))
+      for i, name := range names {
+          g := Greeter{Name: name}
+          greeters[i] = g.Hello    // store bound method
+      }
+      for _, fn := range greeters {
+          fmt.Println(fn())
+          // → Hello, Alice!
+          // → Hello, Bob!
+          // → Hello, Charlie!
+      }
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [09]  METHOD CHAINING (FLUENT API / BUILDER PATTERN)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Return *T from methods to enable chaining.
+  Common in query builders, HTTP clients, config builders.
+
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  EXAMPLE 11 — Query Builder with Method Chaining            ║
+  ╚══════════════════════════════════════════════════════════════╝
+
+  type QueryBuilder struct {
+      table      string
+      conditions []string
+      orderBy    string
+      limit      int
+  }
+
+  func NewQuery(table string) *QueryBuilder {
+      return &QueryBuilder{table: table, limit: -1}
+  }
+
+  func (q *QueryBuilder) Where(condition string) *QueryBuilder {
+      q.conditions = append(q.conditions, condition)
+      return q    // return *QueryBuilder to allow chaining
+  }
+
+  func (q *QueryBuilder) OrderBy(field string) *QueryBuilder {
+      q.orderBy = field
+      return q
+  }
+
+  func (q *QueryBuilder) Limit(n int) *QueryBuilder {
+      q.limit = n
+      return q
+  }
+
+  func (q *QueryBuilder) Build() string {
+      query := fmt.Sprintf("SELECT * FROM %s", q.table)
+      if len(q.conditions) > 0 {
+          query += " WHERE " + strings.Join(q.conditions, " AND ")
+      }
+      if q.orderBy != "" {
+          query += " ORDER BY " + q.orderBy
+      }
+      if q.limit > 0 {
+          query += fmt.Sprintf(" LIMIT %d", q.limit)
+      }
+      return query
+  }
+
+  func main() {
+      // Fluent chaining!
+      sql := NewQuery("users").
+          Where("age > 18").
+          Where("active = true").
+          OrderBy("created_at DESC").
+          Limit(10).
+          Build()
+
+      fmt.Println(sql)
+      // → SELECT * FROM users WHERE age > 18 AND active = true
+      //   ORDER BY created_at DESC LIMIT 10
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [10]  ADVANCED PATTERNS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  EXAMPLE 12 — Functional Options Pattern (Rob Pike style)   ║
+  ╚══════════════════════════════════════════════════════════════╝
+
+  // Used in real-world Go libraries (grpc, zap, etc.)
+
+  type Server struct {
+      host    string
+      port    int
+      timeout int
+      maxConn int
+  }
+
+  // Option is a function that configures Server
+  type Option func(*Server)
+
+  func WithHost(host string) Option {
+      return func(s *Server) {
+          s.host = host
+      }
+  }
+
+  func WithPort(port int) Option {
+      return func(s *Server) {
+          s.port = port
+      }
+  }
+
+  func WithTimeout(t int) Option {
+      return func(s *Server) {
+          s.timeout = t
+      }
+  }
+
+  func WithMaxConn(n int) Option {
+      return func(s *Server) {
+          s.maxConn = n
+      }
+  }
+
+  // Constructor with variadic options
+  func NewServer(opts ...Option) *Server {
+      // sensible defaults
+      s := &Server{
+          host:    "localhost",
+          port:    8080,
+          timeout: 30,
+          maxConn: 100,
+      }
+      for _, opt := range opts {
+          opt(s)    // apply each option
+      }
+      return s
+  }
+
+  func (s *Server) Address() string {
+      return fmt.Sprintf("%s:%d", s.host, s.port)
+  }
+
+  func main() {
+      // Minimal — uses defaults
+      s1 := NewServer()
+      fmt.Println(s1.Address())  // → localhost:8080
+
+      // Custom config — only specify what you need
+      s2 := NewServer(
+          WithHost("0.0.0.0"),
+          WithPort(9090),
+          WithMaxConn(500),
+      )
+      fmt.Println(s2.Address())  // → 0.0.0.0:9090
+  }
+
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  EXAMPLE 13 — Error Handling Methods (errors as values)     ║
+  ╚══════════════════════════════════════════════════════════════╝
+
+  type ValidationError struct {
+      Field   string
+      Message string
+  }
+
+  // Implement the error interface (has Error() string method)
+  func (e *ValidationError) Error() string {
+      return fmt.Sprintf("validation failed for '%s': %s", e.Field, e.Message)
+  }
+
+  type UserInput struct {
+      Name  string
+      Email string
+      Age   int
+  }
+
+  func (u UserInput) Validate() error {
+      if u.Name == "" {
+          return &ValidationError{Field: "name", Message: "cannot be empty"}
+      }
+      if !strings.Contains(u.Email, "@") {
+          return &ValidationError{Field: "email", Message: "invalid format"}
+      }
+      if u.Age < 0 || u.Age > 150 {
+          return &ValidationError{Field: "age", Message: "must be between 0 and 150"}
+      }
+      return nil
+  }
+
+  func main() {
+      u := UserInput{Name: "Alice", Email: "not-an-email", Age: 25}
+      if err := u.Validate(); err != nil {
+          fmt.Println(err)
+          // → validation failed for 'email': invalid format
+
+          // Type assert to access specific fields
+          if ve, ok := err.(*ValidationError); ok {
+              fmt.Printf("Field: %s\n", ve.Field)
+          }
+      }
+  }
+
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  EXAMPLE 14 — Methods with sync.Mutex (Thread-Safe Type)    ║
+  ╚══════════════════════════════════════════════════════════════╝
+
+  import "sync"
+
+  type SafeMap struct {
+      mu   sync.RWMutex
+      data map[string]int
+  }
+
+  func NewSafeMap() *SafeMap {
+      return &SafeMap{data: make(map[string]int)}
+  }
+
+  func (m *SafeMap) Set(key string, value int) {
+      m.mu.Lock()              // write lock
+      defer m.mu.Unlock()
+      m.data[key] = value
+  }
+
+  func (m *SafeMap) Get(key string) (int, bool) {
+      m.mu.RLock()             // read lock (concurrent reads OK)
+      defer m.mu.RUnlock()
+      val, ok := m.data[key]
+      return val, ok
+  }
+
+  func (m *SafeMap) Delete(key string) {
+      m.mu.Lock()
+      defer m.mu.Unlock()
+      delete(m.data, key)
+  }
+
+  // MUST use pointer receiver when embedding sync.Mutex
+  // Never copy a SafeMap — the mutex would be duplicated!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [11]  JAVA vs GO — METHOD QUICK COMPARISON
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌──────────────────────────────┬─────────────────────────────────────┐
+  │  Concept                     │  Java                    │  Go      │
+  ├──────────────────────────────┼──────────────────────────┼──────────┤
+  │  Method declaration          │  Inside class            │  Outside │
+  │                              │                          │  struct  │
+  ├──────────────────────────────┼──────────────────────────┼──────────┤
+  │  Implicit "this"             │  Yes (this)              │  No (use │
+  │                              │                          │  named   │
+  │                              │                          │  recv.)  │
+  ├──────────────────────────────┼──────────────────────────┼──────────┤
+  │  Modify state by default     │  Yes (reference type)    │  No for  │
+  │                              │                          │  value   │
+  │                              │                          │  recv.   │
+  ├──────────────────────────────┼──────────────────────────┼──────────┤
+  │  Polymorphism mechanism      │  Inheritance + Override  │  Interface│
+  │                              │                          │  + Embed  │
+  ├──────────────────────────────┼──────────────────────────┼──────────┤
+  │  Interface binding           │  Explicit (implements)   │  Implicit│
+  │                              │                          │ (duck    │
+  │                              │                          │  typing) │
+  ├──────────────────────────────┼──────────────────────────┼──────────┤
+  │  Method on primitive type    │  No (use Integer etc.)   │  Yes via │
+  │                              │                          │  type    │
+  │                              │                          │  alias   │
+  ├──────────────────────────────┼──────────────────────────┼──────────┤
+  │  Method as first-class value │  Method references       │  Method  │
+  │                              │  (Java 8+, ::)           │  values  │
+  ├──────────────────────────────┼──────────────────────────┼──────────┤
+  │  toString() equivalent       │  Override toString()     │  impl.   │
+  │                              │                          │  String()│
+  │                              │                          │  string  │
+  └──────────────────────────────┴──────────────────────────┴──────────┘
+
+  ── Java toString() ──────────────────────────────────────────
+  class Point {
+      int x, y;
+      @Override public String toString() {
+          return "Point(" + x + ", " + y + ")";
+      }
+  }
+
+  ── Go String() method ───────────────────────────────────────
+  type Point struct{ X, Y int }
+
+  func (p Point) String() string {
+      return fmt.Sprintf("Point(%d, %d)", p.X, p.Y)
+  }
+  // Implementing fmt.Stringer interface — auto-used by fmt.Println
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [12]  ★ INTERVIEW QUESTIONS & ANSWERS ★
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  LEVEL: MEDIOR  (2-4 years experience)                      ║
+  ╚══════════════════════════════════════════════════════════════╝
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Q1. What is a method in Go? How is it different from       │
+  │      a function?                                            │
+  └─────────────────────────────────────────────────────────────┘
+  A: A method is a function with a receiver — a special argument that
+     binds the function to a type. Declared as:
+         func (r ReceiverType) MethodName(args) returnType
+     A function is standalone (no receiver). Methods enable types to
+     have behavior and can satisfy interfaces; functions cannot.
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Q2. When should you use a pointer receiver vs a value      │
+  │      receiver?                                              │
+  └─────────────────────────────────────────────────────────────┘
+  A: Use pointer receiver (*T) when:
+     • The method needs to MODIFY the struct's fields
+     • The struct is large and copying is expensive
+     • The type contains a sync.Mutex or similar (never copy)
+
+     Use value receiver (T) when:
+     • The method only READS data
+     • The type is a small struct or a primitive type alias
+     • You want immutability guarantees
+
+     RULE: Be consistent — if any method on a type uses *T,
+     prefer *T for all methods on that type.
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Q3. What is Go's method set? Why does it matter?           │
+  └─────────────────────────────────────────────────────────────┘
+  A: The method set of a type T includes only value receiver methods.
+     The method set of *T includes BOTH value and pointer receiver methods.
+
+     It matters for interface satisfaction:
+     • T can satisfy an interface only if the interface uses value-receiver methods
+     • *T can satisfy an interface with pointer-receiver methods
+     If you try to use a T where a *T is needed for an interface, you get a
+     compile-time error: "T does not implement interface (method has pointer receiver)"
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Q4. Can you define methods on non-struct types in Go?      │
+  └─────────────────────────────────────────────────────────────┘
+  A: Yes! You can define methods on any NAMED TYPE defined in the same package.
+     Example:
+         type Celsius float64
+         func (c Celsius) ToFahrenheit() Fahrenheit { return Fahrenheit(c*9/5+32) }
+
+     You CANNOT define methods on:
+     • Built-in types directly (int, string) — use a type alias
+     • Pointer types like *int
+     • Types from other packages
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Q5. What is method promotion in Go embedding?              │
+  └─────────────────────────────────────────────────────────────┘
+  A: When you embed a type (anonymous field) in a struct, all the embedded
+     type's exported methods get "promoted" to the outer struct. They can
+     be called directly on the outer struct.
+
+         type Logger struct{}
+         func (l Logger) Log(msg string) { ... }
+
+         type Service struct { Logger; Name string }
+         svc := Service{}
+         svc.Log("hello")  // calls Logger.Log via promotion
+
+     This is Go's composition-over-inheritance. It is NOT inheritance —
+     Service IS NOT a Logger, it just has one.
+
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  LEVEL: EXPERIENCED  (5+ years / senior / staff)            ║
+  ╚══════════════════════════════════════════════════════════════╝
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Q6. What happens when you call a method on a nil pointer?  │
+  │      When is it safe?                                       │
+  └─────────────────────────────────────────────────────────────┘
+  A: Calling a method on a nil *T pointer is valid if the method checks
+     for nil before dereferencing. This is intentional in patterns like
+     linked lists and trees:
+
+         func (n *Node) Len() int {
+             if n == nil { return 0 }
+             return 1 + n.Next.Len()
+         }
+
+     This is different from a nil interface: calling methods on a nil
+     interface panics because there's no type information to dispatch to.
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Q7. What is the difference between a method value and a    │
+  │      method expression?                                     │
+  └─────────────────────────────────────────────────────────────┘
+  A: Method Value: bound to a specific receiver instance.
+         g := Greeter{"Alice"}
+         hv := g.Hello         // type: func() string — bound to g
+         hv()                  // no need to pass receiver
+
+     Method Expression: unbound; the receiver becomes the first arg.
+         he := Greeter.Hello   // type: func(Greeter) string
+         he(g)                 // pass receiver explicitly
+
+     Method values are useful as callbacks or when adapting a method to
+     a func type expected by a higher-order function.
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Q8. Explain the Functional Options pattern. Where is it    │
+  │      used in production Go code?                            │
+  └─────────────────────────────────────────────────────────────┘
+  A: The Functional Options pattern uses a variadic slice of functions
+     (type Option func(*T)) passed to a constructor. Each option closes
+     over specific configuration values and applies them to the struct.
+
+     Benefits:
+     • Backward-compatible: add new options without breaking callers
+     • Named, self-documenting (WithTimeout(30) reads better)
+     • Defaults are explicit in constructor
+     • Avoids overloaded constructors (Java problem)
+
+     Used in production by: grpc-go, uber/zap, go.mongodb.org/mongo-driver,
+     aws-sdk-go-v2, etc.
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Q9. Why should you NEVER copy a struct with sync.Mutex     │
+  │      and how do methods protect against this?               │
+  └─────────────────────────────────────────────────────────────┘
+  A: Copying a sync.Mutex copies its internal state (locked/unlocked counter).
+     If you copy a locked mutex, the copy starts as "locked" with no goroutine
+     to unlock it — causing a deadlock.
+
+     Protection strategies:
+     1. Always use pointer receivers on types containing Mutex:
+            func (m *SafeMap) Set(...) — never func (m SafeMap) Set(...)
+     2. Never return such structs by value from functions
+     3. Run: go vet ./...  (detects mutex copies at compile time via copylocks)
+     4. Embed as sync.Mutex (not *sync.Mutex) to prevent accidental copy
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Q10. How does Go's implicit interface satisfaction via      │
+  │       methods enable better testability?                    │
+  └─────────────────────────────────────────────────────────────┘
+  A: In Go, a type satisfies an interface simply by having the right methods
+     — no explicit "implements" declaration. This means:
+
+     • You can define a small interface for exactly what your function needs:
+           type Reader interface { Read([]byte) (int, error) }
+     • Any type with that method satisfies it — including test mocks
+     • You don't need to modify the original type or its package
+
+     This enables effortless dependency injection and mocking in tests:
+         type DB interface { FindUser(id int) (*User, error) }
+         type MockDB struct{}
+         func (m MockDB) FindUser(id int) (*User, error) { return &User{"test"}, nil }
+
+     Compare to Java: you must declare "implements DB" on every class.
+     Go's implicit satisfaction means third-party types can satisfy your
+     local interfaces without any coupling.
+
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  BONUS: Common Gotchas & Traps                              ║
+  ╚══════════════════════════════════════════════════════════════╝
+
+  ✗  TRAP 1: Inconsistent receivers on the same type
+     → Some value, some pointer receivers = confusing method set
+     → Fix: use pointer receivers for all if any is pointer
+
+  ✗  TRAP 2: Expecting a value receiver method to modify state
+     type S struct{ x int }
+     func (s S) SetX(v int) { s.x = v }  // silently does nothing!
+
+  ✗  TRAP 3: Calling pointer method on non-addressable value
+     type T struct{ n int }
+     func (t *T) Inc() { t.n++ }
+     T{}.Inc()       // ❌ COMPILE ERROR — literal is not addressable
+
+  ✗  TRAP 4: Embedding pointer vs value
+     type A struct{ *B }   // B's pointer receiver methods are promoted
+     type A struct{ B }    // B's pointer receiver methods are NOT promoted
+                           //   if A is not a pointer
+
+  ✗  TRAP 5: Range loop variable capture with method values
+     greeters := make([]func() string, 3)
+     names := []string{"Alice", "Bob", "Charlie"}
+     for i, name := range names {
+         g := Greeter{name}       // create new var inside loop!
+         greeters[i] = g.Hello   // captures g (the new var, not the loop var)
+     }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  QUICK REFERENCE CARD
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Declare a method ........... func (r Receiver) Name(args) returnType
+  Pointer receiver ........... func (r *Receiver) Name(args) returnType
+  Auto-dereference ........... Go auto calls (&v).Method() for you
+  Nil receiver safe .......... Guard with: if r == nil { return ... }
+  Method value ............... fn := obj.Method  (bound, no args change)
+  Method expression .......... fn := Type.Method  (unbound, recv = arg1)
+  Chaining ................... Return *T from each method
+  Embedding / Promotion ...... type A struct { B }  → A gets B's methods
+  Satisfy interface .......... T has all interface methods (implicitly)
+  Functional options ......... type Option func(*T), pass to constructor
+
+  Built-in interfaces worth implementing:
+  ┌──────────────────────┬──────────────────────────────────────┐
+  │  Interface           │  Method Signature                    │
+  ├──────────────────────┼──────────────────────────────────────┤
+  │  fmt.Stringer        │  String() string                     │
+  │  error               │  Error() string                      │
+  │  io.Reader           │  Read(p []byte) (n int, err error)   │
+  │  io.Writer           │  Write(p []byte) (n int, err error)  │
+  │  io.Closer           │  Close() error                       │
+  │  sort.Interface      │  Len() int; Less(i,j int) bool;      │
+  │                      │  Swap(i,j int)                       │
+  │  json.Marshaler      │  MarshalJSON() ([]byte, error)       │
+  │  json.Unmarshaler    │  UnmarshalJSON([]byte) error         │
+  └──────────────────────┴──────────────────────────────────────┘
