@@ -1,0 +1,736 @@
+╔══════════════════════════════════════════════════════════════════════════════════════════╗
+║                                                                                          ║
+║    ██████╗  ██████╗     ██╗      █████╗ ███╗   ██╗ ██████╗                              ║
+║   ██╔════╝ ██╔═══██╗    ██║     ██╔══██╗████╗  ██║██╔════╝                              ║
+║   ██║  ███╗██║   ██║    ██║     ███████║██╔██╗ ██║██║  ███╗                             ║
+║   ██║   ██║██║   ██║    ██║     ██╔══██║██║╚██╗██║██║   ██║                             ║
+║   ╚██████╔╝╚██████╔╝    ███████╗██║  ██║██║ ╚████║╚██████╔╝                             ║
+║    ╚═════╝  ╚═════╝     ╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝                             ║
+║                                                                                          ║
+║              ✦  C O N S T A N T S   &   I O T A  ✦                                      ║
+║              ══════════════════════════════════════                                      ║
+║              Level : Medior  ➜  Experienced Developer                                   ║
+║              Lang  : Go (Golang)                                                         ║
+║              Java  : Side-by-side comparisons included                                  ║
+║                                                                                          ║
+╚══════════════════════════════════════════════════════════════════════════════════════════╝
+
+  ╭──────────────────────────────────────────────────────────────────────────────────────╮
+  │  📑  TABLE OF CONTENTS                                                               │
+  ├──────────────────────────────────────────────────────────────────────────────────────┤
+  │  [01]  What is `const` in Go?                                                        │
+  │  [02]  Typed vs Untyped Constants                                                    │
+  │  [03]  Constant Expressions                                                          │
+  │  [04]  Grouped const Declarations                                                    │
+  │  [05]  What is `iota`?                                                               │
+  │  [06]  iota Patterns — Basic to Advanced                                             │
+  │  [07]  iota with Bit Shifting (Flags / Bitmask)                                      │
+  │  [08]  iota with Methods (Stringer Pattern)                                          │
+  │  [09]  iota Skipping Values & Custom Offsets                                         │
+  │  [10]  Real-World Use Cases                                                          │
+  │  [11]  Java vs Go Constants — Comparison Table                                       │
+  │  [12]  Common Mistakes & Gotchas                                                     │
+  │  [13]  Interview Questions & Answers                                                 │
+  │  [14]  Quick Reference Card                                                          │
+  ╰──────────────────────────────────────────────────────────────────────────────────────╯
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [01]  WHAT IS `const` IN GO?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  • Constants are immutable values known at COMPILE TIME — not runtime.
+  • They can only hold: boolean, numeric (int/float/complex), or string values.
+  • Constants CANNOT hold: slices, maps, structs, pointers, functions.
+  • Constants are evaluated by the compiler, not the runtime → zero overhead.
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  EXAMPLE-01 » Basic const Declaration                          │
+  ├─────────────────────────────────────────────────────────────────┤
+  │                                                                 │
+  │  package main                                                   │
+  │                                                                 │
+  │  import "fmt"                                                   │
+  │                                                                 │
+  │  // Single constant                                             │
+  │  const Pi = 3.14159                                             │
+  │                                                                 │
+  │  // Typed constant — compiler enforces type strictly           │
+  │  const AppVersion string = "1.0.0"                             │
+  │                                                                 │
+  │  // Untyped constant — flexible, adapts to context             │
+  │  const MaxRetries = 5                                           │
+  │                                                                 │
+  │  func main() {                                                  │
+  │      fmt.Println(Pi)           // 3.14159                       │
+  │      fmt.Println(AppVersion)   // 1.0.0                         │
+  │      fmt.Println(MaxRetries)   // 5                             │
+  │  }                                                              │
+  │                                                                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ► Java equivalent:
+      public static final double PI = 3.14159;
+      public static final String APP_VERSION = "1.0.0";
+      public static final int MAX_RETRIES = 5;
+
+  ► Key difference: Go constants are NOT class members. They live at package level
+    or function level. No "static final" ceremony needed.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [02]  TYPED vs UNTYPED CONSTANTS  ◀ IMPORTANT CONCEPT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌────────────────────┬────────────────────────────────────────────────────────────────┐
+  │  TYPED             │  const timeout int = 30                                        │
+  │                    │  → Exact type is locked. Can only use where int is expected.   │
+  ├────────────────────┼────────────────────────────────────────────────────────────────┤
+  │  UNTYPED           │  const timeout = 30                                            │
+  │                    │  → Has a "default kind" (integer) but adapts to any numeric    │
+  │                    │    type that can represent it. More flexible.                  │
+  └────────────────────┴────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  EXAMPLE-02 » Typed vs Untyped in Action                       │
+  ├─────────────────────────────────────────────────────────────────┤
+  │                                                                 │
+  │  const UntypedMax = 1000       // untyped integer constant      │
+  │  const TypedMax int = 1000     // typed int constant            │
+  │                                                                 │
+  │  func main() {                                                  │
+  │      var a int32 = UntypedMax  // ✅ OK — untyped fits int32    │
+  │      var b int64 = UntypedMax  // ✅ OK — untyped fits int64    │
+  │                                                                 │
+  │      // var c int32 = TypedMax // ❌ ERROR: cannot use int      │
+  │      //                        //    as type int32              │
+  │                                                                 │
+  │      fmt.Println(a, b)                                          │
+  │  }                                                              │
+  │                                                                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ► Why this matters: untyped constants give you Java-style implicit widening
+    but only for constants (not variables). This is compile-time magic.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [03]  CONSTANT EXPRESSIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Constants can use expressions — as long as operands are also constants.
+  The expression is evaluated at compile time.
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  EXAMPLE-03 » Constant Arithmetic & String Concat               │
+  ├─────────────────────────────────────────────────────────────────┤
+  │                                                                 │
+  │  const (                                                        │
+  │      KB = 1024                                                  │
+  │      MB = KB * 1024     // 1_048_576 — computed at compile time │
+  │      GB = MB * 1024     // 1_073_741_824                        │
+  │  )                                                              │
+  │                                                                 │
+  │  const Greeting = "Hello, " + "Go!"  // string concat allowed   │
+  │                                                                 │
+  │  func main() {                                                  │
+  │      fmt.Printf("1 MB = %d bytes\n", MB)   // 1048576           │
+  │      fmt.Printf("1 GB = %d bytes\n", GB)   // 1073741824        │
+  │      fmt.Println(Greeting)                  // Hello, Go!       │
+  │  }                                                              │
+  │                                                                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ► NOT allowed in constants:
+      • Function calls (except built-ins: len, cap on arrays)
+      • Runtime values (os.Args, time.Now(), etc.)
+      • Variable references
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [04]  GROUPED const DECLARATIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Grouping is idiomatic Go. Clean, readable, and required for iota to work
+  as an auto-incrementing counter.
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  EXAMPLE-04 » Grouped const Block                               │
+  ├─────────────────────────────────────────────────────────────────┤
+  │                                                                 │
+  │  const (                                                        │
+  │      StatusOK       = 200                                       │
+  │      StatusNotFound = 404                                       │
+  │      StatusInternal = 500                                       │
+  │                                                                 │
+  │      AppName    = "MyService"                                   │
+  │      AppEnv     = "production"                                  │
+  │  )                                                              │
+  │                                                                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ► Rule: Each new `const (...)` block resets `iota` back to 0.
+    This is a critical iota gotcha — covered in [05].
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [05]  WHAT IS `iota`?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  iota is a PREDECLARED IDENTIFIER available only inside a const block.
+  It represents the index (position) of the current const spec, starting at 0.
+  It auto-increments by 1 for each new line in the block.
+
+  ╔════════════════════════════════╗
+  ║  iota = line index in const()  ║
+  ║  starts at 0, resets per block ║
+  ╚════════════════════════════════╝
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  EXAMPLE-05 » iota Basics                                       │
+  ├─────────────────────────────────────────────────────────────────┤
+  │                                                                 │
+  │  type Weekday int                                               │
+  │                                                                 │
+  │  const (                                                        │
+  │      Sunday    Weekday = iota  // iota = 0 → Sunday = 0         │
+  │      Monday                    // iota = 1 → Monday = 1         │
+  │      Tuesday                   // iota = 2 → Tuesday = 2        │
+  │      Wednesday                 // iota = 3 → Wednesday = 3      │
+  │      Thursday                  // iota = 4                      │
+  │      Friday                    // iota = 5                      │
+  │      Saturday                  // iota = 6                      │
+  │  )                                                              │
+  │                                                                 │
+  │  func main() {                                                  │
+  │      fmt.Println(Sunday, Monday, Saturday) // 0 1 6             │
+  │  }                                                              │
+  │                                                                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ► Java equivalent (enum with ordinal):
+      public enum Weekday { SUNDAY, MONDAY, ..., SATURDAY }
+      // SUNDAY.ordinal() == 0, MONDAY.ordinal() == 1, etc.
+
+  ► Go has NO enums. iota + custom type is the idiomatic replacement.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [06]  iota PATTERNS — BASIC TO ADVANCED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  EXAMPLE-06a » iota Starting from 1 (Skip Zero)               │
+  ├─────────────────────────────────────────────────────────────────┤
+  │                                                                 │
+  │  type Priority int                                              │
+  │                                                                 │
+  │  const (                                                        │
+  │      _        Priority = iota  // skip 0 using blank identifier │
+  │      Low                       // 1                             │
+  │      Medium                    // 2                             │
+  │      High                      // 3                             │
+  │      Critical                  // 4                             │
+  │  )                                                              │
+  │                                                                 │
+  │  // Useful when 0 means "unset" and you want 1-based enum      │
+  │                                                                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  EXAMPLE-06b » iota with Arithmetic Expressions               │
+  ├─────────────────────────────────────────────────────────────────┤
+  │                                                                 │
+  │  const (                                                        │
+  │      _  = iota              // 0 — skip                        │
+  │      KB = 1 << (10 * iota)  // 1 << 10 = 1024                  │
+  │      MB                     // 1 << 20 = 1_048_576             │
+  │      GB                     // 1 << 30 = 1_073_741_824         │
+  │      TB                     // 1 << 40 = 1_099_511_627_776     │
+  │  )                                                              │
+  │                                                                 │
+  │  // ✨ The EXPRESSION is repeated, iota value changes each line │
+  │  // iota on KB line = 1, MB line = 2, GB line = 3, TB line = 4 │
+  │                                                                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  EXAMPLE-06c » iota Multiplier Pattern                        │
+  ├─────────────────────────────────────────────────────────────────┤
+  │                                                                 │
+  │  const (                                                        │
+  │      Hundred  = (iota + 1) * 100   // (0+1)*100 = 100          │
+  │      TwoHund                        // (1+1)*100 = 200          │
+  │      ThreeHund                      // (2+1)*100 = 300          │
+  │  )                                                              │
+  │                                                                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  EXAMPLE-06d » Multiple iota in Same Line                     │
+  ├─────────────────────────────────────────────────────────────────┤
+  │                                                                 │
+  │  const (                                                        │
+  │      A, B = iota, iota * 10   // A=0, B=0                      │
+  │      C, D                     // C=1, D=10                     │
+  │      E, F                     // E=2, F=20                     │
+  │  )                                                              │
+  │                                                                 │
+  │  // Multiple consts on same line share the same iota value     │
+  │                                                                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [07]  iota WITH BIT SHIFTING — FLAGS / BITMASK PATTERN  ◀ SENIOR LEVEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  The most powerful real-world use of iota. Produces powers of 2 —
+  perfect for feature flags, permissions, option sets.
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  EXAMPLE-07 » File Permission Flags (Unix-style)              │
+  ├─────────────────────────────────────────────────────────────────┤
+  │                                                                 │
+  │  type Permission uint8                                          │
+  │                                                                 │
+  │  const (                                                        │
+  │      Read    Permission = 1 << iota  // 1 << 0 = 1  (0000 0001)│
+  │      Write                           // 1 << 1 = 2  (0000 0010)│
+  │      Execute                         // 1 << 2 = 4  (0000 0100)│
+  │  )                                                              │
+  │                                                                 │
+  │  func hasPermission(userPerms, perm Permission) bool {          │
+  │      return userPerms&perm != 0  // bitwise AND check          │
+  │  }                                                              │
+  │                                                                 │
+  │  func main() {                                                  │
+  │      // Grant read + execute                                    │
+  │      userPerms := Read | Execute   // 0001 | 0100 = 0101 = 5   │
+  │                                                                 │
+  │      fmt.Println(hasPermission(userPerms, Read))    // true     │
+  │      fmt.Println(hasPermission(userPerms, Write))   // false    │
+  │      fmt.Println(hasPermission(userPerms, Execute)) // true     │
+  │                                                                 │
+  │      // Revoke execute                                          │
+  │      userPerms &^= Execute  // AND NOT (bit clear)             │
+  │      fmt.Println(hasPermission(userPerms, Execute)) // false    │
+  │  }                                                              │
+  │                                                                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ► Java equivalent: EnumSet<Permission> or integer bitmask constants.
+    Go's approach is more lightweight — no enum overhead.
+
+  ► Bit operations recap:
+      a | b   →  set flag
+      a & b   →  check flag
+      a &^ b  →  clear flag (AND NOT)
+      a ^ b   →  toggle flag
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [08]  iota WITH METHODS — STRINGER PATTERN  ◀ EXPERIENCED LEVEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  In Java, enums have toString() built-in. In Go, implement the
+  fmt.Stringer interface to make your iota-based type human-readable.
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  EXAMPLE-08 » OrderStatus with String() method                │
+  ├─────────────────────────────────────────────────────────────────┤
+  │                                                                 │
+  │  package main                                                   │
+  │                                                                 │
+  │  import "fmt"                                                   │
+  │                                                                 │
+  │  type OrderStatus int                                           │
+  │                                                                 │
+  │  const (                                                        │
+  │      Pending    OrderStatus = iota // 0                        │
+  │      Processing                    // 1                        │
+  │      Shipped                       // 2                        │
+  │      Delivered                     // 3                        │
+  │      Cancelled                     // 4                        │
+  │  )                                                              │
+  │                                                                 │
+  │  // Implements fmt.Stringer interface                           │
+  │  func (s OrderStatus) String() string {                         │
+  │      return [...]string{                                        │
+  │          "Pending",                                             │
+  │          "Processing",                                          │
+  │          "Shipped",                                             │
+  │          "Delivered",                                           │
+  │          "Cancelled",                                           │
+  │      }[s]                                                       │
+  │  }                                                              │
+  │                                                                 │
+  │  func main() {                                                  │
+  │      status := Shipped                                          │
+  │      fmt.Println(status)           // Shipped (not "2")        │
+  │      fmt.Printf("Status: %v\n", status)  // Status: Shipped    │
+  │      fmt.Printf("Code:   %d\n", status)  // Code:   2          │
+  │  }                                                              │
+  │                                                                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ► Pro tip: Use `go generate` + `stringer` tool to auto-generate
+    String() methods for all iota-based types:
+        //go:generate stringer -type=OrderStatus
+    Then run:  go generate ./...
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [09]  iota SKIPPING VALUES & CUSTOM OFFSETS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  EXAMPLE-09a » Skipping values with blank identifier          │
+  ├─────────────────────────────────────────────────────────────────┤
+  │                                                                 │
+  │  type LogLevel int                                              │
+  │                                                                 │
+  │  const (                                                        │
+  │      _       LogLevel = iota  // 0 — intentionally unused      │
+  │      DEBUG                    // 1                             │
+  │      _                        // 2 — skip (reserved)          │
+  │      INFO                     // 3                             │
+  │      WARN                     // 4                             │
+  │      ERROR                    // 5                             │
+  │      FATAL                    // 6                             │
+  │  )                                                              │
+  │                                                                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  EXAMPLE-09b » Custom Offset Start                            │
+  ├─────────────────────────────────────────────────────────────────┤
+  │                                                                 │
+  │  // HTTP-like status codes starting from 100                   │
+  │  type StatusCode int                                            │
+  │                                                                 │
+  │  const (                                                        │
+  │      Continue   StatusCode = iota + 100  // 100                │
+  │      SwitchProto                          // 101                │
+  │      Processing2                          // 102                │
+  │  )                                                              │
+  │                                                                 │
+  │  // Start from 1000 with step of 10                            │
+  │  const (                                                        │
+  │      ErrBase      = 1000 + iota*10  // 1000                    │
+  │      ErrNetwork                     // 1010                    │
+  │      ErrTimeout                     // 1020                    │
+  │      ErrAuth                        // 1030                    │
+  │  )                                                              │
+  │                                                                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [10]  REAL-WORLD USE CASES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  EXAMPLE-10a » HTTP Method Enum                               │
+  ├─────────────────────────────────────────────────────────────────┤
+  │                                                                 │
+  │  type HTTPMethod int                                            │
+  │                                                                 │
+  │  const (                                                        │
+  │      GET    HTTPMethod = iota                                   │
+  │      POST                                                       │
+  │      PUT                                                        │
+  │      DELETE                                                     │
+  │      PATCH                                                      │
+  │  )                                                              │
+  │                                                                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  EXAMPLE-10b » Circuit Breaker States                         │
+  ├─────────────────────────────────────────────────────────────────┤
+  │                                                                 │
+  │  type CBState int                                               │
+  │                                                                 │
+  │  const (                                                        │
+  │      Closed    CBState = iota  // normal operation (0)         │
+  │      HalfOpen                  // testing recovery (1)         │
+  │      Open                      // blocking requests (2)        │
+  │  )                                                              │
+  │                                                                 │
+  │  func (s CBState) String() string {                             │
+  │      return [...]string{"Closed", "HalfOpen", "Open"}[s]       │
+  │  }                                                              │
+  │                                                                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────┐
+  │  EXAMPLE-10c » Feature Flags / Role Bitmask                   │
+  ├─────────────────────────────────────────────────────────────────┤
+  │                                                                 │
+  │  type Role uint                                                 │
+  │                                                                 │
+  │  const (                                                        │
+  │      RoleNone  Role = 0                                         │
+  │      RoleRead  Role = 1 << iota  // 1                          │
+  │      RoleWrite                   // 2                          │
+  │      RoleAdmin                   // 4                          │
+  │      RoleSuper                   // 8                          │
+  │  )                                                              │
+  │                                                                 │
+  │  func main() {                                                  │
+  │      // Assign Read + Admin roles                              │
+  │      userRole := RoleRead | RoleAdmin  // 1 | 4 = 5            │
+  │                                                                 │
+  │      if userRole&RoleAdmin != 0 {                               │
+  │          fmt.Println("User is admin")  // prints               │
+  │      }                                                          │
+  │      if userRole&RoleWrite != 0 {                               │
+  │          fmt.Println("User can write") // does NOT print       │
+  │      }                                                          │
+  │  }                                                              │
+  │                                                                 │
+  └─────────────────────────────────────────────────────────────────┘
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [11]  JAVA vs GO — CONSTANTS COMPARISON TABLE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ╔═══════════════════════════╦══════════════════════════════╦══════════════════════════════╗
+  ║  Feature                  ║  Java                        ║  Go                          ║
+  ╠═══════════════════════════╬══════════════════════════════╬══════════════════════════════╣
+  ║  Declare constant         ║  static final int X = 5;     ║  const X = 5                 ║
+  ╠═══════════════════════════╬══════════════════════════════╬══════════════════════════════╣
+  ║  Enum-like constants      ║  enum Color { RED, GREEN }   ║  type Color int              ║
+  ║                           ║                              ║  const (RED Color=iota...)   ║
+  ╠═══════════════════════════╬══════════════════════════════╬══════════════════════════════╣
+  ║  Auto-increment           ║  enum ordinal (implicit)     ║  iota (explicit)             ║
+  ╠═══════════════════════════╬══════════════════════════════╬══════════════════════════════╣
+  ║  toString / name          ║  Built-in: Color.RED.name()  ║  Manual String() method      ║
+  ║                           ║                              ║  or go generate stringer     ║
+  ╠═══════════════════════════╬══════════════════════════════╬══════════════════════════════╣
+  ║  Enum methods             ║  Yes (full class body)       ║  Yes (methods on type)       ║
+  ╠═══════════════════════════╬══════════════════════════════╬══════════════════════════════╣
+  ║  Type safety              ║  Strong (enum type)          ║  Moderate (underlying int)   ║
+  ╠═══════════════════════════╬══════════════════════════════╬══════════════════════════════╣
+  ║  Bitmask flags            ║  EnumSet<E>                  ║  uint + iota bit shift       ║
+  ╠═══════════════════════════╬══════════════════════════════╬══════════════════════════════╣
+  ║  Constant expression      ║  Yes (compile-time)          ║  Yes (compile-time)          ║
+  ╠═══════════════════════════╬══════════════════════════════╬══════════════════════════════╣
+  ║  Class-level scope        ║  Yes (static fields)         ║  Package-level only          ║
+  ╠═══════════════════════════╬══════════════════════════════╬══════════════════════════════╣
+  ║  Complex types as const   ║  Effectively final objects   ║  ❌ Only primitives/strings  ║
+  ╚═══════════════════════════╩══════════════════════════════╩══════════════════════════════╝
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [12]  COMMON MISTAKES & GOTCHAS  ⚠️
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌──────────────────────────────────────────────────────────────────────────────────────┐
+  │  ⚠️  GOTCHA #1 — iota resets to 0 in each new const() block                        │
+  │                                                                                      │
+  │  const (                                                                             │
+  │      A = iota  // 0                                                                  │
+  │      B         // 1                                                                  │
+  │  )                                                                                   │
+  │                                                                                      │
+  │  const (                                                                             │
+  │      C = iota  // 0  ← ⚠️ NOT 2! iota resets here                                  │
+  │      D         // 1                                                                  │
+  │  )                                                                                   │
+  └──────────────────────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────────────────────────────┐
+  │  ⚠️  GOTCHA #2 — Expression repeats, not value                                      │
+  │                                                                                      │
+  │  const (                                                                             │
+  │      A = iota * 2   // 0 * 2 = 0                                                    │
+  │      B              // 1 * 2 = 2  ← expression iota*2 is repeated with new iota    │
+  │      C              // 2 * 2 = 4                                                    │
+  │  )                                                                                   │
+  │  // The EXPRESSION (iota * 2) is what repeats, not the result                       │
+  └──────────────────────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────────────────────────────┐
+  │  ⚠️  GOTCHA #3 — iota counts ALL lines, including blank identifiers                 │
+  │                                                                                      │
+  │  const (                                                                             │
+  │      A = iota  // 0                                                                  │
+  │      _         // 1 — blank still increments iota!                                  │
+  │      B         // 2  ← not 1!                                                       │
+  │  )                                                                                   │
+  └──────────────────────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────────────────────────────┐
+  │  ⚠️  GOTCHA #4 — Can't use iota outside a const block                               │
+  │                                                                                      │
+  │  var x = iota   // ❌ COMPILE ERROR: undefined: iota                                │
+  │                                                                                      │
+  │  func foo() {                                                                        │
+  │      const y = iota  // ✅ single const inside func — iota = 0                      │
+  │  }                                                                                   │
+  └──────────────────────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────────────────────────────────────────────────────────────────────────────┐
+  │  ⚠️  GOTCHA #5 — Type safety is weaker than Java enums                              │
+  │                                                                                      │
+  │  type Color int                                                                      │
+  │  const Red Color = iota                                                              │
+  │                                                                                      │
+  │  var c Color = 999  // ✅ compiles! Go doesn't restrict int value range             │
+  │                     // In Java, Color.valueOf(999) would panic at runtime            │
+  │                     // Go has no built-in exhaustiveness check                      │
+  └──────────────────────────────────────────────────────────────────────────────────────┘
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [13]  INTERVIEW QUESTIONS & ANSWERS  🎯
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ╭──────────────────────────────────────────────────────────────────────────────────────╮
+  │  Q1.  What is the difference between typed and untyped constants in Go?             │
+  ╰──────────────────────────────────────────────────────────────────────────────────────╯
+  A:  An untyped constant (e.g. const X = 5) has a default kind but adapts to any
+      compatible type during assignment — it's flexible. A typed constant
+      (e.g. const X int = 5) is bound to a specific type and will cause a compile error
+      if you try to assign it to a variable of a different type, even a compatible
+      numeric one. Untyped constants allow implicit widening at compile time; typed
+      constants do not.
+
+  ╭──────────────────────────────────────────────────────────────────────────────────────╮
+  │  Q2.  What is iota and how does it work?                                            │
+  ╰──────────────────────────────────────────────────────────────────────────────────────╯
+  A:  `iota` is a predeclared identifier in Go that represents the index of the
+      current constant specification within a const block, starting at 0 and
+      incrementing by 1 for each new line. It is automatically reset to 0 at the
+      beginning of every new const() block. It is only usable inside const declarations.
+
+  ╭──────────────────────────────────────────────────────────────────────────────────────╮
+  │  Q3.  What value does iota have in a new const block?                               │
+  ╰──────────────────────────────────────────────────────────────────────────────────────╯
+  A:  iota is reset to 0 at the start of every new const() block, regardless of
+      what value it had in a previous block. Each block is independent.
+
+  ╭──────────────────────────────────────────────────────────────────────────────────────╮
+  │  Q4.  How would you skip iota value 0?                                              │
+  ╰──────────────────────────────────────────────────────────────────────────────────────╯
+  A:  Assign the first iota to the blank identifier `_`:
+          const (
+              _    = iota  // consumes 0, discards it
+              Low          // 1
+              Medium       // 2
+              High         // 3
+          )
+      This is useful when 0 represents an "uninitialized" or "unknown" state.
+
+  ╭──────────────────────────────────────────────────────────────────────────────────────╮
+  │  Q5.  How do you implement Go enums? How is it different from Java?                │
+  ╰──────────────────────────────────────────────────────────────────────────────────────╯
+  A:  Go has no `enum` keyword. The idiomatic pattern is:
+        1. Define a custom type based on int  (type Status int)
+        2. Use const + iota for values
+        3. Optionally implement String() for human-readable output
+      Java enums are full classes with built-in name(), ordinal(), values(),
+      and switch exhaustiveness. Go's approach is lighter but requires more manual work
+      (String() method, no switch exhaustiveness checks by default).
+
+  ╭──────────────────────────────────────────────────────────────────────────────────────╮
+  │  Q6.  What is the output of this code? (Tricky question)                           │
+  ╰──────────────────────────────────────────────────────────────────────────────────────╯
+      const (
+          x = iota + 1   // ?
+          y              // ?
+          z = iota * 3   // ?
+          w              // ?
+      )
+      fmt.Println(x, y, z, w)
+
+  A:  x = 0+1 = 1
+      y = 1+1 = 2   (expression "iota+1" repeated, iota=1)
+      z = 2*3 = 6   (NEW expression "iota*3", iota=2)
+      w = 3*3 = 9   (expression "iota*3" repeated, iota=3)
+      Output: 1 2 6 9
+
+  ╭──────────────────────────────────────────────────────────────────────────────────────╮
+  │  Q7.  When would you use iota with bit shifting? Give an example.                  │
+  ╰──────────────────────────────────────────────────────────────────────────────────────╯
+  A:  When modelling flags or permissions that can be combined (OR-ed) together.
+      Using 1 << iota generates powers of 2 (1, 2, 4, 8...) — each bit position
+      represents a distinct flag. You can combine them with | and test them with &.
+      Example: file permissions (Read=1, Write=2, Execute=4), user roles, feature flags.
+
+  ╭──────────────────────────────────────────────────────────────────────────────────────╮
+  │  Q8.  Can you use a function call in a const declaration?                          │
+  ╰──────────────────────────────────────────────────────────────────────────────────────╯
+  A:  No. Constants are evaluated at compile time, so only constant expressions are
+      allowed. Function calls return runtime values and are not allowed.
+      Exception: len() on array literals and a few other built-in compile-time ops.
+
+  ╭──────────────────────────────────────────────────────────────────────────────────────╮
+  │  Q9.  What tool can you use to auto-generate String() for iota types?              │
+  ╰──────────────────────────────────────────────────────────────────────────────────────╯
+  A:  The `stringer` tool from golang.org/x/tools/cmd/stringer.
+      Add a go:generate comment above your const block:
+          //go:generate stringer -type=MyType
+      Then run `go generate ./...` to auto-generate the String() method file.
+
+  ╭──────────────────────────────────────────────────────────────────────────────────────╮
+  │  Q10. Is Go's const type-safe like Java enums?                                     │
+  ╰──────────────────────────────────────────────────────────────────────────────────────╯
+  A:  Not fully. Go's iota-based constants use underlying numeric types, so the
+      compiler won't prevent assigning an arbitrary integer to a custom type. For
+      example, `var c Color = 999` compiles fine even if 999 is not a valid Color.
+      Java enums are sealed — you can't create invalid instances. In Go, you need
+      to enforce validity manually (e.g., range checks in constructors or methods).
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [14]  QUICK REFERENCE CARD  🃏
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ╔══════════════════════════════════╦════════════════════════════════════════════════════╗
+  ║  Pattern                         ║  Syntax                                            ║
+  ╠══════════════════════════════════╬════════════════════════════════════════════════════╣
+  ║  Basic constant                  ║  const X = 42                                     ║
+  ║  Typed constant                  ║  const X int = 42                                 ║
+  ║  Group constants                 ║  const ( A = 1; B = 2 )                           ║
+  ║  iota 0-based                    ║  const ( A = iota; B; C )  → 0,1,2                ║
+  ║  iota 1-based (skip 0)           ║  const ( _ = iota; A; B )  → 1,2                  ║
+  ║  iota with expression            ║  const ( A = iota+10 )     → 10,11,...            ║
+  ║  iota multiplier                 ║  const ( A = (iota+1)*100 )→ 100,200,...          ║
+  ║  iota bit shift (flags)          ║  const ( A = 1 << iota )   → 1,2,4,8,...          ║
+  ║  iota byte sizes                 ║  const ( _ = iota; KB = 1<<(10*iota) ) → 1024     ║
+  ║  iota offset start               ║  const ( A = iota + 100 )  → 100,101,...          ║
+  ║  iota error codes (step 10)      ║  const ( A = 1000+iota*10 )→ 1000,1010,...        ║
+  ║  iota skip middle values         ║  Use _ on lines to skip                           ║
+  ╚══════════════════════════════════╩═══════════════════════════════════════════════════╝
+
+  ┌──────────────────────────────────────────────────────────────────────────────────────┐
+  │  RULES CHEATSHEET                                                                    │
+  │                                                                                      │
+  │  ✅  Constants must be compile-time evaluable                                        │
+  │  ✅  Supported types: bool, int, float, complex, string                              │
+  │  ✅  iota starts at 0 in each new const() block                                      │
+  │  ✅  iota increments per line, not per assignment                                    │
+  │  ✅  The EXPRESSION repeats, the iota VALUE changes                                  │
+  │  ✅  Multiple constants on one line share the same iota value                        │
+  │  ❌  Cannot use runtime values in constants                                          │
+  │  ❌  Cannot use function calls (except compile-time builtins)                        │
+  │  ❌  Cannot declare slice, map, struct, pointer as const                             │
+  │  ❌  iota cannot be used outside const blocks                                        │
+  └──────────────────────────────────────────────────────────────────────────────────────┘
+
+
+╔══════════════════════════════════════════════════════════════════════════════════════════╗
+║                                                                                          ║
+║   ✦  End of Notes : Go Constants & iota                                                  ║
+║                                                                                          ║
+║   Cross-reference topics:                                                                ║
+║     → go_types_and_variables.txt     (type aliases, named types)                         ║
+║     → go_interfaces.txt              (fmt.Stringer → String() method)                    ║
+║     → go_functions.txt               (closures, variadic)                                ║
+║     → go_structs_methods.txt         (methods on custom types)                           ║
+║                                                                                          ║
+╚══════════════════════════════════════════════════════════════════════════════════════════╝

@@ -1,0 +1,258 @@
+============================================================
+# 🚀 Go Lang CONST & IOTA 
+============================================================
+========================================================
+1. CONSTANTS (const)
+========================================================
+
+► Definition:
+Constants are immutable values known at compile time.
+
+► Syntax:
+const name type = value
+
+► Example:
+--------------------------------------------------------
+const Pi float64 = 3.14159
+const AppName = "GoApp" // type inferred
+--------------------------------------------------------
+
+► Key Characteristics:
+✔ Immutable (cannot be changed)
+✔ Evaluated at compile time
+✔ Can be untyped OR typed
+✔ Cannot use := shorthand
+✔ Cannot assign runtime values
+
+--------------------------------------------------------
+❌ INVALID:
+var x = 10
+const y = x // ❌ runtime value not allowed
+--------------------------------------------------------
+
+========================================================
+2. UNTYPED CONSTANTS (IMPORTANT)
+========================================================
+
+Go has "untyped constants" → very powerful feature
+
+--------------------------------------------------------
+const x = 10        // untyped
+const y = 3.14      // untyped
+--------------------------------------------------------
+
+► Why useful?
+They adapt to context automatically:
+
+--------------------------------------------------------
+var i int = x       // OK
+var f float64 = x   // OK
+--------------------------------------------------------
+
+► Advanced Insight:
+Untyped constants have "arbitrary precision"
+→ no overflow until assigned
+
+--------------------------------------------------------
+const big = 1 << 100
+--------------------------------------------------------
+
+========================================================
+3. TYPED CONSTANTS
+========================================================
+
+--------------------------------------------------------
+const x int = 10
+--------------------------------------------------------
+
+► Behavior:
+✔ Strict type checking
+✔ Cannot assign to incompatible types
+
+--------------------------------------------------------
+var f float64 = x // ❌ error (typed constant)
+--------------------------------------------------------
+
+========================================================
+4. CONST GROUPS
+========================================================
+
+--------------------------------------------------------
+const (
+    A = 1
+    B = 2
+    C = 3
+)
+--------------------------------------------------------
+
+► Cleaner and widely used in production code
+
+========================================================
+5. IOTA (ENUMERATOR)
+========================================================
+
+► Definition:
+iota is a predeclared identifier used for auto-incrementing constants
+
+✔ Starts from 0
+✔ Resets in each const block
+✔ Increments by 1 per line
+
+--------------------------------------------------------
+const (
+    A = iota // 0
+    B        // 1
+    C        // 2
+)
+--------------------------------------------------------
+
+========================================================
+6. IOTA PATTERNS (IMPORTANT FOR INTERVIEWS)
+========================================================
+
+► Basic Enum:
+--------------------------------------------------------
+const (
+    Pending = iota
+    Approved
+    Rejected
+)
+--------------------------------------------------------
+
+► Skip Values:
+--------------------------------------------------------
+const (
+    A = iota // 0
+    _
+    C        // 2
+)
+--------------------------------------------------------
+
+► Custom Start:
+--------------------------------------------------------
+const (
+    A = iota + 1 // 1
+    B            // 2
+)
+--------------------------------------------------------
+
+► Step Values:
+--------------------------------------------------------
+const (
+    A = iota * 10 // 0
+    B             // 10
+    C             // 20
+)
+--------------------------------------------------------
+
+========================================================
+7. BITMASKING WITH IOTA (ADVANCED)
+========================================================
+
+Used heavily in system design / flags
+
+--------------------------------------------------------
+const (
+    Read = 1 << iota  // 1 (001)
+    Write             // 2 (010)
+    Execute           // 4 (100)
+)
+--------------------------------------------------------
+
+► Usage:
+--------------------------------------------------------
+perm := Read | Write
+
+if perm & Read != 0 {
+    fmt.Println("Read allowed")
+}
+--------------------------------------------------------
+
+========================================================
+8. IOTA WITH EXPRESSIONS
+========================================================
+
+--------------------------------------------------------
+const (
+    A = iota       // 0
+    B = iota * 2   // 2
+    C = iota * 3   // 6
+)
+--------------------------------------------------------
+
+========================================================
+9. REAL-WORLD USAGE PATTERNS
+========================================================
+
+✔ Enums (Status, Roles, States)
+✔ Bit flags (permissions, feature flags)
+✔ Protocol definitions
+✔ Internal DSL-like configs
+
+--------------------------------------------------------
+type Status int
+
+const (
+    Pending Status = iota
+    Running
+    Completed
+    Failed
+)
+--------------------------------------------------------
+
+========================================================
+10. BEST PRACTICES (SENIOR LEVEL)
+========================================================
+
+✔ Use typed constants for domain safety
+✔ Use iota for enums, NOT magic numbers
+✔ Group related constants
+✔ Use bitmask only when needed (avoid overuse)
+✔ Add String() methods for enums (fmt.Stringer)
+
+--------------------------------------------------------
+func (s Status) String() string {
+    switch s {
+    case Pending:
+        return "Pending"
+    case Running:
+        return "Running"
+    default:
+        return "Unknown"
+    }
+}
+--------------------------------------------------------
+
+========================================================
+11. COMMON PITFALLS
+========================================================
+
+❌ Assuming iota continues across blocks
+❌ Mixing typed & untyped carelessly
+❌ Overusing bitmasks when enums are enough
+❌ Expecting runtime evaluation
+
+========================================================
+12. INTERVIEW QUESTIONS
+========================================================
+
+1. What is the difference between const and var?
+2. What are untyped constants in Go?
+3. How does iota work internally?
+4. Can iota be used outside const block?
+5. How do you implement enums in Go?
+6. Explain bitmasking using iota.
+7. What happens when you skip a value in iota?
+8. Why Go does not have traditional enums?
+9. Difference between typed vs untyped constants?
+10. How would you make enums printable?
+
+========================================================
+13. MINI EXERCISE
+========================================================
+
+Q1: Create HTTP status constants using iota  
+Q2: Implement role-based access using bitmask  
+Q3: Create enum with custom start (100+)  
+
+========================================================

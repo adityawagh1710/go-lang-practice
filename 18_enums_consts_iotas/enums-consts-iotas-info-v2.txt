@@ -1,0 +1,64 @@
+============================================================
+# 🚀 Go Lang CONST & IOTA 
+============================================================
+
+╔════════════════════════════════════════════════════════════════════════════════════╗
+║  1. CONSTANTS IN GO – THE BASICS (Medior Level)                                    ║
+╚════════════════════════════════════════════════════════════════════════════════════╝
+
+Constants are immutable values known at compile time.
+• Declared with `const`
+• Can be untyped (inferred) or typed
+• Package-level or inside functions (but usually package-level)
+• Zero memory overhead in many cases (compiler inlines them)
+
+Key Rules:
+- Must be basic types (bool, string, numeric) or derived from them
+- Cannot be changed after declaration
+- Can be shadowed (but don't do it in prod)
+
+Simple Example:
+const (
+    MaxRetries = 5          // untyped int
+    Pi         = 3.14159    // untyped float
+    DebugMode  = true       // untyped bool
+    AppName    = "MyAwesomeAPI" // untyped string
+)
+
+Typed constant:
+const MaxUsers uint32 = 10000
+
+╔════════════════════════════════════════════════════════════════════════════════════╗
+║  2. IOTA – THE MAGIC AUTO-INCREMENTER (Medior → Senior)                           ║
+╚════════════════════════════════════════════════════════════════════════════════════╝
+
+`iota` is a predeclared identifier that:
+• Starts at 0 in every `const` block
+• Increments by 1 for each constant specification (line)
+• Is only valid inside `const` declarations
+• Resets to 0 when a new `const` block begins
+• Can be used in expressions (most powerful feature)
+
+Official Spec (for experienced devs):
+"Iota represents successive untyped integer constants. Its value is the index of the respective ConstSpec in that constant declaration, starting at zero."
+
+Key Advanced Behavior:
+- If you omit the expression on a line → previous expression is repeated (but with NEW iota value!)
+- Blank identifier `_` skips a value without assigning it
+- New const block = iota resets
+
+╔════════════════════════════════════════════════════════════════════════════════════╗
+║  3. BASIC EXAMPLES (Perfect for Medior Interviews)                                 ║
+╚════════════════════════════════════════════════════════════════════════════════════╝
+
+Example 1: Classic Enum-style (Days of Week)
+```go
+const (
+    Sunday = iota    // 0
+    Monday           // 1
+    Tuesday          // 2
+    Wednesday        // 3
+    Thursday         // 4
+    Friday           // 5
+    Saturday         // 6
+)
