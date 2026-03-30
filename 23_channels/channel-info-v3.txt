@@ -1,0 +1,1402 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 🚀 Go Lang CHANNELS
+════════════════════════════════════════════════════════════════════════════════════
+
+╔══════════════════════════════════════════════════════════════════╗
+║  📋  TABLE OF CONTENTS                                           ║
+╚══════════════════════════════════════════════════════════════════╝
+                        
+  ┌──────────────────────────────────────────────────────┐
+  │  [01]  What is a Channel?                            │
+  │  [02]  Channel Types & Declaration                   │
+  │  [03]  Buffered vs Unbuffered Channels               │
+  │  [04]  Directional Channels                          │
+  │  [05]  Channel Operations (Send / Receive / Close)   │
+  │  [06]  Range over Channels                           │
+  │  [07]  Select Statement                              │
+  │  [08]  Channel Patterns (Pipeline, Fan-Out, Fan-In)  │
+  │  [09]  Done Channel Pattern (Cancellation)           │
+  │  [10]  Channel vs Mutex — When to Use Which          │
+  │  [11]  Common Mistakes & Gotchas                     │
+  │  [12]  Java Comparison Notes                         │
+  │  [13]  Interview Q&A — Medior Level                  │
+  │  [14]  Interview Q&A — Experienced Level             │
+  └──────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════╗
+║  [01]  WHAT IS A CHANNEL?                                        ║
+╚══════════════════════════════════════════════════════════════════╝
+
+  A channel is a typed conduit through which goroutines communicate.
+  Channels implement CSP (Communicating Sequential Processes) — the
+  foundation of Go's concurrency model.
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Goroutine A ──► [ Channel ] ──► Goroutine B                │
+  │                                                             │
+  │  • Thread-safe by design (no explicit locks needed)         │
+  │  • First-class citizen in Go (can be passed as arguments)   │
+  │  • Zero value is nil (send/receive on nil blocks forever)   │
+  └─────────────────────────────────────────────────────────────┘
+
+  ▸ Key Properties:
+    ✦ Typed: chan int  ≠  chan string
+    ✦ Directional: can be send-only or receive-only
+    ✦ Blocking by default (unbuffered)
+    ✦ Safe to use from multiple goroutines
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════╗
+║  [02]  CHANNEL TYPES & DECLARATION                               ║
+╚══════════════════════════════════════════════════════════════════╝
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  SYNTAX                                                     │
+  │  ─────                                                      │
+  │  var ch chan int         // nil channel (zero value)        │
+  │  ch := make(chan int)    // unbuffered channel              │
+  │  ch := make(chan int, 5) // buffered channel (cap = 5)      │
+  └─────────────────────────────────────────────────────────────┘
+
+  ► Example: Basic Channel Declaration
+
+    package main
+
+    import "fmt"
+
+    func main() {
+        // 1. Nil channel
+        var nilCh chan int
+        fmt.Println(nilCh)        // Output: <nil>
+        fmt.Println(nilCh == nil) // Output: true
+
+        // 2. Unbuffered channel
+        unbuffered := make(chan string)
+        fmt.Println(cap(unbuffered)) // Output: 0
+        fmt.Println(len(unbuffered)) // Output: 0
+
+        // 3. Buffered channel
+        buffered := make(chan string, 3)
+        fmt.Println(cap(buffered)) // Output: 3
+        fmt.Println(len(buffered)) // Output: 0
+
+        // 4. Channel of channels (advanced)
+        meta := make(chan chan int)
+        _ = meta // just to show it's valid
+    }
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  Channel built-in functions:                                │
+  │    make(chan T)      → create channel                       │
+  │    make(chan T, n)   → create buffered channel              │
+  │    len(ch)          → number of queued elements             │
+  │    cap(ch)          → buffer capacity                       │
+  │    close(ch)        → signal no more sends                  │
+  └─────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════╗
+║  [03]  BUFFERED vs UNBUFFERED CHANNELS                           ║
+╚══════════════════════════════════════════════════════════════════╝
+
+  ┌──────────────────────────┬──────────────────────────────────┐
+  │   UNBUFFERED (default)   │   BUFFERED                       │
+  ├──────────────────────────┼──────────────────────────────────┤
+  │ make(chan T)              │ make(chan T, N)                 │
+  │ Sender blocks until      │ Sender blocks only when          │
+  │ receiver is ready        │ buffer is FULL                   │
+  │ Receiver blocks until    │ Receiver blocks only when        │
+  │ sender sends             │ buffer is EMPTY                  │
+  │ Guarantees synchrony     │ Allows async within buffer size  │
+  │ Zero capacity            │ Capacity = N                     │
+  └──────────────────────────┴──────────────────────────────────┘
+
+  ► Example A: Unbuffered Channel (Synchronous Handshake)
+
+    package main
+
+    import (
+        "fmt"
+        "time"
+    )
+
+    func main() {
+        ch := make(chan string) // unbuffered
+
+        go func() {
+            time.Sleep(1 * time.Second)
+            fmt.Println("Goroutine: sending message...")
+            ch <- "hello from goroutine" // blocks until main receives
+            fmt.Println("Goroutine: message sent!")
+        }()
+
+        fmt.Println("Main: waiting to receive...")
+        msg := <-ch // blocks until goroutine sends
+        fmt.Println("Main: received:", msg)
+    }
+
+    // Output:
+    // Main: waiting to receive...
+    // (1 second pause)
+    // Goroutine: sending message...
+    // Main: received: hello from goroutine
+    // Goroutine: message sent!
+
+  ► Example B: Buffered Channel (Async Within Buffer)
+
+    package main
+
+    import "fmt"
+
+    func main() {
+        ch := make(chan int, 3) // buffer of 3
+
+        // These sends don't block (buffer not full yet)
+        ch <- 10
+        ch <- 20
+        ch <- 30
+        fmt.Println("Sent 3 items, len:", len(ch), "cap:", cap(ch))
+        // Output: Sent 3 items, len: 3 cap: 3
+
+        // This would DEADLOCK (buffer full, no receiver):
+        // ch <- 40
+
+        fmt.Println(<-ch) // 10
+        fmt.Println(<-ch) // 20
+        fmt.Println(<-ch) // 30
+    }
+
+  ► Example C: Worker with Buffered Channel
+
+    package main
+
+    import (
+        "fmt"
+        "sync"
+    )
+
+    func worker(id int, jobs <-chan int, wg *sync.WaitGroup) {
+        defer wg.Done()
+        for job := range jobs {
+            fmt.Printf("Worker %d processing job %d\n", id, job)
+        }
+    }
+
+    func main() {
+        jobs := make(chan int, 10) // buffered: producer won't block easily
+        var wg sync.WaitGroup
+
+        // Start 3 workers
+        for i := 1; i <= 3; i++ {
+            wg.Add(1)
+            go worker(i, jobs, &wg)
+        }
+
+        // Send 9 jobs
+        for j := 1; j <= 9; j++ {
+            jobs <- j
+        }
+        close(jobs) // signal no more jobs
+
+        wg.Wait()
+        fmt.Println("All jobs done!")
+    }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════╗
+║  [04]  DIRECTIONAL CHANNELS                                      ║
+╚══════════════════════════════════════════════════════════════════╝
+
+  Channels can be restricted to send-only or receive-only to enforce
+  correct usage at compile time. This is a Go API design best practice.
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  chan T      → bidirectional (can send & receive)           │
+  │  chan<- T    → send-only  (can only send into it)           │
+  │  <-chan T    → receive-only (can only receive from it)      │
+  └─────────────────────────────────────────────────────────────┘
+
+  ► Example: Direction Enforcement in Functions
+
+    package main
+
+    import "fmt"
+
+    // producer: can only send into 'out'
+    func producer(out chan<- int) {
+        for i := 1; i <= 5; i++ {
+            out <- i
+        }
+        close(out)
+        // <-out  ← COMPILE ERROR: cannot receive from send-only channel
+    }
+
+    // consumer: can only receive from 'in'
+    func consumer(in <-chan int) {
+        for val := range in {
+            fmt.Println("Received:", val)
+        }
+        // in <- 99  ← COMPILE ERROR: cannot send to receive-only channel
+    }
+
+    func main() {
+        ch := make(chan int, 5) // bidirectional
+        go producer(ch)        // bidirectional auto-converts to chan<- int
+        consumer(ch)           // bidirectional auto-converts to <-chan int
+    }
+
+    // Output:
+    // Received: 1
+    // Received: 2
+    // Received: 3
+    // Received: 4
+    // Received: 5
+
+  ► NOTE: Conversion Rules
+    ✦ bidirectional → send-only  : OK (automatic)
+    ✦ bidirectional → receive-only: OK (automatic)
+    ✦ send-only → bidirectional  : ✗ COMPILE ERROR
+    ✦ receive-only → bidirectional: ✗ COMPILE ERROR
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════╗
+║  [05]  CHANNEL OPERATIONS                                        ║
+╚══════════════════════════════════════════════════════════════════╝
+
+  ─────────────────────────────────────────────────────────────────
+  ⚡ SEND:  ch <- value
+  ─────────────────────────────────────────────────────────────────
+  • Blocks if unbuffered and no receiver waiting
+  • Blocks if buffered and buffer is full
+  • Panics if channel is closed
+  • Blocks forever if channel is nil
+
+  ─────────────────────────────────────────────────────────────────
+  ⚡ RECEIVE:  value := <-ch   |   value, ok := <-ch
+  ─────────────────────────────────────────────────────────────────
+  • Blocks if no value available
+  • Returns zero value + false if channel is closed & empty
+  • ok == true  → received real value
+  • ok == false → channel closed and drained
+  • Blocks forever if channel is nil
+
+  ─────────────────────────────────────────────────────────────────
+  ⚡ CLOSE:  close(ch)
+  ─────────────────────────────────────────────────────────────────
+  • Only the SENDER should close (never the receiver)
+  • Closing a nil channel → PANIC
+  • Closing an already-closed channel → PANIC
+  • Receiving from closed channel returns zero value, ok=false
+  • Sending to closed channel → PANIC
+
+  ► Example: Safe Close with ok Check
+
+    package main
+
+    import "fmt"
+
+    func main() {
+        ch := make(chan int, 3)
+        ch <- 100
+        ch <- 200
+        close(ch)
+
+        // Two-value receive: detect closed channel
+        for {
+            val, ok := <-ch
+            if !ok {
+                fmt.Println("Channel closed!")
+                break
+            }
+            fmt.Println("Got:", val)
+        }
+    }
+
+    // Output:
+    // Got: 100
+    // Got: 200
+    // Channel closed!
+
+  ► Example: What Happens on Various Invalid Operations
+
+    package main
+
+    import "fmt"
+
+    func demoNilChannel() {
+        var ch chan int
+
+        // Receiving from nil → blocks forever (deadlock in main goroutine)
+        // val := <-ch
+
+        // Sending to nil → blocks forever (deadlock in main goroutine)
+        // ch <- 1
+
+        fmt.Println("nil channel cap:", cap(ch)) // 0
+        fmt.Println("nil channel len:", len(ch)) // 0
+    }
+
+    func demoClosedChannel() {
+        ch := make(chan int, 2)
+        ch <- 42
+        close(ch)
+
+        val, ok := <-ch
+        fmt.Println(val, ok)  // 42 true  (drained buffered value)
+
+        val, ok = <-ch
+        fmt.Println(val, ok)  // 0 false  (channel closed & empty)
+
+        // Sending to closed channel:
+        // ch <- 1  → PANIC: send on closed channel
+
+        // Closing again:
+        // close(ch)  → PANIC: close of closed channel
+    }
+
+    func main() {
+        demoNilChannel()
+        demoClosedChannel()
+    }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════╗
+║  [06]  RANGE OVER CHANNELS                                       ║
+╚══════════════════════════════════════════════════════════════════╝
+
+  `for val := range ch` receives values until the channel is CLOSED.
+  Without close(), the range loop will block forever → deadlock.
+
+  ► Example: Range — Correct Usage
+
+    package main
+
+    import "fmt"
+
+    func generateNumbers(count int) <-chan int {
+        out := make(chan int)
+        go func() {
+            defer close(out) // MUST close for range to terminate
+            for i := 1; i <= count; i++ {
+                out <- i
+            }
+        }()
+        return out
+    }
+
+    func main() {
+        for num := range generateNumbers(5) {
+            fmt.Println("Number:", num)
+        }
+        fmt.Println("Done!")
+    }
+
+    // Output:
+    // Number: 1
+    // Number: 2
+    // Number: 3
+    // Number: 4
+    // Number: 5
+    // Done!
+
+  ► Example: Range with String Channel
+
+    package main
+
+    import "fmt"
+
+    func streamWords(words []string) <-chan string {
+        ch := make(chan string, len(words))
+        go func() {
+            defer close(ch)
+            for _, w := range words {
+                ch <- w
+            }
+        }()
+        return ch
+    }
+
+    func main() {
+        words := []string{"Go", "Channels", "Are", "Awesome"}
+        for word := range streamWords(words) {
+            fmt.Printf("%-12s", word)
+        }
+        fmt.Println()
+    }
+
+    // Output:
+    // Go          Channels    Are         Awesome
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════╗
+║  [07]  SELECT STATEMENT                                          ║
+╚══════════════════════════════════════════════════════════════════╝
+
+  `select` is like a switch for channels. It waits on multiple
+  channel operations and proceeds with whichever is ready first.
+  If multiple are ready → one is chosen at RANDOM (not sequentially).
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  select {                                                   │
+  │      case val := <-ch1:   // receive from ch1              │
+  │          ...                                                │
+  │      case ch2 <- value:   // send to ch2                   │
+  │          ...                                                │
+  │      case <-done:         // receive from done             │
+  │          return                                             │
+  │      default:             // non-blocking fallback         │
+  │          ...                                                │
+  │  }                                                          │
+  └─────────────────────────────────────────────────────────────┘
+
+  ► Example A: Basic Select
+
+    package main
+
+    import (
+        "fmt"
+        "time"
+    )
+
+    func main() {
+        ch1 := make(chan string)
+        ch2 := make(chan string)
+
+        go func() {
+            time.Sleep(1 * time.Second)
+            ch1 <- "one"
+        }()
+
+        go func() {
+            time.Sleep(2 * time.Second)
+            ch2 <- "two"
+        }()
+
+        // Receive from whichever channel is ready first
+        for i := 0; i < 2; i++ {
+            select {
+            case msg1 := <-ch1:
+                fmt.Println("Received from ch1:", msg1)
+            case msg2 := <-ch2:
+                fmt.Println("Received from ch2:", msg2)
+            }
+        }
+    }
+
+    // Output:
+    // Received from ch1: one
+    // Received from ch2: two
+
+  ► Example B: Select with Timeout
+
+    package main
+
+    import (
+        "fmt"
+        "time"
+    )
+
+    func fetchData(delay time.Duration) <-chan string {
+        ch := make(chan string, 1)
+        go func() {
+            time.Sleep(delay)
+            ch <- "data ready"
+        }()
+        return ch
+    }
+
+    func main() {
+        result := fetchData(3 * time.Second)
+
+        select {
+        case data := <-result:
+            fmt.Println("Success:", data)
+        case <-time.After(2 * time.Second):
+            fmt.Println("Timeout! Operation took too long.")
+        }
+    }
+
+    // Output (because fetch takes 3s but timeout is 2s):
+    // Timeout! Operation took too long.
+
+  ► Example C: Non-blocking Select with Default
+
+    package main
+
+    import "fmt"
+
+    func main() {
+        ch := make(chan int, 1)
+
+        // Non-blocking send
+        select {
+        case ch <- 42:
+            fmt.Println("Sent 42")
+        default:
+            fmt.Println("Channel full, couldn't send")
+        }
+
+        // Non-blocking receive
+        select {
+        case val := <-ch:
+            fmt.Println("Received:", val)
+        default:
+            fmt.Println("No value available")
+        }
+
+        // Try receive again (channel now empty)
+        select {
+        case val := <-ch:
+            fmt.Println("Received:", val)
+        default:
+            fmt.Println("Channel is empty")
+        }
+    }
+
+    // Output:
+    // Sent 42
+    // Received: 42
+    // Channel is empty
+
+  ► Example D: Select for Cancellation
+
+    package main
+
+    import (
+        "fmt"
+        "time"
+    )
+
+    func worker(done <-chan struct{}) {
+        for {
+            select {
+            case <-done:
+                fmt.Println("Worker: received cancellation, stopping.")
+                return
+            default:
+                fmt.Println("Worker: doing work...")
+                time.Sleep(500 * time.Millisecond)
+            }
+        }
+    }
+
+    func main() {
+        done := make(chan struct{})
+        go worker(done)
+
+        time.Sleep(2 * time.Second)
+        close(done) // broadcast cancellation to all workers
+        time.Sleep(100 * time.Millisecond)
+        fmt.Println("Main: done.")
+    }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════╗
+║  [08]  CHANNEL PATTERNS                                          ║
+╚══════════════════════════════════════════════════════════════════╝
+
+  ════════════════════════════════════════════
+  ▶ PATTERN 1: PIPELINE
+  ════════════════════════════════════════════
+
+  Stages connected by channels. Output of one stage is input of next.
+
+    ┌──────────┐     ┌──────────┐     ┌──────────┐
+    │ Stage 1  │────►│ Stage 2  │────►│ Stage 3  │
+    │(generate)│     │(process) │     │(consume) │
+    └──────────┘     └──────────┘     └──────────┘
+
+    package main
+
+    import "fmt"
+
+    // Stage 1: generate integers
+    func generate(nums ...int) <-chan int {
+        out := make(chan int)
+        go func() {
+            defer close(out)
+            for _, n := range nums {
+                out <- n
+            }
+        }()
+        return out
+    }
+
+    // Stage 2: square each integer
+    func square(in <-chan int) <-chan int {
+        out := make(chan int)
+        go func() {
+            defer close(out)
+            for n := range in {
+                out <- n * n
+            }
+        }()
+        return out
+    }
+
+    // Stage 3: double each integer
+    func double(in <-chan int) <-chan int {
+        out := make(chan int)
+        go func() {
+            defer close(out)
+            for n := range in {
+                out <- n * 2
+            }
+        }()
+        return out
+    }
+
+    func main() {
+        // Build the pipeline: generate → square → double
+        c := generate(1, 2, 3, 4, 5)
+        sq := square(c)
+        db := double(sq)
+
+        for result := range db {
+            fmt.Println(result) // 2, 8, 18, 32, 50
+        }
+    }
+
+  ════════════════════════════════════════════
+  ▶ PATTERN 2: FAN-OUT
+  ════════════════════════════════════════════
+
+  Distribute work from one channel to multiple goroutines.
+
+    ┌──────────┐     ┌──────────┐
+    │          │────►│ Worker 1 │
+    │  Source  │────►│ Worker 2 │
+    │          │────►│ Worker 3 │
+    └──────────┘     └──────────┘
+
+    package main
+
+    import (
+        "fmt"
+        "sync"
+    )
+
+    func fanOut(source <-chan int, numWorkers int) []<-chan int {
+        outputs := make([]<-chan int, numWorkers)
+        for i := 0; i < numWorkers; i++ {
+            outputs[i] = processWork(i+1, source) // all read from same source
+        }
+        return outputs
+    }
+
+    func processWork(id int, in <-chan int) <-chan int {
+        out := make(chan int)
+        go func() {
+            defer close(out)
+            for val := range in {
+                fmt.Printf("Worker %d: processing %d\n", id, val)
+                out <- val * val
+            }
+        }()
+        return out
+    }
+
+    func collectResults(channels []<-chan int) <-chan int {
+        var wg sync.WaitGroup
+        merged := make(chan int)
+
+        // merge all outputs into one
+        collect := func(ch <-chan int) {
+            defer wg.Done()
+            for val := range ch {
+                merged <- val
+            }
+        }
+
+        wg.Add(len(channels))
+        for _, ch := range channels {
+            go collect(ch)
+        }
+
+        go func() {
+            wg.Wait()
+            close(merged)
+        }()
+        return merged
+    }
+
+    func main() {
+        source := make(chan int, 6)
+        for i := 1; i <= 6; i++ {
+            source <- i
+        }
+        close(source)
+
+        workers := fanOut(source, 3)
+        results := collectResults(workers)
+
+        for r := range results {
+            fmt.Println("Result:", r)
+        }
+    }
+
+  ════════════════════════════════════════════
+  ▶ PATTERN 3: FAN-IN (MERGE)
+  ════════════════════════════════════════════
+
+  Combine multiple input channels into a single output channel.
+
+    ┌──────────┐
+    │ Source 1 │────►┐
+    └──────────┘     │    ┌──────────┐
+    ┌──────────┐     ├───►│  Merged  │
+    │ Source 2 │────►│    └──────────┘
+    └──────────┘     │
+    ┌──────────┐     │
+    │ Source 3 │────►┘
+    └──────────┘
+
+    package main
+
+    import (
+        "fmt"
+        "sync"
+        "time"
+    )
+
+    func fanIn(channels ...<-chan string) <-chan string {
+        var wg sync.WaitGroup
+        merged := make(chan string, 10)
+
+        // Start a goroutine for each input channel
+        forward := func(ch <-chan string) {
+            defer wg.Done()
+            for val := range ch {
+                merged <- val
+            }
+        }
+
+        wg.Add(len(channels))
+        for _, ch := range channels {
+            go forward(ch)
+        }
+
+        // Close merged when all inputs are done
+        go func() {
+            wg.Wait()
+            close(merged)
+        }()
+
+        return merged
+    }
+
+    func source(name string, delay time.Duration) <-chan string {
+        ch := make(chan string)
+        go func() {
+            defer close(ch)
+            for i := 1; i <= 3; i++ {
+                time.Sleep(delay)
+                ch <- fmt.Sprintf("%s:%d", name, i)
+            }
+        }()
+        return ch
+    }
+
+    func main() {
+        ch1 := source("Alpha", 100*time.Millisecond)
+        ch2 := source("Beta", 150*time.Millisecond)
+        ch3 := source("Gamma", 200*time.Millisecond)
+
+        for msg := range fanIn(ch1, ch2, ch3) {
+            fmt.Println(msg)
+        }
+    }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════╗
+║  [09]  DONE CHANNEL PATTERN (CANCELLATION)                       ║
+╚══════════════════════════════════════════════════════════════════╝
+
+  The `done` channel pattern propagates cancellation signals to
+  goroutines. Closing done broadcasts to ALL receivers simultaneously.
+
+  ► Example: Cancellable Generator with Done Channel
+
+    package main
+
+    import (
+        "fmt"
+        "time"
+    )
+
+    func counter(done <-chan struct{}) <-chan int {
+        out := make(chan int)
+        go func() {
+            defer close(out)
+            n := 0
+            for {
+                select {
+                case <-done:
+                    fmt.Println("counter: cancelled, exiting")
+                    return
+                case out <- n:
+                    n++
+                }
+            }
+        }()
+        return out
+    }
+
+    func main() {
+        done := make(chan struct{})
+        nums := counter(done)
+
+        // Consume 5 values
+        for i := 0; i < 5; i++ {
+            fmt.Println(<-nums)
+        }
+
+        // Cancel the counter
+        close(done)
+        time.Sleep(50 * time.Millisecond)
+        fmt.Println("main: done")
+    }
+
+    // Output:
+    // 0
+    // 1
+    // 2
+    // 3
+    // 4
+    // counter: cancelled, exiting
+    // main: done
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  NOTE: context.Context is the modern, idiomatic way to do   │
+  │  cancellation in Go (wraps the done channel pattern):       │
+  │                                                             │
+  │    ctx, cancel := context.WithTimeout(context.Background(), │
+  │                    2*time.Second)                           │
+  │    defer cancel()                                           │
+  │                                                             │
+  │    select {                                                 │
+  │    case <-ctx.Done():                                       │
+  │        return ctx.Err()                                     │
+  │    case result := <-workCh:                                 │
+  │        return result                                        │
+  │    }                                                        │
+  └─────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════╗
+║  [10]  CHANNEL vs MUTEX — WHEN TO USE WHICH                      ║
+╚══════════════════════════════════════════════════════════════════╝
+
+  ┌──────────────────────────────┬──────────────────────────────┐
+  │   USE CHANNELS WHEN...       │   USE MUTEX WHEN...          │
+  ├──────────────────────────────┼──────────────────────────────┤
+  │ Passing data/ownership       │ Protecting shared state      │
+  │ between goroutines           │ (caches, maps, structs)      │
+  ├──────────────────────────────┼──────────────────────────────┤
+  │ Coordinating async work      │ Simple counter/flag          │
+  │ (producer-consumer)          │ increments                   │
+  ├──────────────────────────────┼──────────────────────────────┤
+  │ Signalling events/completion │ Performance-critical paths   │
+  │ (done channels)              │ (mutexes are lighter)        │
+  ├──────────────────────────────┼──────────────────────────────┤
+  │ Pipeline & streaming data    │ Short critical sections      │
+  │ flows                        │                              │
+  ├──────────────────────────────┼──────────────────────────────┤
+  │ Fan-out / Fan-in patterns    │ sync.Map for concurrent maps │
+  └──────────────────────────────┴──────────────────────────────┘
+
+  ► Example: Same problem — Channel vs Mutex
+
+    // ── USING CHANNEL (ownership transfer) ──────────────────
+    func safeCounterChannel() {
+        counter := 0
+        inc := make(chan struct{}, 100)
+        done := make(chan int)
+
+        go func() {
+            for range inc {
+                counter++
+            }
+            done <- counter
+        }()
+
+        var wg sync.WaitGroup
+        for i := 0; i < 1000; i++ {
+            wg.Add(1)
+            go func() {
+                defer wg.Done()
+                inc <- struct{}{}
+            }()
+        }
+        wg.Wait()
+        close(inc)
+        fmt.Println("Final count:", <-done)
+    }
+
+    // ── USING MUTEX (simpler for this case) ─────────────────
+    func safeCounterMutex() {
+        var mu sync.Mutex
+        counter := 0
+
+        var wg sync.WaitGroup
+        for i := 0; i < 1000; i++ {
+            wg.Add(1)
+            go func() {
+                defer wg.Done()
+                mu.Lock()
+                counter++
+                mu.Unlock()
+            }()
+        }
+        wg.Wait()
+        fmt.Println("Final count:", counter)
+    }
+
+  ► Go Proverb Guide:
+    "Use channels to share data between goroutines."
+    "Use mutexes to protect internal state within a single goroutine's scope."
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════╗
+║  [11]  COMMON MISTAKES & GOTCHAS                                 ║
+╚══════════════════════════════════════════════════════════════════╝
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  ⚠️  GOTCHA 1: Deadlock from missing receiver               │
+  └─────────────────────────────────────────────────────────────┘
+    // BAD: unbuffered channel with no goroutine receiving
+    ch := make(chan int)
+    ch <- 42 // DEADLOCK: all goroutines are asleep
+
+    // GOOD: use goroutine or buffered channel
+    ch := make(chan int, 1)
+    ch <- 42 // OK, buffered can hold 1
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  ⚠️  GOTCHA 2: Goroutine leak (range without close)         │
+  └─────────────────────────────────────────────────────────────┘
+    // BAD: range will block forever, goroutine never exits
+    func leak() {
+        ch := make(chan int)
+        go func() {
+            for val := range ch { // stuck here forever
+                fmt.Println(val)
+            }
+        }()
+        ch <- 1
+        ch <- 2
+        // forgot to close(ch) → goroutine leaks!
+    }
+
+    // GOOD: always close the channel you own
+    func noLeak() {
+        ch := make(chan int)
+        go func() {
+            for val := range ch {
+                fmt.Println(val)
+            }
+        }()
+        ch <- 1
+        ch <- 2
+        close(ch) // goroutine will exit cleanly
+    }
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  ⚠️  GOTCHA 3: Closing channel from wrong goroutine         │
+  └─────────────────────────────────────────────────────────────┘
+    // Rule: Only the SENDER closes the channel.
+    // Never close from the receiver side.
+    // Use sync.WaitGroup + single goroutine to close after all senders done.
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  ⚠️  GOTCHA 4: Multiple closes → panic                      │
+  └─────────────────────────────────────────────────────────────┘
+    ch := make(chan int)
+    close(ch)
+    close(ch) // PANIC: close of closed channel
+
+    // SAFE pattern using sync.Once:
+    var once sync.Once
+    safeClose := func() { once.Do(func() { close(ch) }) }
+    safeClose() // OK
+    safeClose() // OK (no-op, not panic)
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  ⚠️  GOTCHA 5: Nil channel in select (trap & trick)         │
+  └─────────────────────────────────────────────────────────────┘
+    // A nil channel in select is NEVER selected (skipped)
+    // This is actually USEFUL for disabling cases dynamically!
+
+    var ch1, ch2 chan int = make(chan int, 1), make(chan int, 1)
+    ch1 <- 10
+    ch2 <- 20
+
+    // Disable ch1 after receiving once
+    for i := 0; i < 2; i++ {
+        select {
+        case v, ok := <-ch1:
+            if !ok {
+                ch1 = nil // disabling this case
+            } else {
+                fmt.Println("ch1:", v)
+            }
+        case v := <-ch2:
+            fmt.Println("ch2:", v)
+        }
+    }
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  ⚠️  GOTCHA 6: Capture variable in goroutine closure        │
+  └─────────────────────────────────────────────────────────────┘
+    // BAD: i captured by reference
+    for i := 0; i < 3; i++ {
+        go func() { fmt.Println(i) }() // prints 3,3,3 (or similar)
+    }
+
+    // GOOD: pass i as argument
+    for i := 0; i < 3; i++ {
+        go func(n int) { fmt.Println(n) }(i) // prints 0,1,2 (order varies)
+    }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════╗
+║  [12]  JAVA COMPARISON NOTES  ☕ → 🦫                             ║
+╚══════════════════════════════════════════════════════════════════╝
+
+  ┌──────────────────────────────┬──────────────────────────────┐
+  │   JAVA CONCEPT               │   GO EQUIVALENT              │
+  ├──────────────────────────────┼──────────────────────────────┤
+  │ BlockingQueue<T>             │ chan T (unbuffered)          │
+  │ ArrayBlockingQueue(n)        │ make(chan T, n) (buffered)   │
+  │ SynchronousQueue             │ make(chan T) (unbuffered)    │
+  │ ExecutorService              │ goroutines + channels        │
+  │ CompletableFuture<T>         │ chan T (single result)       │
+  │ CountDownLatch               │ sync.WaitGroup               │
+  │ Semaphore(n)                 │ make(chan struct{}, n)       │
+  │ Thread.interrupt()           │ close(done) / ctx.Cancel()   │
+  │ Future.cancel()              │ context.WithCancel()         │
+  │ SelectionKey (NIO)           │ select statement             │
+  └──────────────────────────────┴──────────────────────────────┘
+
+  ► Semaphore using buffered channel (Experienced pattern):
+
+    // Limit to 3 concurrent goroutines (like Semaphore(3) in Java)
+    sem := make(chan struct{}, 3)
+
+    for i := 0; i < 10; i++ {
+        sem <- struct{}{}   // acquire
+        go func(n int) {
+            defer func() { <-sem }() // release
+            doWork(n)
+        }(i)
+    }
+
+  ► CompletableFuture → channel equivalent:
+
+    // Java: CompletableFuture<String> future = CompletableFuture.supplyAsync(...)
+    // Go:
+    result := make(chan string, 1)
+    go func() {
+        result <- fetchData() // produce
+    }()
+    val := <-result // consume (blocks until ready)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════╗
+║  [13]  INTERVIEW Q&A — MEDIOR LEVEL  🎯                          ║
+╚══════════════════════════════════════════════════════════════════╝
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Q1. What is a channel in Go and why is it useful?           │
+  └──────────────────────────────────────────────────────────────┘
+  A: A channel is a typed conduit for safe communication between
+     goroutines. It follows the CSP model — instead of goroutines
+     sharing memory with locks, they pass values through channels.
+     Benefits: thread-safety by design, clear ownership transfer,
+     easy synchronization without explicit mutexes.
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Q2. What is the difference between buffered and             │
+  │      unbuffered channels?                                    │
+  └──────────────────────────────────────────────────────────────┘
+  A: Unbuffered (make(chan T)): sender blocks until receiver is
+     ready, guaranteeing synchronous handshake.
+     Buffered (make(chan T, N)): sender only blocks when buffer is
+     full. Allows async operation up to capacity. Use buffered
+     when you want decoupling between producer and consumer speed.
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Q3. What happens when you send on a closed channel?         │
+  └──────────────────────────────────────────────────────────────┘
+  A: It panics with "send on closed channel". Only the sender
+     should close a channel, and only once. Receiving from a
+     closed channel returns the zero value and ok=false.
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Q4. What does `value, ok := <-ch` mean?                     │
+  └──────────────────────────────────────────────────────────────┘
+  A: The two-value receive idiom. `ok` is true if the value was
+     successfully received from an open channel. `ok` is false
+     if the channel is closed and empty, and `value` will be the
+     zero value for the type.
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Q5. When does `for range ch` terminate?                     │
+  └──────────────────────────────────────────────────────────────┘
+  A: When the channel is closed AND all buffered values have been
+     drained. If the channel is never closed, range blocks forever
+     causing a goroutine leak / deadlock.
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Q6. What is the purpose of the select statement?            │
+  └──────────────────────────────────────────────────────────────┘
+  A: select lets a goroutine wait on multiple channel operations
+     simultaneously. It proceeds with the first case that becomes
+     ready. If multiple are ready, Go picks one at random. With a
+     default case, it becomes non-blocking.
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Q7. How do you implement a timeout with channels?           │
+  └──────────────────────────────────────────────────────────────┘
+  A: Use select with time.After():
+     select {
+     case result := <-workCh:
+         // handle result
+     case <-time.After(2 * time.Second):
+         // handle timeout
+     }
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Q8. What is a directional channel?                          │
+  └──────────────────────────────────────────────────────────────┘
+  A: A channel restricted to either send-only (chan<- T) or
+     receive-only (<-chan T). Used in function signatures to
+     enforce correct channel usage at compile time. A bidirectional
+     channel automatically converts to a directional one when passed
+     to such a function.
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Q9. What causes a goroutine leak with channels?             │
+  └──────────────────────────────────────────────────────────────┘
+  A: Common causes:
+     • Goroutine blocked receiving from a channel no one sends to
+     • Goroutine blocked sending to a channel no one receives from
+     • Range over a channel that is never closed
+     Fix: Always ensure goroutines have an exit path (done channel,
+     context cancellation, or close the channel you own).
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Q10. What is the zero value of a channel and what happens   │
+  │       when you use it?                                       │
+  └──────────────────────────────────────────────────────────────┘
+  A: The zero value is nil. Sending to or receiving from a nil
+     channel blocks forever. Closing a nil channel panics.
+     However, a nil channel in a select case is never chosen —
+     this is useful for dynamically disabling select cases.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════╗
+║  [14]  INTERVIEW Q&A — EXPERIENCED LEVEL  🚀                     ║
+╚══════════════════════════════════════════════════════════════════╝
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Q1. Explain the CSP model and how Go implements it.         │
+  └──────────────────────────────────────────────────────────────┘
+  A: CSP (Communicating Sequential Processes, by Tony Hoare 1978)
+     models concurrent systems as independent processes that
+     communicate via message passing — no shared state. Go
+     implements this with goroutines (processes) and channels
+     (message passing). The key idea: goroutines don't share
+     memory; instead they communicate to transfer ownership of
+     data, avoiding race conditions by design.
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Q2. How does channel select guarantee fairness?             │
+  └──────────────────────────────────────────────────────────────┘
+  A: Go's select is deliberately pseudo-random — when multiple
+     cases are ready simultaneously, Go picks one uniformly at
+     random. This prevents starvation. It is NOT round-robin and
+     NOT priority-based. The randomness is guaranteed by the spec.
+     If you need priority, you must use nested selects or other
+     logic.
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Q3. How would you implement a semaphore using channels?     │
+  └──────────────────────────────────────────────────────────────┘
+  A: Use a buffered channel of empty structs:
+     sem := make(chan struct{}, N) // N = max concurrency
+     sem <- struct{}{} // acquire (blocks if N goroutines running)
+     defer func() { <-sem }() // release
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Q4. What is the "pipeline" pattern and why is it valuable?  │
+  └──────────────────────────────────────────────────────────────┘
+  A: A pipeline is a series of stages connected by channels where
+     each stage is a goroutine. Data flows one-way through stages.
+     Value: composability (each stage is independently testable),
+     lazy evaluation (stages run concurrently and only when needed),
+     back-pressure (slow stage naturally slows down producers via
+     channel blocking), and memory efficiency (streaming vs batching).
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Q5. How do you handle multiple senders closing a channel    │
+  │      safely?                                                 │
+  └──────────────────────────────────────────────────────────────┘
+  A: Close only from one coordinator goroutine:
+     • Use sync.WaitGroup to track all senders
+     • Launch a separate goroutine that waits for WaitGroup, then closes
+     • Or use sync.Once for a safe close primitive
+     Never close from multiple goroutines — only one closer per channel.
+
+    var wg sync.WaitGroup
+    out := make(chan int)
+
+    for i := 0; i < numSenders; i++ {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            out <- computeSomething()
+        }()
+    }
+
+    // Single closer goroutine
+    go func() {
+        wg.Wait()
+        close(out) // safe: called exactly once
+    }()
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Q6. What is a "done channel" pattern and how does it relate │
+  │      to context.Context?                                     │
+  └──────────────────────────────────────────────────────────────┘
+  A: The done channel pattern uses close(done) to broadcast a
+     cancellation signal to all goroutines listening on that channel.
+     It's the manual predecessor to context.Context.
+     context.Context wraps this pattern with:
+       - WithCancel: cancel by calling cancel()
+       - WithTimeout: auto-cancel after duration
+       - WithDeadline: cancel at a specific time
+       - WithValue: carry request-scoped data
+     context.Context is now the idiomatic approach for cancellation
+     in Go — especially for HTTP handlers and RPC calls.
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Q7. Explain channel memory model guarantees.                │
+  └──────────────────────────────────────────────────────────────┘
+  A: Go memory model guarantees for channels:
+     • A send on a channel happens-before the corresponding receive completes
+     • Closing a channel happens-before a receive that returns zero value
+     • A receive from unbuffered channel happens-before the send completes
+     • The kth receive from a buffered channel of capacity C happens-before
+       the (k+C)th send completes
+     These guarantees mean channels are sufficient for safe data sharing
+     across goroutines without additional locks.
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Q8. When would you prefer channels over sync.Mutex?         │
+  └──────────────────────────────────────────────────────────────┘
+  A: Channels are better when:
+     - You need to transfer ownership of data (not just protect it)
+     - You need to coordinate sequencing between goroutines
+     - You're building pipelines or event systems
+     Mutex is better when:
+     - Protecting simple shared state (counters, maps)
+     - Performance-critical sections (mutexes are lower overhead)
+     - Goroutines all need READ access concurrently (sync.RWMutex)
+     Rule of thumb: "If you're communicating, use channels. If you're
+     sharing state, use a mutex."
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Q9. How do you detect and fix a goroutine leak caused       │
+  │      by channels in production?                              │
+  └──────────────────────────────────────────────────────────────┘
+  A: Detection:
+     - runtime.NumGoroutine() increasing unboundedly
+     - Use pprof: go tool pprof (goroutine profile)
+     - Use goleak library in tests (uber-go/goleak)
+     Fix:
+     - Always provide cancellation (done channel or context)
+     - Ensure every goroutine has a guaranteed exit path
+     - Use select with done channel in all blocking goroutines
+     - In pipelines, propagate done to all stages
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │  Q10. What is back-pressure in a channel pipeline and how    │
+  │       is it naturally handled?                               │
+  └──────────────────────────────────────────────────────────────┘
+  A: Back-pressure is when a slow consumer signals a fast producer
+     to slow down. In Go channel pipelines, this is handled
+     automatically — when a downstream stage's input channel is
+     full (or unbuffered stage has no receiver), the upstream
+     sender blocks. This creates natural flow control without any
+     explicit signalling. You can tune it with buffer sizes:
+     larger buffers = more tolerance for speed differences.
+     For production systems: pair with context cancellation to
+     avoid indefinite blocking when the system is overloaded.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════╗
+║  QUICK REFERENCE CHEATSHEET                                      ║
+╚══════════════════════════════════════════════════════════════════╝
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │  CREATION                                                   │
+  │    make(chan T)       → unbuffered                          │
+  │    make(chan T, N)    → buffered (cap N)                    │
+  │                                                             │
+  │  SEND / RECEIVE / CLOSE                                     │
+  │    ch <- val          → send                                │
+  │    val := <-ch        → receive                             │
+  │    val, ok := <-ch    → receive with closed check           │
+  │    close(ch)          → close (only sender)                 │
+  │                                                             │
+  │  DIRECTION                                                  │
+  │    chan<- T           → send-only                           │
+  │    <-chan T           → receive-only                        │
+  │                                                             │
+  │  ITERATION                                                  │
+  │    for v := range ch  → iterate until closed                │
+  │                                                             │
+  │  SELECT                                                     │
+  │    select { case ... } → multiplex channels                 │
+  │    select with default → non-blocking                       │
+  │    time.After(d)      → timeout                             │
+  │                                                             │
+  │  PATTERNS                                                   │
+  │    Pipeline           → stage1 → ch → stage2                │
+  │    Fan-Out            → 1 source → N workers                │
+  │    Fan-In             → N sources → 1 merged                │ 
+  │    Done Channel       → close(done) to cancel all           │
+  │    Semaphore          → make(chan struct{}, N)              │
+  │                                                             │
+  │  PANIC TRIGGERS ❌                                          │
+  │    send on nil        → blocks forever                      │
+  │    send on closed     → PANIC                               │
+  │    close(nil)         → PANIC                               │
+  │    close(closed)      → PANIC                               │
+  └─────────────────────────────────────────────────────────────┘
+
+╔══════════════════════════════════════════════════════════════════╗
+║                                                                  ║
+║   "A channel provides a mechanism for concurrently executing     ║
+║    functions to communicate by sending and receiving values      ║
+║    of a specified element type."                                 ║
+║                                  — The Go Programming Language   ║
+║                                                                  ║
+╚══════════════════════════════════════════════════════════════════╝

@@ -1,0 +1,291 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 🚀 Go Lang ROUTINES
+════════════════════════════════════════════════════════════════════════════════════
+
+📌 WHAT IS A GOROUTINE?
+──────────────────────
+A Goroutine is a lightweight thread managed by the Go runtime.
+
+👉 It allows concurrent execution of functions.
+👉 Much cheaper than OS threads (KB vs MB memory).
+
+Syntax:
+go functionName()
+
+Example:
+go sayHello()
+
+---
+
+⚙️ HOW GOROUTINES WORK INTERNALLY
+─────────────────────────────────
+
+* Managed by Go Scheduler (M:N model)
+* M = OS Threads
+* N = Goroutines
+
+Key Concepts:
+
+* G (Goroutine)
+* M (Machine / OS Thread)
+* P (Processor / logical CPU)
+
+👉 Scheduler maps many goroutines onto fewer OS threads.
+
+---
+
+🧠 BASIC EXAMPLE
+────────────────
+
+package main
+
+import (
+"fmt"
+"time"
+)
+
+func sayHello() {
+for i := 0; i < 3; i++ {
+fmt.Println("Hello")
+time.Sleep(time.Millisecond * 500)
+}
+}
+
+func main() {
+go sayHello()
+fmt.Println("Main function")
+time.Sleep(time.Second * 2)
+}
+
+📝 NOTE:
+Without sleep, program may exit before goroutine runs.
+
+---
+
+⚠️ COMMON PROBLEM: MAIN EXITS EARLY
+───────────────────────────────────
+Solution:
+
+1. time.Sleep (not recommended for production)
+2. sync.WaitGroup (correct approach)
+
+---
+
+🧩 WAITGROUP (SYNCHRONIZATION)
+─────────────────────────────
+
+package main
+
+import (
+"fmt"
+"sync"
+)
+
+func worker(id int, wg *sync.WaitGroup) {
+defer wg.Done()
+fmt.Println("Worker:", id)
+}
+
+func main() {
+var wg sync.WaitGroup
+
+```
+for i := 1; i <= 3; i++ {
+    wg.Add(1)
+    go worker(i, &wg)
+}
+
+wg.Wait()
+```
+
+}
+
+---
+
+📡 GOROUTINES + CHANNELS
+────────────────────────
+Channels allow safe communication.
+
+Example:
+
+func sendData(ch chan string) {
+ch <- "Hello from goroutine"
+}
+
+func main() {
+ch := make(chan string)
+go sendData(ch)
+
+```
+msg := <-ch
+fmt.Println(msg)
+```
+
+}
+
+---
+
+🔁 BUFFERED CHANNELS
+────────────────────
+
+ch := make(chan int, 2)
+
+ch <- 1
+ch <- 2
+
+fmt.Println(<-ch)
+fmt.Println(<-ch)
+
+👉 No blocking until buffer is full
+
+---
+
+🔄 SELECT STATEMENT
+───────────────────
+Used to handle multiple channels.
+
+select {
+case msg := <-ch1:
+fmt.Println(msg)
+case msg := <-ch2:
+fmt.Println(msg)
+default:
+fmt.Println("No data")
+}
+
+---
+
+🚨 COMMON PITFALLS
+──────────────────
+
+1. ❌ Race Conditions
+
+   * Multiple goroutines accessing same memory
+   * Fix: sync.Mutex / channels
+
+2. ❌ Goroutine Leak
+
+   * Goroutine never exits
+   * Cause: blocked channel or infinite loop
+
+3. ❌ Deadlock
+
+   * All goroutines waiting forever
+
+4. ❌ Loop Variable Capture
+
+   WRONG:
+   for i := 0; i < 3; i++ {
+   go func() {
+   fmt.Println(i)
+   }()
+   }
+
+   FIX:
+   for i := 0; i < 3; i++ {
+   go func(i int) {
+   fmt.Println(i)
+   }(i)
+   }
+
+---
+
+🔐 MUTEX (SHARED MEMORY CONTROL)
+───────────────────────────────
+
+var mu sync.Mutex
+
+mu.Lock()
+counter++
+mu.Unlock()
+
+---
+
+⚡ PERFORMANCE INSIGHTS
+──────────────────────
+
+✔ Goroutines are cheap (~2KB stack)
+✔ Millions possible (depending on system)
+✔ Use worker pools for control
+✔ Avoid spawning unbounded goroutines
+
+---
+
+🏗️ WORKER POOL PATTERN
+──────────────────────
+
+jobs := make(chan int, 5)
+results := make(chan int, 5)
+
+for w := 1; w <= 3; w++ {
+go worker(w, jobs, results)
+}
+
+---
+
+🎯 BEST PRACTICES (EXPERIENCED DEV)
+───────────────────────────────────
+
+✔ Prefer channels over shared memory
+✔ Use context for cancellation
+✔ Always handle goroutine lifecycle
+✔ Avoid global state
+✔ Use WaitGroup properly
+✔ Profile with:
+go run -race
+go tool trace
+
+---
+
+📚 INTERVIEW QUESTIONS
+─────────────────────
+
+🔹 Beginner:
+
+1. What is a goroutine?
+2. Difference between goroutine and thread?
+3. Why is main exiting early?
+
+🔹 Intermediate:
+4. Explain WaitGroup
+5. Buffered vs unbuffered channels?
+6. What is select?
+
+🔹 Advanced:
+7. Explain Go scheduler (M:N model)
+8. What causes deadlock?
+9. How to detect race conditions?
+10. How to prevent goroutine leaks?
+
+🔹 Expert:
+11. How does preemption work in Go?
+12. When NOT to use goroutines?
+13. Design a worker pool system
+14. Compare channels vs mutex
+
+---
+
+🧠 REAL-WORLD USE CASES
+──────────────────────
+
+✔ API parallel calls
+✔ Background job processing
+✔ Event-driven systems
+✔ Streaming pipelines
+✔ Microservices concurrency
+
+---
+
+🏁 SUMMARY
+──────────────────────
+
+Goroutines = Lightweight concurrency primitive
+
+Core combo:
+👉 Goroutines + Channels + Sync tools
+
+Golden Rule:
+"Do not communicate by sharing memory;
+instead, share memory by communicating."
+
+---

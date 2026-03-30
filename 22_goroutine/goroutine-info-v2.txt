@@ -1,0 +1,189 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 🚀 Go Lang ROUTINES
+════════════════════════════════════════════════════════════════════════════════════
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║  📌  SECTION 1: GOROUTINE FUNDAMENTALS (Medior Level)                            ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+🔹 What is a Goroutine?
+   • Lightweight, user-space thread managed by Go runtime (not OS thread)
+   • Costs ~2KB stack (vs ~1-2MB for OS thread)
+   • Can have 100,000+ goroutines on a single machine
+   • Go runtime scheduler (GPM model: Goroutine, Processor, Machine) multiplexes them
+
+🔹 Spawning a Goroutine
+   go functionName()
+   go func() { ... }()          // anonymous
+   go func(x int) { ... }(100)  // with args
+
+🔹 Basic Medior Example – Concurrent Hello World
+   ```go
+   package main
+   import (
+       "fmt"
+       "time"
+   )
+
+   func worker(id int) {
+       fmt.Printf("👷 Worker %d started\n", id)
+       time.Sleep(500 * time.Millisecond)
+       fmt.Printf("✅ Worker %d done\n", id)
+   }
+
+   func main() {
+       for i := 1; i <= 5; i++ {
+           go worker(i)          // 🔥 fire and forget
+       }
+       time.Sleep(2 * time.Second) // prevent main from exiting
+       fmt.Println("🎉 Main finished")
+   }
+Output (order non-deterministic):
+👷 Worker 1 started
+👷 Worker 3 started
+...
+╔════════════════════════════════════════════════════════════════════════════════════╗
+║  🔧  SECTION 2: SYNCHRONIZATION PRIMITIVES                 ║
+╚════════════════════════════════════════════════════════════════════════════════════╝
+✅ sync.WaitGroup – Wait for multiple goroutines
+Govar wg sync.WaitGroup
+wg.Add(1)      // before go
+go func() {
+    defer wg.Done()
+    // work
+}()
+wg.Wait()
+✅ sync.Mutex – Protect shared state
+Govar mu sync.Mutex
+var counter int
+
+func inc() {
+    mu.Lock()
+    defer mu.Unlock()
+    counter++
+}
+✅ sync.RWMutex – Reader/Writer lock (performance king for reads)
+Gomu.RLock()   // many readers
+mu.RUnlock()
+mu.Lock()    // only one writer
+✅ sync.Once – Execute exactly once (lazy init)
+Govar once sync.Once
+var db *sql.DB
+
+func getDB() *sql.DB {
+    once.Do(func() { db = connectDB() })
+    return db
+}
+╔════════════════════════════════════════════════════════════════════════════════════╗
+║  📡  SECTION 3: CHANNELS – The Heart of Go Concurrency                             ║
+╚════════════════════════════════════════════════════════════════════════════════════╝
+
+🔹 Unbuffered vs Buffered
+ch := make(chan int)           // unbuffered (synchronous)
+ch := make(chan int, 10)       // buffered (asynchronous up to 10)
+
+🔹 Medior Example – Producer / Consumer
+Gofunc producer(ch chan<- int) {
+    for i := 0; i < 5; i++ {
+        ch <- i
+        fmt.Println("📤 sent", i)
+    }
+    close(ch)
+}
+
+func consumer(ch <-chan int) {
+    for val := range ch {
+        fmt.Println("📥 received", val)
+    }
+}
+
+func main() {
+    ch := make(chan int)
+    go producer(ch)
+    consumer(ch)
+}
+
+🔹 Experienced Pattern – Worker Pool with buffered channel + WaitGroup
+
+Goconst workers = 4
+jobs := make(chan int, 100)
+var wg sync.WaitGroup
+
+for i := 1; i <= workers; i++ {
+    wg.Add(1)
+    go func(id int) {
+        defer wg.Done()
+        for job := range jobs {
+            fmt.Printf("🔧 Worker %d processing job %d\n", id, job)
+            time.Sleep(200 * time.Millisecond)
+        }
+    }(i)
+}
+
+for i := 1; i <= 50; i++ {
+    jobs <- i
+}
+close(jobs)
+wg.Wait()
+
+🔹 Select Statement (Experienced Power Tool)
+Goselect {
+case msg := <-ch1:
+    // ...
+case msg := <-ch2:
+    // ...
+case <-time.After(500 * time.Millisecond):
+    // timeout
+case <-ctx.Done():
+    // cancellation
+}
+
+╔════════════════════════════════════════════════════════════════════════════════════╗
+║  🚀  SECTION 4: ADVANCED / EXPERIENCED LEVEL PATTERNS                              ║
+╚════════════════════════════════════════════════════════════════════════════════════╝
+
+• Context for cancellation & deadlines
+Goctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+defer cancel()
+// pass ctx to goroutines
+• Error handling in goroutines (fan-in pattern)
+Gotype Result struct {
+    Value int
+    Err   error
+}
+• Avoid goroutine leaks (always drain channels, use context)
+• Go 1.22+ range-over-func iterators + goroutines
+• Performance: GOMAXPROCS, runtime.Gosched(), preemption
+Common Pitfalls (Senior Interview Red Flags)
+❌ Calling goroutine without waiting → main exits
+❌ Closing channel from receiver side
+❌ Forgetting to call wg.Done() → deadlock
+❌ Data race (use go run -race)
+❌ Holding mutex across channel send/receive
+
+╔════════════════════════════════════════════════════════════════════════════════════╗
+║  ❓  SECTION 5: INTERVIEW QUESTIONS (Medior → Principal Level)                    ║
+╚════════════════════════════════════════════════════════════════════════════════════╝
+MEDIOR (30–60 min)
+
+What is the difference between goroutine and OS thread?
+How do you wait for multiple goroutines to finish? (show code)
+What happens if main() returns while goroutines are running?
+Explain unbuffered vs buffered channels with a real-world analogy.
+Write a simple worker pool that processes 100 jobs with 5 workers.
+
+EXPERIENCED / SENIOR
+6. How does the Go scheduler work? (GPM model)
+7. Explain the difference between sync.Mutex and sync.RWMutex. When would you use each?
+8. How would you implement a rate limiter using channels and ticker?
+9. What are goroutine leaks? How do you prevent them?
+10. Show how to use context.Context with timeout + cancellation in a fan-out pattern.
+11. What is the zero value of a channel? When is it useful?
+12. Explain select default case and how it avoids deadlock.
+13. How does sync.Once work internally? (bonus: compare with atomic + mutex)
+14. Design a concurrent map (or explain why sync.Map exists).
+15. You have a function that spawns 10,000 goroutines. How do you profile and tune it?
+PRINCIPAL / ARCHITECT LEVEL
+16. How would you implement a fan-in/fan-out pipeline with error propagation and graceful shutdown?
+17. Explain Go’s memory model and happens-before guarantees for channels.
+18. When would you choose runtime.SetFinalizer in a goroutine-heavy service?
+19. Design a highly concurrent service that handles 1M requests/min with bounded goroutines.
