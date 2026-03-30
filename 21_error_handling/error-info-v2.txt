@@ -1,0 +1,121 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 🚀 Go Lang Error Handling 
+════════════════════════════════════════════════════════════════════════════════════
+
+╔══════════════════════ MEDIOR DEVELOPER LEVEL ══════════════════════╗
+║ 1. Errors are VALUES (not exceptions)                              ║
+║    • The error interface: type error interface { Error() string }  ║
+║    • Functions return (value, error) — never ignore errors!        ║
+║    • Golden rule: "If a function can fail, it MUST return error"   ║
+╚════════════════════════════════════════════════════════════════════╝
+
+KEY CONCEPTS (Medior must master):
+• Always check: if err != nil { ... }
+• Never use panic() for expected errors (only for programmer errors)
+• Use errors.New("msg") for simple cases
+• Use fmt.Errorf("context: %v", err) for context (pre-1.13 style)
+
+BEST PRACTICES (Medior):
+• Propagate errors up the call stack with context
+• Log at the top level only (don't swallow errors)
+• Use defer to close resources even on error paths
+• %w verb → wraps errors (preserves original error)
+• errors.Is(err, target) → checks sentinel errors through wrapping
+• errors.As(err, &target) → extracts typed errors through wrapping
+• errors.Unwrap(err) → gets the immediate wrapped error
+• errors.Join(err1, err2) (Go 1.20+) → combine multiple errors
+
+Why this matters for Seniors:
+- No more fragile string matching
+- Full error chains for debugging (like stack traces but idiomatic)
+- Sentinel errors (pre-defined var ErrXXX) vs wrapped errors (use wisely)
+
+Advanced Patterns:
+1. Custom error types with Unwrap() method
+2. Error wrapping in middleware / layers (HTTP → DB → Service)
+3. Context cancellation errors (context.Canceled, context.DeadlineExceeded)
+4. Third-party alternatives (github.com/pkg/errors is legacy — use stdlib now)
+
+```go
+// MEDIOR: Basic + fmt.Errorf (still used everywhere)
+func FetchUser(id int) (*User, error) {
+    user, err := db.GetUser(id)
+    if err != nil {
+        return nil, fmt.Errorf("failed to fetch user %d: %v", id, err) // old style
+    }
+    return user, nil
+}
+
+// EXPERIENCED: Proper wrapping + sentinel + errors.Is/As
+var ErrUserNotFound = errors.New("user not found") // sentinel
+
+type ValidationError struct {
+    Field string
+    Msg   string
+}
+
+func (e ValidationError) Error() string { return e.Msg }
+func (e ValidationError) Unwrap() error { return nil } // for custom wrapping
+
+func CreateUser(req CreateUserRequest) error {
+    if req.Email == "" {
+        return fmt.Errorf("validation failed: %w", ValidationError{Field: "email", Msg: "required"})
+    }
+    if err := db.Insert(req); err != nil {
+        return fmt.Errorf("failed to create user: %w", err) // %w magic
+    }
+    return nil
+}
+
+//
+if err != nil {
+    if errors.Is(err, ErrUserNotFound) {
+        return echo.NewHTTPError(404, "user not found")
+    }
+    var ve ValidationError
+    if errors.As(err, &ve) {
+        return echo.NewHTTPError(400, ve.Msg)
+    }
+    log.Printf("unexpected error: %+v", err) // use %+v for full chain
+    return echo.NewHTTPError(500, "internal error")
+}
+
+//
+func SafeRun(fn func()) {
+    defer func() {
+        if r := recover(); r != nil {
+            log.Printf("recovered from panic: %v", r)
+            // Optionally wrap into error and send to error channel
+        }
+    }()
+    fn()
+}
+
+MEDIOR QUESTIONS:
+
+Why does Go use errors as return values instead of exceptions?
+What happens if you ignore an error with _ ?
+Write a function that returns custom error type.
+
+EXPERIENCED / SENIOR QUESTIONS:
+4. Explain the difference between %v and %w in fmt.Errorf. When would you use each?
+5. How do errors.Is() and errors.As() work internally? Show a real-world example with 3 layers of wrapping.
+6. Design error handling strategy for a microservice with gRPC + database + external API calls.
+7. When should you use panic() vs return error? Give concrete rules.
+8. How would you handle multiple errors in a goroutine fan-in pattern? (hint: errors.Join)
+9. What is the "errors are values" philosophy? How does it affect testing?
+10. Bonus (Principal): Implement a custom error type that implements both error and Unwrap() and can be used with errors.As().
+MODEL ANSWER (for Q5):
+"With %w we create a chain. errors.Is walks the chain using Unwrap() until it finds a match or reaches nil. 
+This replaced the old github.com/pkg/errors everywhere after Go 1.13."
+
+✅ DO:
+• Always handle or return errors
+• Wrap with context using %w
+• Use errors.Is / errors.As
+• Return sentinel errors for expected cases
+❌ DON'T:
+• Ignore errors (_)
+• Panic for expected failures
+• Compare errors with == (use errors.Is)
+• Use fmt.Errorf without %w in new code

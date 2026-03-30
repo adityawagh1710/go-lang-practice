@@ -1,0 +1,879 @@
+╔══════════════════════════════════════════════════════════════════════════════════════╗
+║                  GO ERROR HANDLING — EXPERIENCED DEVELOPER NOTES                   ║
+║                     Complete Reference with Examples & Interview Q&A               ║
+╚══════════════════════════════════════════════════════════════════════════════════════╝
+
+  Author  : Aditya's Go Learning Series
+  Topic   : Error Handling in Go
+  Level   : Medior → Experienced
+  Updated : 2025
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  📋 INDEX
+  ════════
+  [01] The error Interface — Foundation
+  [02] Creating Errors — errors.New & fmt.Errorf
+  [03] Custom Error Types
+  [04] Error Wrapping & Unwrapping (Go 1.13+)
+  [05] errors.Is & errors.As — Sentinel & Type Checks
+  [06] Panic & Recover
+  [07] Error Handling Patterns
+  [08] Multiple Return Values & Named Errors
+  [09] errors.Join (Go 1.20+)
+  [10] Real-World Layered Error Handling
+  [11] Java vs Go — Error Handling Comparison
+  [12] Interview Questions — Medior Level
+  [13] Interview Questions — Experienced Level
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[01]  THE error INTERFACE — FOUNDATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  In Go, errors are NOT exceptions. They are VALUES — plain values returned from
+  functions and handled by the caller explicitly.
+
+  The built-in error interface is defined as:
+
+    type error interface {
+        Error() string
+    }
+
+
+  Any type that implements the Error() string method satisfies the error interface.
+  nil means "no error".
+
+  PHILOSOPHY: Go treats errors as explicit control flow, not exceptional cases.
+  This forces developers to think about failure at every call site.
+
+    // Basic function returning an error
+    func divide(a, b float64) (float64, error) {
+        if b == 0 {
+            return 0, errors.New("division by zero")
+        }
+        return a / b, nil    // nil = no error
+    }
+    
+    func main() {
+        result, err := divide(10, 0)
+        if err != nil {
+            fmt.Println("Error:", err)  // Error: division by zero
+            return
+        }
+        fmt.Println("Result:", result)
+    }
+
+
+  ⚡ KEY RULE: ALWAYS check errors. Ignoring with _ is a code smell.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[02]  CREATING ERRORS — errors.New & fmt.Errorf
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ── 2.1  errors.New ─────────────────────────────────────────────────────────────
+
+    Creates a simple, static error with a fixed message.
+    Best for sentinel errors (package-level, reusable).
+
+    import "errors"
+    
+    var ErrNotFound = errors.New("record not found")    // sentinel error
+    var ErrUnauthorized = errors.New("unauthorized")
+    
+    func findUser(id int) (*User, error) {
+        if id <= 0 {
+            return nil, ErrNotFound
+        }
+        // ...
+    }
+
+
+    ⚡ errors.New returns a *errorString (unexported), each call is unique:
+       errors.New("x") != errors.New("x")  →  FALSE, they are different values!
+       This is why sentinel errors must be package-level vars.
+
+  ── 2.2  fmt.Errorf ─────────────────────────────────────────────────────────────
+
+    Creates errors with dynamic formatting. Use %w to WRAP another error.
+
+    import "fmt"
+    
+    func fetchData(url string) error {
+        resp, err := http.Get(url)
+        if err != nil {
+            // %w wraps the original error — preserves the chain
+            return fmt.Errorf("fetchData(%s): %w", url, err)
+        }
+        defer resp.Body.Close()
+        return nil
+    }
+    
+    // Without %w (use %v or %s) — context added but chain is BROKEN
+    return fmt.Errorf("fetchData failed: %v", err)   // cannot errors.Is/As
+
+
+    ┌────────────────────────────┬─────────────────────────────────────────────┐
+    │  Verb                      │ Effect                                      │
+    ├────────────────────────────┼─────────────────────────────────────────────┤
+    │  %w                        │ Wraps error — chain preserved for Is/As     │
+    │  %v or %s                  │ Formats message only — chain BROKEN         │
+    └────────────────────────────┴─────────────────────────────────────────────┘
+
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[03]  CUSTOM ERROR TYPES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  When you need errors with STRUCTURED DATA (not just a message), define a struct
+  that implements the error interface.
+
+  ── 3.1  Basic Custom Error ─────────────────────────────────────────────────────
+
+    // ValidationError carries field-level context
+    type ValidationError struct {
+        Field   string
+        Message string
+    }
+    
+    // Implement error interface
+    func (e *ValidationError) Error() string {
+        return fmt.Sprintf("validation error: field=%s, msg=%s",
+            e.Field, e.Message)
+    }
+    
+    func validateAge(age int) error {
+        if age < 0 || age > 150 {
+            return &ValidationError{
+                Field:   "age",
+                Message: "must be between 0 and 150",
+            }
+        }
+        return nil
+    }
+    
+    func main() {
+        err := validateAge(-5)
+        if err != nil {
+            // Type assert to access extra fields
+            var ve *ValidationError
+            if errors.As(err, &ve) {
+                fmt.Println("Field:", ve.Field)    // Field: age
+            }
+        }
+    }
+
+
+  ── 3.2  HTTP-style Error with Code ─────────────────────────────────────────────
+
+    type AppError struct {
+        Code    int
+        Message string
+        Err     error    // wrapped inner error
+    }
+    
+    func (e *AppError) Error() string {
+        if e.Err != nil {
+            return fmt.Sprintf("[%d] %s: %v", e.Code, e.Message, e.Err)
+        }
+        return fmt.Sprintf("[%d] %s", e.Code, e.Message)
+    }
+    
+    // Unwrap lets errors.Is/As traverse the chain
+    func (e *AppError) Unwrap() error { return e.Err }
+    
+    // ── Usage ──
+    func getOrder(id int) (*Order, error) {
+        order, err := db.Find(id)
+        if err != nil {
+            return nil, &AppError{
+                Code:    404,
+                Message: "order not found",
+                Err:     err,
+            }
+        }
+        return order, nil
+    }
+
+
+  ⚡ KEY INSIGHT: Use *pointer receiver* for Error(). A value receiver means the
+    nil check will PASS even if the concrete pointer is nil — a classic Go gotcha.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[04]  ERROR WRAPPING & UNWRAPPING (Go 1.13+)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Wrapping preserves the original error INSIDE a new error. This creates an
+  "error chain" — like exception chaining in Java (initCause / getCause).
+
+  ── 4.1  Wrap with fmt.Errorf %w ────────────────────────────────────────────────
+
+    var ErrDatabase = errors.New("database error")
+    
+    func queryUser(id int) (*User, error) {
+        row, err := db.Query("SELECT ...", id)
+        if err != nil {
+            // Wrap: adds context, keeps original
+            return nil, fmt.Errorf("queryUser id=%d: %w", id, ErrDatabase)
+        }
+        // ...
+    }
+    
+    func serviceLayer(id int) (*User, error) {
+        user, err := queryUser(id)
+        if err != nil {
+            return nil, fmt.Errorf("serviceLayer: %w", err) // wrap again
+        }
+        return user, nil
+    }
+    
+    // Error message becomes:
+    // "serviceLayer: queryUser id=42: database error"
+
+
+  ── 4.2  Unwrapping Manually ─────────────────────────────────────────────────────
+
+    import "errors"
+    
+    err := fmt.Errorf("layer2: %w", fmt.Errorf("layer1: %w", ErrNotFound))
+    
+    // Unwrap one level
+    inner := errors.Unwrap(err)    // "layer1: record not found"
+    inner2 := errors.Unwrap(inner) // ErrNotFound
+    inner3 := errors.Unwrap(inner2) // nil (no more wrapping)
+
+
+  ── 4.3  Implementing Unwrap in Custom Types ─────────────────────────────────────
+
+    Any custom error type that wraps should implement Unwrap() error:
+
+    type ServiceError struct {
+        Op  string
+        Err error
+    }
+    
+    func (e *ServiceError) Error() string {
+        return fmt.Sprintf("service op=%s: %v", e.Op, e.Err)
+    }
+    
+    func (e *ServiceError) Unwrap() error { return e.Err }  // ← CRITICAL
+
+
+  JAVA ANALOGY:
+    Java:  throw new ServiceException("msg", cause);   cause = getCause()
+    Go  :  fmt.Errorf("msg: %w", cause)                cause = errors.Unwrap(err)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[05]  errors.Is & errors.As — SENTINEL & TYPE CHECKS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Both functions traverse the entire error CHAIN, not just the top-level error.
+
+  ── 5.1  errors.Is — Match a Specific Error Value ────────────────────────────────
+
+    Use when checking for a known SENTINEL error (specific instance).
+
+    var ErrNotFound = errors.New("not found")
+    
+    // Deeply wrapped error
+    wrappedErr := fmt.Errorf("repo: %w",
+                     fmt.Errorf("db: %w", ErrNotFound))
+    
+    // errors.Is walks the entire chain
+    if errors.Is(wrappedErr, ErrNotFound) {
+        fmt.Println("Record not found — show 404 page")
+    }
+    
+    // Standard library sentinels
+    if errors.Is(err, io.EOF) { ... }
+    if errors.Is(err, sql.ErrNoRows) { ... }
+    if errors.Is(err, os.ErrPermission) { ... }
+
+
+    ⚡ CUSTOM Is() METHOD:
+    You can control matching by implementing Is(target error) bool on your type:
+
+    type StatusError struct { Code int }
+    func (e *StatusError) Error() string { return fmt.Sprintf("status %d", e.Code) }
+    
+    // Custom match: match by Code only, ignoring other fields
+    func (e *StatusError) Is(target error) bool {
+        t, ok := target.(*StatusError)
+        return ok && t.Code == e.Code
+    }
+    
+    var ErrNotFound = &StatusError{Code: 404}
+    err := fmt.Errorf("wrap: %w", &StatusError{Code: 404})
+    fmt.Println(errors.Is(err, ErrNotFound)) // true
+
+
+  ── 5.2  errors.As — Extract a Specific Error TYPE ───────────────────────────────
+
+    Use when you need to ACCESS the structured data inside a custom error type.
+
+    type ValidationError struct {
+        Field string
+    }
+    func (e *ValidationError) Error() string {
+        return "validation failed on " + e.Field
+    }
+    
+    err := fmt.Errorf("service: %w", &ValidationError{Field: "email"})
+    
+    var ve *ValidationError
+    if errors.As(err, &ve) {
+        // ve is now populated — even though err was wrapped!
+        fmt.Println("Validation failed on field:", ve.Field) // email
+    }
+
+
+  ── 5.3  Is vs As — Decision Guide ──────────────────────────────────────────────
+
+    Question                              → Use
+    ├────────────────────────────────────────────────────────────────────────────┤
+    "Is this the ErrNotFound sentinel?"   → errors.Is(err, ErrNotFound)
+    "Is this some ValidationError type?"  → errors.As(err, &ve)
+    "I need the .Field on ValidationErr"  → errors.As(err, &ve) then ve.Field
+
+
+  ⚠️ GOTCHA: Don't use == for wrapped errors — it only checks the TOP level.
+     err == ErrNotFound  ← WRONG if err is wrapped
+     errors.Is(err, ErrNotFound) ← CORRECT
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[06]  PANIC & RECOVER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Panic is for UNRECOVERABLE situations — not for normal error handling.
+  Think of it as a last resort, like Java's Error (not Exception).
+
+  ── 6.1  panic ──────────────────────────────────────────────────────────────────
+
+    func mustCompile(pattern string) *regexp.Regexp {
+        re, err := regexp.Compile(pattern)
+        if err != nil {
+            // Only panic on programmer errors (bad regex at startup)
+            panic(fmt.Sprintf("invalid regexp %q: %v", pattern, err))
+        }
+        return re
+    }
+    
+    // ❌ NEVER panic for expected/runtime errors like DB or HTTP failures
+    // ✅ DO panic for: nil pointer deref in init, required config missing
+
+
+  ── 6.2  recover — Catching a Panic ─────────────────────────────────────────────
+
+    recover() only works inside a deferred function.
+    Used to gracefully catch panics and convert them to errors.
+
+    // safeDiv returns (result, err) — never panics to caller
+    func safeDiv(a, b int) (result int, err error) {
+        defer func() {
+            if r := recover(); r != nil {
+                err = fmt.Errorf("recovered from panic: %v", r)
+            }
+        }()
+        result = a / b    // panics if b == 0 (integer division by zero)
+        return result, nil
+    }
+    
+    func main() {
+        result, err := safeDiv(10, 0)
+        if err != nil {
+            fmt.Println(err) // recovered from panic: runtime error: ...
+            return
+        }
+        fmt.Println(result)
+    }
+
+
+  ── 6.3  HTTP Middleware Pattern with Recover ────────────────────────────────────
+
+    // Real-world: protect HTTP handlers from panics
+    func recoveryMiddleware(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            defer func() {
+                if err := recover(); err != nil {
+                    log.Printf("panic: %v\n%s", err, debug.Stack())
+                    http.Error(w, "Internal Server Error", 500)
+                }
+            }()
+            next.ServeHTTP(w, r)
+        })
+    }
+
+
+  ── 6.4  When to Use panic vs error ─────────────────────────────────────────────
+
+    ┌────────────────────────────────────────────┬──────────────────────────────┐
+    │  Situation                                 │ Use                          │
+    ├────────────────────────────────────────────┼──────────────────────────────┤
+    │  Expected failure (file not found, etc.)   │ error return                 │
+    │  Programmer error (nil interface call)     │ panic                        │
+    │  Init-time invariant violation             │ panic (log.Fatal is also ok) │
+    │  Crossing library boundary                 │ NEVER panic — return error   │
+    │  Internal package invariant broken         │ panic                        │
+    └────────────────────────────────────────────┴──────────────────────────────┘
+
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[07]  ERROR HANDLING PATTERNS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ── 7.1  Early Return (Guard Clause) ─────────────────────────────────────────────
+
+    The idiomatic Go style: handle errors at the top, happy path flows downward.
+
+    // ❌ Nested (Java-style) — avoid
+    func processOrder(id int) error {
+        order, err := getOrder(id)
+        if err == nil {
+            payment, err := processPayment(order)
+            if err == nil {
+                err = sendConfirmation(payment)
+            }
+        }
+        return err
+    }
+    
+    // ✅ Early return — idiomatic Go
+    func processOrder(id int) error {
+        order, err := getOrder(id)
+        if err != nil {
+            return fmt.Errorf("processOrder: get: %w", err)
+        }
+        payment, err := processPayment(order)
+        if err != nil {
+            return fmt.Errorf("processOrder: payment: %w", err)
+        }
+        if err := sendConfirmation(payment); err != nil {
+            return fmt.Errorf("processOrder: confirm: %w", err)
+        }
+        return nil
+    }
+
+
+  ── 7.2  Error Accumulation (errgroup) ───────────────────────────────────────────
+
+    When running multiple goroutines, use golang.org/x/sync/errgroup.
+
+    import "golang.org/x/sync/errgroup"
+    
+    func fetchAll(urls []string) error {
+        g, ctx := errgroup.WithContext(context.Background())
+    
+        for _, url := range urls {
+            url := url // capture loop variable
+            g.Go(func() error {
+                return fetchURL(ctx, url)
+            })
+        }
+    
+        // Wait returns the first non-nil error, cancels ctx
+        return g.Wait()
+    }
+
+
+  ── 7.3  Inline Error in if Scope ───────────────────────────────────────────────
+
+    Declare and check err in the same if statement — limits scope:
+
+    if err := doSomething(); err != nil {
+        return fmt.Errorf("context: %w", err)
+    }
+    // err is NOT accessible here — intentional
+
+
+  ── 7.4  Deferred Cleanup with Error Handling ────────────────────────────────────
+
+    func writeFile(path, content string) (retErr error) {
+        f, err := os.Create(path)
+        if err != nil {
+            return fmt.Errorf("create: %w", err)
+        }
+        // Defer with named return to capture close error
+        defer func() {
+            if closeErr := f.Close(); closeErr != nil && retErr == nil {
+                retErr = fmt.Errorf("close: %w", closeErr)
+            }
+        }()
+    
+        if _, err := f.WriteString(content); err != nil {
+            return fmt.Errorf("write: %w", err)
+        }
+        return nil
+    }
+
+
+  ── 7.5  Error Type Dispatch (Switch) ────────────────────────────────────────────
+
+    func handleError(err error) {
+        var notFound *NotFoundError
+        var authErr *AuthError
+    
+        switch {
+        case errors.Is(err, ErrTimeout):
+            retry()
+        case errors.As(err, &notFound):
+            log.Printf("resource %s not found", notFound.Resource)
+            return404()
+        case errors.As(err, &authErr):
+            return401()
+        default:
+            log.Printf("unexpected error: %v", err)
+            return500()
+        }
+    }
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[08]  MULTIPLE RETURN VALUES & NAMED ERRORS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ── 8.1  Convention: error is ALWAYS the last return value ─────────────────────
+
+    func parse(s string) (int, error)           // ✅ correct order
+    func parse(s string) (error, int)           // ❌ wrong — unusual
+
+
+  ── 8.2  Named Return Values ─────────────────────────────────────────────────────
+
+    Useful with defer to annotate errors automatically:
+
+    // Named returns: result and err are declared upfront
+    func divide(a, b float64) (result float64, err error) {
+        defer func() {
+            // Can read/modify named returns in defer
+            if err != nil {
+                err = fmt.Errorf("divide(%v, %v): %w", a, b, err)
+            }
+        }()
+    
+        if b == 0 {
+            return 0, errors.New("divisor is zero") // deferred will wrap it
+        }
+        return a / b, nil
+    }
+
+
+  ⚡ Named returns can improve readability but use them sparingly —
+    they can make control flow harder to follow if overused.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[09]  errors.Join (Go 1.20+)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Combines multiple errors into a single error. All joined errors are traversable
+  by errors.Is and errors.As.
+
+    import "errors"
+    
+    var ErrDB = errors.New("db error")
+    var ErrCache = errors.New("cache error")
+    
+    // Collect errors from multiple subsystems
+    func validateAll(input Input) error {
+        var errs []error
+    
+        if err := validateName(input.Name); err != nil {
+            errs = append(errs, err)
+        }
+        if err := validateEmail(input.Email); err != nil {
+            errs = append(errs, err)
+        }
+        if err := validateAge(input.Age); err != nil {
+            errs = append(errs, err)
+        }
+    
+        return errors.Join(errs...)    // nil if all errs are nil
+    }
+    
+    func main() {
+        joined := errors.Join(ErrDB, ErrCache)
+        fmt.Println(errors.Is(joined, ErrDB))    // true
+        fmt.Println(errors.Is(joined, ErrCache)) // true
+        fmt.Println(joined)
+        // db error
+        // cache error
+    }
+
+
+  ⚡ errors.Join(nil, nil) returns nil — safe to call with empty or nil errors.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[10]  REAL-WORLD LAYERED ERROR HANDLING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  A complete example showing a 3-layer architecture: Handler → Service → Repository
+
+    package main
+    
+    import (
+        "errors"
+        "fmt"
+        "net/http"
+    )
+    
+    // ── Domain Errors ──────────────────────────────────────
+    var ErrUserNotFound = errors.New("user not found")
+    var ErrDBUnavailable = errors.New("database unavailable")
+    
+    type ValidationError struct {
+        Field   string
+        Message string
+    }
+    func (e *ValidationError) Error() string {
+        return fmt.Sprintf("%s: %s", e.Field, e.Message)
+    }
+    
+    // ── Repository Layer ─────────────────────────────────
+    type UserRepo struct{}
+    
+    func (r *UserRepo) FindByID(id int) (*User, error) {
+        if id <= 0 {
+            return nil, fmt.Errorf("FindByID: %w", ErrUserNotFound)
+        }
+        // simulate db failure
+        if id == 999 {
+            return nil, fmt.Errorf("FindByID: %w", ErrDBUnavailable)
+        }
+        return &User{ID: id, Name: "Aditya"}, nil
+    }
+    
+    // ── Service Layer ───────────────────────────────────
+    type UserService struct {
+        repo *UserRepo
+    }
+    
+    func (s *UserService) GetUser(id int) (*User, error) {
+        if id == 0 {
+            return nil, &ValidationError{Field: "id", Message: "cannot be 0"}
+        }
+        user, err := s.repo.FindByID(id)
+        if err != nil {
+            return nil, fmt.Errorf("GetUser(id=%d): %w", id, err)
+        }
+        return user, nil
+    }
+    
+    // ── HTTP Handler Layer ──────────────────────────────
+    func (h *Handler) GetUserHandler(w http.ResponseWriter, r *http.Request) {
+        id := parseID(r)
+        user, err := h.svc.GetUser(id)
+        if err != nil {
+            // Dispatch based on error type/sentinel
+            var ve *ValidationError
+            switch {
+            case errors.As(err, &ve):
+                http.Error(w, ve.Error(), http.StatusBadRequest)
+            case errors.Is(err, ErrUserNotFound):
+                http.Error(w, "user not found", http.StatusNotFound)
+            case errors.Is(err, ErrDBUnavailable):
+                http.Error(w, "service unavailable", http.StatusServiceUnavailable)
+            default:
+                http.Error(w, "internal error", http.StatusInternalServerError)
+            }
+            return
+        }
+        writeJSON(w, user)
+    }
+
+
+  Error chain for id=0:
+    Handler sees: "GetUser(id=0): id: cannot be 0"
+    errors.As finds ValidationError → 400 Bad Request
+
+  Error chain for id=999:
+    Handler sees: "GetUser(id=999): FindByID: database unavailable"
+    errors.Is finds ErrDBUnavailable → 503 Service Unavailable
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[11]  JAVA vs GO — ERROR HANDLING COMPARISON
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌──────────────────────────────────┬──────────────────────────────────────────┐
+  │  Java                            │  Go                                      │
+  ├──────────────────────────────────┼──────────────────────────────────────────┤
+  │  try { } catch (Ex e) { }        │  val, err := fn(); if err != nil { }     │
+  │  throws IOException              │  (no declaration) — return error         │
+  │  Checked exceptions              │  All errors are unchecked (no forced try)│
+  │  Unchecked (RuntimeException)    │  panic (not for normal flow)             │
+  │  ex.getCause()                   │  errors.Unwrap(err)                      │
+  │  ex instanceof MyException       │  errors.As(err, &myErr)                  │
+  │  ex == SPECIFIC_CONSTANT         │  errors.Is(err, ErrConstant)             │
+  │  Exception chaining              │  fmt.Errorf("ctx: %w", err)              │
+  │  Multi-catch (Ex1 | Ex2)         │  errors.Join(err1, err2) (Go 1.20+)     │
+  │  finally { }                     │  defer func() { cleanup() }()           │
+  │  Custom exception class          │  Custom struct + Error() string          │
+  │  Stack trace automatic           │  Must use %+v with pkg/errors or slog   │
+  └──────────────────────────────────┴──────────────────────────────────────────┘
+
+
+
+  KEY PHILOSOPHICAL DIFFERENCE:
+  Java: "Errors are exceptional — use normal flow by default"
+  Go  : "Errors are expected — treat them as part of normal flow"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[12]  INTERVIEW QUESTIONS — MEDIOR LEVEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Q1: What is the error interface in Go?
+  ───────────────────────────────────────
+  A: It's a built-in interface with a single method: Error() string.
+     Any type implementing this method is an error. nil error means no error.
+
+  Q2: What is the difference between errors.New and fmt.Errorf?
+  ──────────────────────────────────────────────────────────────
+  A: errors.New creates a static error with a fixed message, best for sentinels.
+     fmt.Errorf supports dynamic formatting and crucially the %w verb to wrap
+     another error while preserving the chain for errors.Is/As.
+
+  Q3: What is error wrapping and why is it important?
+  ────────────────────────────────────────────────────
+  A: Wrapping embeds one error inside another using fmt.Errorf("ctx: %w", err).
+     It adds context at each layer without losing the original error identity.
+     Callers can then use errors.Is/As to check the whole chain, not just
+     the top-level message.
+
+  Q4: What is the difference between errors.Is and errors.As?
+  ────────────────────────────────────────────────────────────
+  A: errors.Is checks if any error in the chain matches a specific VALUE
+     (sentinel). errors.As checks if any error in the chain matches a specific
+     TYPE and extracts it, giving access to its fields.
+
+  Q5: When should you use panic?
+  ──────────────────────────────
+  A: Only for programmer errors and invariant violations that should never happen
+     at runtime — like an impossible nil pointer or bad init-time config.
+     Never use panic for expected errors like missing files or bad user input.
+
+  Q6: How does recover work?
+  ───────────────────────────
+  A: recover() must be called inside a deferred function. It catches a panic
+     and returns the panic value. After recover, the goroutine continues normally
+     but the panicking function's stack has already unwound.
+
+  Q7: What's the nil interface gotcha with errors?
+  ─────────────────────────────────────────────────
+  A: If a function returns a typed nil pointer as an error interface, the interface
+     is non-nil (it holds type info). So err != nil will be true even though the
+     underlying pointer is nil. Always return untyped nil for "no error".
+
+     BAD:  var err *MyError = nil; return err   // interface is not nil!
+     GOOD: return nil                           // untyped nil — interface is nil
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[13]  INTERVIEW QUESTIONS — EXPERIENCED LEVEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Q1: How does errors.Is traverse a wrapped error chain?
+  ───────────────────────────────────────────────────────
+  A: It calls Unwrap() on each error in the chain and compares using ==. It stops
+     when it finds a match or Unwrap() returns nil. You can also implement a custom
+     Is(target error) bool method on your error type to override equality matching
+     (e.g., match only by status code rather than by pointer identity).
+
+  Q2: When would you implement a custom Is() method on an error type?
+  ────────────────────────────────────────────────────────────────────
+  A: When equality is domain-specific — for example, two HTTPError{Code: 404}
+     should match regardless of their message, since they're structurally equal
+     but not the same pointer. Without a custom Is(), errors.Is would compare
+     them by pointer equality and return false.
+
+  Q3: What does errors.Join do and how does it differ from fmt.Errorf %w?
+  ────────────────────────────────────────────────────────────────────────
+  A: errors.Join (Go 1.20+) wraps multiple errors into one, returning a single
+     error that exposes all of them through Unwrap() []error. This allows
+     errors.Is/As to match any of the contained errors. fmt.Errorf %w wraps a
+     single parent-child chain (linear), while errors.Join creates a tree.
+
+  Q4: Explain the "named return + defer" pattern for error annotation.
+  ────────────────────────────────────────────────────────────────────
+  A: Named returns allow a deferred function to read and modify the actual return
+     values. A common pattern is:
+       func foo() (err error) {
+           defer func() {
+               if err != nil { err = fmt.Errorf("foo: %w", err) }
+           }()
+       }
+     This automatically adds "foo: " context to every error path in the function
+     without repeating the wrapping at each return site.
+
+  Q5: How would you design error handling for a library that might be used
+      by anyone? What rules apply?
+  ──────────────────────────────────────────────────────────────────────────
+  A: Key rules for library error design:
+     1. Never panic — always return errors (panics cross goroutine boundaries badly)
+     2. Export sentinel errors as package-level vars so callers can use errors.Is
+     3. Export custom error types so callers can use errors.As
+     4. Wrap internal errors with context using %w, preserving the chain
+     5. Don't expose internal implementation errors directly to callers
+     6. Document sentinel errors and what conditions produce them
+     7. Implement Unwrap() on custom error types that wrap inner errors
+
+  Q6: What is the performance consideration with error wrapping?
+  ──────────────────────────────────────────────────────────────
+  A: fmt.Errorf allocates a new error on every call. On hot paths (tight loops,
+     millions of calls/sec) where errors are common — like parsing — this causes
+     GC pressure. Prefer pre-allocated sentinel errors on hot paths and avoid
+     wrapping unless error context is needed. profiling tools like pprof can
+     reveal alloc pressure from errors.
+
+  Q7: How do you handle errors in goroutines without losing them?
+  ────────────────────────────────────────────────────────────────
+  A: Options:
+     1. errgroup — collects the first error and cancels a shared context
+     2. Error channels — each goroutine sends errors to a chan error
+     3. errors.Join — aggregate all errors after goroutines complete
+     Example with errgroup:
+       g, ctx := errgroup.WithContext(ctx)
+       g.Go(func() error { return doWork(ctx) })
+       if err := g.Wait(); err != nil { /* handle */ }
+
+  Q8: Explain the "typed nil" interface trap and how to avoid it.
+  ───────────────────────────────────────────────────────────────
+  A: In Go, an interface value has two components: (type, value). A nil interface
+     has both as nil. But a typed nil — like (*MyError)(nil) — has a type component
+     set, so the interface is non-nil.
+     Trap:
+       func getErr() error {
+           var e *MyError = nil
+           return e      // returns non-nil interface!
+       }
+       err := getErr()
+       fmt.Println(err == nil) // false — surprise!
+     Fix: always return untyped nil: return nil
+     Or: guard with: if ptr == nil { return nil }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  QUICK REFERENCE CHEAT SHEET
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    TASK                               │  HOW
+  ├────────────────────────────────────────────────────────────────────────────┤
+    Create simple error                │  errors.New("msg")
+    Create formatted error             │  fmt.Errorf("ctx %v", val)
+    Wrap error (preserve chain)        │  fmt.Errorf("ctx: %w", err)
+    Custom error type                  │  struct + Error() string
+    Make custom type unwrappable       │  + Unwrap() error
+    Check for sentinel                 │  errors.Is(err, ErrFoo)
+    Extract typed error                │  errors.As(err, &myErr)
+    Peel one layer                     │  errors.Unwrap(err)
+    Combine multiple errors            │  errors.Join(e1, e2) // Go 1.20+
+    Catch panic in defer               │  recover()
+    Annotate all returns via defer     │  named return + defer fmt.Errorf
+    Concurrent error collection        │  errgroup.Go + g.Wait()
+    Typed nil trap fix                 │  always return nil, not typed nil
+
+
+  SENTINEL ERROR NAMING CONVENTION:
+    var ErrNotFound    = errors.New("not found")     // ✅ starts with Err
+    var errInternal    = errors.New("internal")      // unexported — package-only
+    var ErrTimeout     = errors.New("timeout")       // exported — for callers
+
+  WRAPPING CONVENTION (Op: Msg: Wrapped):
+    fmt.Errorf("UserService.GetUser: validate: %w", err)
+    → Produces: "UserService.GetUser: validate: id: cannot be empty"

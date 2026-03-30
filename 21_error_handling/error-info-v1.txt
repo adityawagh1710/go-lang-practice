@@ -1,0 +1,269 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 🚀 Go Lang Error Handling 
+════════════════════════════════════════════════════════════════════════════════════
+
+---
+
+## 📌 1. Philosophy of Error Handling in Go
+
+* Go treats **errors as values**, not exceptions
+* No `try-catch` — explicit handling is required
+* Encourages **clarity, simplicity, and control flow transparency**
+
+```go
+if err != nil {
+    return err
+}
+```
+
+✔ Forces developers to **think about failure cases**
+✔ Makes code predictable and maintainable
+
+---
+
+## ⚙️ 2. Basic Error Handling
+
+### 🔹 Returning Errors
+
+```go
+func divide(a, b int) (int, error) {
+    if b == 0 {
+        return 0, fmt.Errorf("cannot divide by zero")
+    }
+    return a / b, nil
+}
+```
+
+### 🔹 Handling Errors
+
+```go
+result, err := divide(10, 0)
+if err != nil {
+    fmt.Println("Error:", err)
+    return
+}
+fmt.Println("Result:", result)
+```
+
+---
+
+## 🧱 3. Custom Error Types (Advanced Practice)
+
+✔ Useful for domain-specific errors
+✔ Enables better error inspection
+
+```go
+type MyError struct {
+    Code int
+    Msg  string
+}
+
+func (e *MyError) Error() string {
+    return fmt.Sprintf("Code %d: %s", e.Code, e.Msg)
+}
+```
+
+### Usage:
+
+```go
+func doSomething() error {
+    return &MyError{Code: 400, Msg: "Bad Request"}
+}
+```
+
+---
+
+## 🔍 4. Error Wrapping (Go 1.13+)
+
+✔ Preserve original error context
+✔ Use `%w` with `fmt.Errorf`
+
+```go
+func readFile() error {
+    err := os.Open("file.txt")
+    if err != nil {
+        return fmt.Errorf("failed to open file: %w", err)
+    }
+    return nil
+}
+```
+
+---
+
+## 🧠 5. Unwrapping Errors
+
+```go
+if errors.Is(err, os.ErrNotExist) {
+    fmt.Println("File does not exist")
+}
+```
+
+```go
+var myErr *MyError
+if errors.As(err, &myErr) {
+    fmt.Println("Custom error:", myErr.Code)
+}
+```
+
+---
+
+## 🧵 6. Sentinel Errors (Shared Errors)
+
+```go
+var ErrNotFound = errors.New("not found")
+```
+
+✔ Compare using `errors.Is` instead of `==`
+
+```go
+if errors.Is(err, ErrNotFound) {
+    // handle
+}
+```
+
+---
+
+## 🧰 7. Best Practices (Medior → Senior Level)
+
+### ✅ DO:
+
+* Return errors early (fail fast)
+* Wrap errors with context
+* Use `errors.Is` / `errors.As`
+* Keep error messages **lowercase, no punctuation**
+
+### ❌ DON'T:
+
+* Ignore errors (`_`)
+* Panic for expected failures
+* Return vague errors like `"something went wrong"`
+
+---
+
+## 🔥 8. Panic & Recover (Use Carefully)
+
+### 🔹 Panic
+
+```go
+panic("something went terribly wrong")
+```
+
+### 🔹 Recover
+
+```go
+defer func() {
+    if r := recover(); r != nil {
+        fmt.Println("Recovered:", r)
+    }
+}()
+```
+
+✔ Use only for:
+
+* Programmer errors
+* Irrecoverable states
+
+---
+
+## 🧪 9. Real-World Example (Service Layer)
+
+```go
+func GetUser(id int) (*User, error) {
+    user, err := repo.FindByID(id)
+    if err != nil {
+        return nil, fmt.Errorf("get user failed: %w", err)
+    }
+    return user, nil
+}
+```
+
+✔ Adds context → easier debugging
+
+---
+
+## 🧩 10. Error Handling Patterns
+
+### 🔹 Inline Handling
+
+```go
+if err := doSomething(); err != nil {
+    return err
+}
+```
+
+### 🔹 Guard Clauses
+
+```go
+if err != nil {
+    return err
+}
+```
+
+✔ Keeps code flat and readable
+
+---
+
+## 🧠 11. Advanced Pattern: Error Classification
+
+```go
+type Temporary interface {
+    Temporary() bool
+}
+```
+
+```go
+if t, ok := err.(Temporary); ok && t.Temporary() {
+    // retry logic
+}
+```
+
+---
+
+## 🎯 12. Interview Questions
+
+### 🟢 Basic
+
+1. Why does Go not use exceptions?
+2. What is the `error` interface?
+3. Difference between `nil` error and non-nil error?
+
+### 🟡 Intermediate
+
+4. What is error wrapping and why use `%w`?
+5. Difference between `errors.Is` and `errors.As`?
+6. When would you create custom error types?
+
+### 🔴 Advanced
+
+7. How do you design error handling in microservices?
+8. How do you propagate errors across layers?
+9. When should you use panic vs error?
+
+---
+
+## 🧠 13. Pro Tips (Experienced Dev Mindset)
+
+* Treat errors as part of your API contract
+* Log errors with context (request ID, user ID)
+* Avoid leaking internal errors to clients
+* Use structured logging (zap, logrus)
+
+---
+
+## 📌 Summary
+
+| Concept          | Key Idea                   |
+| ---------------- | -------------------------- |
+| Errors as values | Explicit handling          |
+| Wrapping         | Preserve context           |
+| Custom errors    | Domain-specific logic      |
+| Panic            | Only for critical failures |
+| Best practice    | Fail fast, be explicit     |
+
+---
+
+## 🚀 Final Thought
+
+> “Good error handling is not about catching errors — it's about designing systems that communicate failure clearly.”
+
+---
