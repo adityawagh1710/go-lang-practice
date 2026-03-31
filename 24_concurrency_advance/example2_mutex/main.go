@@ -29,7 +29,9 @@ func increment(s string) {
 var counter2 int
 
 func increment2(wg *sync.WaitGroup) {
-	defer wg.Done()
+	defer func() {
+		wg.Done()
+	}()
 
 	for i := 0; i < 1000; i++ {
 		mutex.Lock()

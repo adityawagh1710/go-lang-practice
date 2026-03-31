@@ -197,6 +197,13 @@
     //   Locking the same mutex from the same goroutine = instant deadlock.
 
 
+The defer keyword is generally used for cleaning purpose. 
+The defer keyword postpones the execution of a function or statement until the end of the calling function.
+
+It executes code (a function or expression) when the enclosing function returns before the closing curly brace }. 
+It is also executed if an error occurs during the execution of the enclosing function.
+
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  ┌─────────────────────────────────────────────────────────────────────────────────┐
  │  SECTION 3 ❯  sync.RWMutex — READ/WRITE LOCKING                                │
@@ -267,6 +274,11 @@
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
  ◈ CORE CONCEPT
+    Atomics provide synchronization at the hardware level. 
+    Because of this, it’s limited to words and half-words of data. 
+    So they’re great for counters or fast switching mechanics. 
+    The WaitGroup API’s use atomics.
+    
     Atomic operations use CPU-level instructions (CAS — Compare-And-Swap) that
     execute indivisibly without needing a mutex or lock.
 

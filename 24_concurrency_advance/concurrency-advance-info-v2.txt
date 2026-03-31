@@ -90,12 +90,25 @@ Mutex is NOT re-entrant (unlike Java synchronized)
 Prefer small critical sections → Lock only what you need
 Use sync.RWMutex for read-heavy workloads
 
+The defer keyword is generally used for cleaning purpose. 
+The defer keyword postpones the execution of a function or statement until the end of the calling function.
+
+It executes code (a function or expression) when the enclosing function returns before the closing curly brace }. 
+It is also executed if an error occurs during the execution of the enclosing function.
+
 📊 PERFORMANCE TIP:
 Mutex is ~10-20ns per lock/unlock on modern CPUs.
 If you lock for >100ns → you are doing it wrong.
+
 ──────────────────────────────────────────────────────────────────────────────
 3️⃣ SYNC/ATOMIC – LOCK-FREE MAGIC ⚡
 ──────────────────────────────────────────────────────────────────────────────
+
+Atomics provide synchronization at the hardware level. 
+Because of this, it’s limited to words and half-words of data. 
+So they’re great for counters or fast switching mechanics. 
+The WaitGroup API’s use atomics.
+
 📌 WHEN TO USE (Medior):
 When you only need simple operations (++, --, swap, CAS) on int32/int64/uintptr.
 📌 EXAMPLES (Experienced):
