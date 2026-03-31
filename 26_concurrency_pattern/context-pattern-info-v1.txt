@@ -1,0 +1,335 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 🚀 Go Concurrency patterns
+════════════════════════════════════════════════════════════════════════════════════
+🔹 1. What is a Concurrency Pattern?
+
+Concurrency patterns are standard ways to structure goroutines and channels to solve real-world problems like:
+
+Parallel processing
+Task coordination
+Resource sharing
+Pipelines
+
+They help make code:
+
+Maintainable
+Scalable
+Safe (avoid race conditions)
+
+════════════════════════════════════════════════════════════════════════════════════
+🔹 2. Fan-Out / Fan-In Pattern
+
+👉 Concept:
+Fan-Out: Multiple goroutines process tasks concurrently
+Fan-In: Combine results into a single channel
+
+✅ Example:
+package main
+
+import (
+	"fmt"
+	"sync"
+)
+
+func worker(id int, jobs <-chan int, results chan<- int, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	for job := range jobs {
+		fmt.Printf("Worker %d processing job %d\n", id, job)
+		results <- job * 2
+	}
+}
+
+func main() {
+	jobs := make(chan int, 5)
+	results := make(chan int, 5)
+
+	var wg sync.WaitGroup
+
+	// Fan-Out
+	for i := 1; i <= 3; i++ {
+		wg.Add(1)
+		go worker(i, jobs, results, &wg)
+	}
+
+	// Send jobs
+	for j := 1; j <= 5; j++ {
+		jobs <- j
+	}
+	close(jobs)
+
+	wg.Wait()
+	close(results)
+
+	// Fan-In
+	for res := range results {
+		fmt.Println("Result:", res)
+	}
+}
+
+════════════════════════════════════════════════════════════════════════════════════
+🔹 3. Worker Pool Pattern
+
+👉 Concept:
+Fixed number of workers
+Jobs distributed via channel
+Controls concurrency
+
+✅ Example:
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func worker(id int, jobs <-chan int) {
+	for job := range jobs {
+		fmt.Printf("Worker %d started job %d\n", id, job)
+		time.Sleep(time.Second)
+		fmt.Printf("Worker %d finished job %d\n", id, job)
+	}
+}
+
+func main() {
+	jobs := make(chan int, 10)
+
+	// Start workers
+	for i := 1; i <= 3; i++ {
+		go worker(i, jobs)
+	}
+
+	// Send jobs
+	for j := 1; j <= 5; j++ {
+		jobs <- j
+	}
+	close(jobs)
+
+	time.Sleep(3 * time.Second)
+}
+
+════════════════════════════════════════════════════════════════════════════════════
+🔹 4. Pipeline Pattern
+
+👉 Concept:
+Data flows through multiple stages
+Each stage is a goroutine
+
+✅ Example:
+package main
+
+import "fmt"
+
+func stage1(nums []int) <-chan int {
+	out := make(chan int)
+
+	go func() {
+		for _, n := range nums {
+			out <- n * 2
+		}
+		close(out)
+	}()
+
+	return out
+}
+
+func stage2(in <-chan int) <-chan int {
+	out := make(chan int)
+
+	go func() {
+		for n := range in {
+			out <- n + 1
+		}
+		close(out)
+	}()
+
+	return out
+}
+
+func main() {
+	nums := []int{1, 2, 3}
+
+	stage1Out := stage1(nums)
+	stage2Out := stage2(stage1Out)
+
+	for result := range stage2Out {
+		fmt.Println(result)
+	}
+}
+════════════════════════════════════════════════════════════════════════════════════
+🔹 5. Producer-Consumer Pattern
+
+👉 Concept:
+Producer generates data
+Consumer processes data
+
+✅ Example:
+package main
+
+import "fmt"
+
+func producer(ch chan<- int) {
+	for i := 1; i <= 5; i++ {
+		ch <- i
+	}
+	close(ch)
+}
+
+func consumer(ch <-chan int) {
+	for val := range ch {
+		fmt.Println("Consumed:", val)
+	}
+}
+
+func main() {
+	ch := make(chan int)
+
+	go producer(ch)
+	consumer(ch)
+}
+════════════════════════════════════════════════════════════════════════════════════
+🔹 6. Select Pattern (Multiplexing)
+
+👉 Concept:
+Handle multiple channels
+Non-blocking or timeout behavior
+
+✅ Example:
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func main() {
+	ch1 := make(chan string)
+	ch2 := make(chan string)
+
+	go func() {
+		time.Sleep(1 * time.Second)
+		ch1 <- "from ch1"
+	}()
+
+	go func() {
+		time.Sleep(2 * time.Second)
+		ch2 <- "from ch2"
+	}()
+
+	for i := 0; i < 2; i++ {
+		select {
+		case msg1 := <-ch1:
+			fmt.Println(msg1)
+		case msg2 := <-ch2:
+			fmt.Println(msg2)
+		}
+	}
+}
+════════════════════════════════════════════════════════════════════════════════════
+🔹 7. Context Cancellation Pattern
+
+👉 Concept:
+Gracefully cancel goroutines
+Prevent leaks
+
+✅ Example:
+package main
+
+import (
+	"context"
+	"fmt"
+	"time"
+)
+
+func worker(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Println("Worker stopped")
+			return
+		default:
+			fmt.Println("Working...")
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+}
+
+func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	go worker(ctx)
+
+	time.Sleep(2 * time.Second)
+	cancel()
+
+	time.Sleep(1 * time.Second)
+}
+════════════════════════════════════════════════════════════════════════════════════
+🔥 Important Best Practices
+✔ Always close channels when done
+✔ Use WaitGroup for synchronization
+✔ Avoid goroutine leaks
+✔ Prefer context for cancellation
+✔ Avoid shared memory (use channels)
+✔ Keep goroutines lightweight
+🎯 Interview Questions & Answers
+❓ Q1: What is Fan-In and Fan-Out?
+
+Answer:
+
+Fan-Out: Multiple goroutines process tasks
+Fan-In: Combine outputs into one channel
+❓ Q2: What is Worker Pool?
+
+Answer:
+
+Fixed number of goroutines processing jobs from a queue
+Controls concurrency and resource usage
+❓ Q3: What is Pipeline in Go?
+
+Answer:
+
+Series of stages connected via channels
+Output of one stage becomes input of another
+❓ Q4: Why use select?
+
+Answer:
+
+To listen to multiple channels simultaneously
+Helps in timeout, cancellation, multiplexing
+❓ Q5: How to prevent goroutine leaks?
+
+Answer:
+
+Use context
+Close channels properly
+Avoid infinite blocking
+❓ Q6: Channels vs Mutex?
+
+Answer:
+
+Channels → communication
+Mutex → shared memory protection
+
+Go philosophy:
+
+"Do not communicate by sharing memory;
+Instead, share memory by communicating"
+❓ Q7: Buffered vs Unbuffered Channels?
+
+Answer:
+
+Unbuffered → synchronous (blocking)
+Buffered → asynchronous (non-blocking up to capacity)
+❓ Q8: What happens if channel is not closed?
+
+Answer:
+
+Receivers may block forever → goroutine leak
+🚀 Summary
+Fan-Out/Fan-In  → Parallel processing
+Worker Pool     → Controlled concurrency
+Pipeline        → Data processing stages
+Producer-Consumer → Data flow handling
+Select          → Multi-channel handling
+Context         → Cancellation control

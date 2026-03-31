@@ -1,0 +1,1258 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 🚀 Go Concurrency patterns
+════════════════════════════════════════════════════════════════════════════════════
+
+  TABLE OF CONTENTS
+  ─────────────────
+  [01]  What Are Concurrency Patterns?
+  [02]  Pattern 1  — Pipeline
+  [03]  Pattern 2  — Fan-Out / Fan-In
+  [04]  Pattern 3  — Done Channel (Cancellation)
+  [05]  Pattern 4  — Context for Cancellation & Timeout
+  [06]  Pattern 5  — Semaphore (Bounded Concurrency)
+  [07]  Pattern 6  — Rate Limiting
+  [08]  Pattern 7  — Pub / Sub (Event Broadcasting)
+  [09]  Pattern 8  — Timeout & Select
+  [10]  Pattern 9  — Or-Done Channel
+  [11]  Pattern 10 — Tee Channel (Stream Splitting)
+  [12]  Java vs Go Concurrency — Comparison Table
+  [13]  Quick-Reference Cheat Sheet
+  [14]  Interview Q&A — Medior Level
+  [15]  Interview Q&A — Experienced Level
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [01]  WHAT ARE CONCURRENCY PATTERNS?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Go's concurrency model is built on the CSP (Communicating Sequential
+  Processes) philosophy — goroutines talk to each other through channels
+  rather than sharing memory directly.
+
+  Go's famous guiding principle:
+      "Do not communicate by sharing memory;
+       share memory by communicating."
+
+  Concurrency patterns are reusable, well-understood solutions to common
+  problems when coordinating multiple goroutines. They answer questions like:
+
+    • How do I chain processing stages?              → Pipeline
+    • How do I parallelize work and merge results?   → Fan-Out / Fan-In
+    • How do I stop goroutines gracefully?           → Done Channel / Context
+    • How do I limit concurrent access?              → Semaphore
+    • How do I control request rate?                 → Rate Limiting
+    • How do I broadcast events to many listeners?   → Pub/Sub
+    • How do I handle partial results with timeout?  → Select + Timeout
+
+  Each pattern is explained below with:
+    ▸ Concept explanation
+    ▸ When to use it
+    ▸ Named, runnable Go code example
+    ▸ Key pitfalls
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [02]  PATTERN 1 — PIPELINE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  CONCEPT
+  ───────
+  A pipeline is a series of stages connected by channels.
+  Each stage:
+    1. Receives values from an upstream channel (inbound).
+    2. Does some processing on those values.
+    3. Sends results to a downstream channel (outbound).
+
+  Think of it like a Unix pipe:
+      cat file | grep "error" | wc -l
+  Each command is a stage; stdout/stdin acts as the channel.
+
+  In Go, each stage is a function that:
+    • Takes a receive-only channel  (<-chan T)
+    • Returns a send-only channel   (chan<- T)  [or receive-only for downstream]
+
+  WHEN TO USE
+  ───────────
+    • ETL (Extract, Transform, Load) workflows
+    • Image/audio/video processing chains
+    • Data transformation pipelines (parse → validate → enrich → store)
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Example: pipeline_numbers.go
+  — Generate numbers → Square them → Print results
+  ──────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+// Stage 1: generator — produces integers into a channel
+func generate(nums ...int) <-chan int {
+    out := make(chan int)
+    go func() {
+        for _, n := range nums {
+            out <- n   // send each number downstream
+        }
+        close(out)     // always close when done sending
+    }()
+    return out
+}
+
+// Stage 2: square — receives ints, sends their squares
+func square(in <-chan int) <-chan int {
+    out := make(chan int)
+    go func() {
+        for n := range in {   // range over channel reads until it's closed
+            out <- n * n
+        }
+        close(out)
+    }()
+    return out
+}
+
+func main() {
+    // Wire up the pipeline: generate → square → print
+    nums := generate(2, 3, 4, 5)
+    squares := square(nums)
+
+    // Stage 3: consumer — reads final output
+    for result := range squares {
+        fmt.Println(result)   // 4, 9, 16, 25
+    }
+}
+
+  OUTPUT:
+      4
+      9
+      16
+      25
+
+  KEY RULES
+  ─────────
+  ✔  Each stage owns exactly one goroutine (or more for fan-out).
+  ✔  The producer always closes the channel when done.
+  ✔  Consumers use range to read until closed — no manual nil checks.
+  ✘  Never close a channel from the receiver side — only the sender closes.
+  ✘  Don't send on a closed channel — it panics.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [03]  PATTERN 2 — FAN-OUT / FAN-IN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  CONCEPT
+  ───────
+  Fan-Out  → Split one input channel into multiple goroutines that process
+             work concurrently.
+
+  Fan-In   → Merge multiple output channels back into one single channel
+             (also called a "Merge" or "Multiplexer").
+
+  Visual:
+                    ┌── worker1 ──┐
+  input ──┤ Fan-Out ├── worker2 ──┤ Fan-In ──► merged output
+                    └── worker3 ──┘
+
+  This is the Go equivalent of Java's ForkJoinPool or parallel streams,
+  but built explicitly with goroutines and channels.
+
+  WHEN TO USE
+  ───────────
+    • CPU-bound tasks that can run independently in parallel
+    • Network/IO calls (call multiple APIs concurrently, merge results)
+    • Search across multiple data sources simultaneously
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Example: fanout_fanin.go
+  — Fan out to 3 workers, fan in results
+  ──────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "sync"
+)
+
+// worker simulates processing a job — squares the value
+func worker(id int, jobs <-chan int, results chan<- int, wg *sync.WaitGroup) {
+    defer wg.Done()
+    for j := range jobs {
+        result := j * j
+        fmt.Printf("  Worker %d processed job %d → %d\n", id, j, result)
+        results <- result
+    }
+}
+
+func main() {
+    jobs    := make(chan int, 10)    // buffered: producer won't block immediately
+    results := make(chan int, 10)
+
+    var wg sync.WaitGroup
+
+    // Fan-Out: launch 3 worker goroutines
+    for w := 1; w <= 3; w++ {
+        wg.Add(1)
+        go worker(w, jobs, results, &wg)
+    }
+
+    // Send 9 jobs into the jobs channel
+    for j := 1; j <= 9; j++ {
+        jobs <- j
+    }
+    close(jobs)   // signal workers: no more jobs coming
+
+    // Wait for all workers, then close results channel
+    go func() {
+        wg.Wait()
+        close(results)   // safe to close here — all senders are done
+    }()
+
+    // Fan-In: collect all results
+    total := 0
+    for r := range results {
+        total += r
+    }
+    fmt.Println("Total:", total)   // 1+4+9+16+25+36+49+64+81 = 285
+}
+
+  KEY INSIGHT
+  ───────────
+  The sync.WaitGroup tracks when ALL workers finish so we can safely close
+  the results channel. Without closing results, the final range loop would
+  block forever (deadlock).
+
+  CLOSING RULE FOR FAN-IN
+  ───────────────────────
+  When multiple goroutines write to one channel, use a WaitGroup in a
+  separate goroutine to close the channel only after ALL writers are done:
+
+      go func() {
+          wg.Wait()
+          close(results)
+      }()
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [04]  PATTERN 3 — DONE CHANNEL (CANCELLATION)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  CONCEPT
+  ───────
+  A "done" channel is a signal channel (chan struct{}) used to tell goroutines
+  to stop what they're doing and exit cleanly.
+
+  Why struct{}? It carries zero bytes — it's the smallest possible signal.
+  We never send a value; we just close() it. Closing broadcasts to ALL
+  receivers simultaneously — this is the key mechanism.
+
+  WHEN TO USE
+  ───────────
+    • You spawn goroutines that run indefinitely (event loops, watchers)
+    • You want to cancel a pipeline mid-stream
+    • Before the context package existed; still useful for simple cases
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Example: done_channel.go
+  — Generator that stops when done is closed
+  ──────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+// generate produces an infinite stream of integers.
+// It stops as soon as the done channel is closed.
+func generate(done <-chan struct{}) <-chan int {
+    out := make(chan int)
+    go func() {
+        defer close(out)
+        n := 0
+        for {
+            select {
+            case <-done:
+                fmt.Println("  generator: received done signal, stopping")
+                return   // exit the goroutine cleanly
+            case out <- n:
+                n++
+            }
+        }
+    }()
+    return out
+}
+
+func main() {
+    done := make(chan struct{})
+    nums := generate(done)
+
+    // Read only the first 5 values
+    for i := 0; i < 5; i++ {
+        fmt.Println("Received:", <-nums)
+    }
+
+    // Signal all goroutines to stop by closing done
+    close(done)
+    fmt.Println("main: sent cancellation")
+}
+
+  OUTPUT:
+      Received: 0
+      Received: 1
+      Received: 2
+      Received: 3
+      Received: 4
+      main: sent cancellation
+      generator: received done signal, stopping
+
+  WHY close() AND NOT send()?
+  ───────────────────────────
+  close(done) unblocks ALL goroutines waiting on <-done at once.
+  Sending a value (done <- struct{}{}) only wakes ONE receiver.
+  For broadcast cancellation, always use close().
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [05]  PATTERN 4 — CONTEXT FOR CANCELLATION & TIMEOUT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  CONCEPT
+  ───────
+  The context package is the idiomatic Go way to handle:
+    • Cancellation   (context.WithCancel)
+    • Deadlines      (context.WithDeadline)
+    • Timeouts       (context.WithTimeout)
+    • Request-scoped values (context.WithValue) — use sparingly
+
+  A Context flows DOWN the call tree (parent → child). When a parent context
+  is cancelled, ALL child contexts derived from it are also cancelled.
+
+  Java analogy:
+    Java uses Thread.interrupt() or Future.cancel() for similar purposes.
+    Go's context is more explicit and composable.
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Example A: context_cancel.go
+  — Manual cancellation with context.WithCancel
+  ──────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "context"
+    "fmt"
+    "time"
+)
+
+// worker does periodic work until the context is cancelled
+func worker(ctx context.Context, id int) {
+    for {
+        select {
+        case <-ctx.Done():
+            // ctx.Err() tells you WHY it was cancelled
+            fmt.Printf("  Worker %d stopped: %v\n", id, ctx.Err())
+            return
+        default:
+            fmt.Printf("  Worker %d working...\n", id)
+            time.Sleep(500 * time.Millisecond)
+        }
+    }
+}
+
+func main() {
+    // WithCancel returns a new ctx and a cancel function
+    ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()   // always defer cancel to avoid context leak
+
+    go worker(ctx, 1)
+    go worker(ctx, 2)
+
+    time.Sleep(1200 * time.Millisecond)   // let workers run for ~1.2s
+
+    fmt.Println("main: cancelling context")
+    cancel()   // sends cancellation to all workers
+
+    time.Sleep(100 * time.Millisecond)   // give goroutines time to print
+    fmt.Println("main: done")
+}
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Example B: context_timeout.go
+  — Automatic timeout with context.WithTimeout
+  ──────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "context"
+    "fmt"
+    "time"
+)
+
+// slowOperation simulates an operation that takes 2 seconds
+func slowOperation(ctx context.Context) error {
+    select {
+    case <-time.After(2 * time.Second):
+        return nil   // operation completed
+    case <-ctx.Done():
+        return ctx.Err()   // context expired or was cancelled
+    }
+}
+
+func main() {
+    // Context will auto-cancel after 1 second
+    ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+    defer cancel()
+
+    err := slowOperation(ctx)
+    if err != nil {
+        fmt.Println("Operation failed:", err)   // context deadline exceeded
+    } else {
+        fmt.Println("Operation succeeded")
+    }
+}
+
+  OUTPUT:
+      Operation failed: context deadline exceeded
+
+  GOLDEN RULES FOR CONTEXT
+  ────────────────────────
+  ✔  Always defer cancel() immediately after WithCancel/WithTimeout.
+  ✔  Pass context as the FIRST parameter: func DoWork(ctx context.Context, ...)
+  ✔  Check ctx.Done() in select blocks inside long-running loops.
+  ✔  Use ctx.Err() to log WHY the context ended (cancelled vs deadline).
+  ✘  Never store context in a struct — pass it explicitly.
+  ✘  Never pass nil context — use context.Background() or context.TODO().
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [06]  PATTERN 5 — SEMAPHORE (BOUNDED CONCURRENCY)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  CONCEPT
+  ───────
+  A semaphore limits the number of goroutines that can do something at once.
+  In Go, a buffered channel is the natural semaphore:
+
+      sem := make(chan struct{}, N)   // allows N concurrent goroutines
+
+  Acquire the semaphore by sending to it:    sem <- struct{}{}
+  Release it by receiving from it:           <-sem
+
+  This is Go's idiomatic replacement for Java's Semaphore class.
+
+  WHEN TO USE
+  ───────────
+    • Limit concurrent database connections
+    • Cap parallel HTTP calls to an external API
+    • Control CPU-intensive parallel work
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Example: semaphore_pattern.go
+  — Process 10 tasks but only 3 at a time
+  ──────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "sync"
+    "time"
+)
+
+func main() {
+    const maxConcurrent = 3
+    sem := make(chan struct{}, maxConcurrent)   // buffered channel as semaphore
+
+    var wg sync.WaitGroup
+
+    for i := 1; i <= 10; i++ {
+        wg.Add(1)
+        go func(id int) {
+            defer wg.Done()
+
+            sem <- struct{}{}       // ACQUIRE: blocks if 3 goroutines are active
+            defer func() { <-sem }() // RELEASE: always release on exit
+
+            // Critical section: at most 3 goroutines here at once
+            fmt.Printf("  Task %d started\n", id)
+            time.Sleep(300 * time.Millisecond)   // simulate work
+            fmt.Printf("  Task %d done\n", id)
+        }(i)
+    }
+
+    wg.Wait()
+    fmt.Println("All tasks completed")
+}
+
+  HOW IT WORKS
+  ────────────
+  The buffered channel has capacity 3.
+  • First 3 goroutines: send into sem immediately (channel not full), proceed.
+  • 4th goroutine tries to send: channel is full → blocks.
+  • When one finishes, <-sem frees a slot, unblocking the 4th goroutine.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [07]  PATTERN 6 — RATE LIMITING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  CONCEPT
+  ───────
+  Rate limiting controls how many requests/operations happen per unit of time,
+  protecting downstream services and APIs from being overwhelmed.
+
+  Go's standard approach uses time.Tick() or time.NewTicker() as a "token
+  bucket" — each tick of the clock represents one allowed operation.
+
+  WHEN TO USE
+  ───────────
+    • Calling external APIs that have a rate limit (e.g., 100 req/sec)
+    • Throttling writes to a database
+    • Pacing event processing in a high-throughput system
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Example A: basic_rate_limiter.go
+  — Allow exactly 1 request per 200ms
+  ──────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "time"
+)
+
+func main() {
+    requests := make(chan int, 5)
+    for i := 1; i <= 5; i++ {
+        requests <- i
+    }
+    close(requests)
+
+    // Ticker fires every 200ms — one "token" per 200ms
+    limiter := time.Tick(200 * time.Millisecond)
+
+    for req := range requests {
+        <-limiter   // wait for a token before processing
+        fmt.Printf("  Request %d handled at %v\n", req, time.Now().Format("15:04:05.000"))
+    }
+}
+
+  OUTPUT (approximate):
+      Request 1 handled at 10:00:00.200
+      Request 2 handled at 10:00:00.400
+      Request 3 handled at 10:00:00.600
+      Request 4 handled at 10:00:00.800
+      Request 5 handled at 10:00:01.000
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Example B: burst_rate_limiter.go
+  — Allow bursts of up to 3, then rate-limit
+  ──────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "time"
+)
+
+func main() {
+    requests := make(chan int, 8)
+    for i := 1; i <= 8; i++ {
+        requests <- i
+    }
+    close(requests)
+
+    // Buffered channel pre-filled with burst tokens
+    burstLimiter := make(chan time.Time, 3)
+    for i := 0; i < 3; i++ {
+        burstLimiter <- time.Now()   // pre-fill 3 burst tokens
+    }
+
+    // Refill 1 token every 200ms
+    go func() {
+        for t := range time.Tick(200 * time.Millisecond) {
+            burstLimiter <- t
+        }
+    }()
+
+    for req := range requests {
+        <-burstLimiter   // consume a token
+        fmt.Printf("  Request %d at %v\n", req, time.Now().Format("15:04:05.000"))
+    }
+}
+
+  // Requests 1-3 go immediately (burst). Then throttled at 1 per 200ms.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [08]  PATTERN 7 — PUB / SUB (EVENT BROADCASTING)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  CONCEPT
+  ───────
+  Publish/Subscribe decouples event producers from event consumers.
+  Publishers send events to a broker; subscribers register their interest
+  and receive events.
+
+  In Go, a simple pub/sub broker is built with:
+    • A registry of subscriber channels (map[string][]chan Event)
+    • A mutex to protect the registry
+    • Goroutines that deliver events to each subscriber
+
+  Java analogy: Similar to Java's EventBus (Guava) or reactive streams.
+
+  WHEN TO USE
+  ───────────
+    • Real-time notification systems
+    • Microservice event buses
+    • UI event systems (e.g., theme changes, data updates)
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Example: pubsub_broker.go
+  — Simple pub/sub with topic-based routing
+  ──────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "sync"
+)
+
+// Broker manages pub/sub
+type Broker struct {
+    mu          sync.RWMutex
+    subscribers map[string][]chan string   // topic → list of subscriber channels
+}
+
+// NewBroker creates a ready-to-use broker
+func NewBroker() *Broker {
+    return &Broker{
+        subscribers: make(map[string][]chan string),
+    }
+}
+
+// Subscribe registers a new subscriber for a topic.
+// Returns a channel on which the subscriber will receive messages.
+func (b *Broker) Subscribe(topic string) <-chan string {
+    b.mu.Lock()
+    defer b.mu.Unlock()
+
+    ch := make(chan string, 10)   // buffered: publisher won't block if subscriber is slow
+    b.subscribers[topic] = append(b.subscribers[topic], ch)
+    return ch
+}
+
+// Publish sends a message to all subscribers of the given topic
+func (b *Broker) Publish(topic, message string) {
+    b.mu.RLock()   // read lock: multiple publishers can publish concurrently
+    defer b.mu.RUnlock()
+
+    for _, ch := range b.subscribers[topic] {
+        // Non-blocking send: drop message if subscriber channel is full
+        select {
+        case ch <- message:
+        default:
+            fmt.Printf("  WARNING: subscriber channel full, dropping message on '%s'\n", topic)
+        }
+    }
+}
+
+// Close shuts down all subscriber channels for a topic
+func (b *Broker) Close(topic string) {
+    b.mu.Lock()
+    defer b.mu.Unlock()
+
+    for _, ch := range b.subscribers[topic] {
+        close(ch)
+    }
+    delete(b.subscribers, topic)
+}
+
+func main() {
+    broker := NewBroker()
+
+    // Two subscribers for "news" topic
+    sub1 := broker.Subscribe("news")
+    sub2 := broker.Subscribe("news")
+    sub3 := broker.Subscribe("sports")
+
+    // Publish events
+    broker.Publish("news", "Go 1.23 released!")
+    broker.Publish("news", "New concurrency features!")
+    broker.Publish("sports", "Team wins championship!")
+
+    // Close channels when done publishing
+    broker.Close("news")
+    broker.Close("sports")
+
+    // Read what each subscriber received
+    for msg := range sub1 {
+        fmt.Println("Sub1 (news):", msg)
+    }
+    for msg := range sub2 {
+        fmt.Println("Sub2 (news):", msg)
+    }
+    for msg := range sub3 {
+        fmt.Println("Sub3 (sports):", msg)
+    }
+}
+
+  OUTPUT:
+      Sub1 (news): Go 1.23 released!
+      Sub1 (news): New concurrency features!
+      Sub2 (news): Go 1.23 released!
+      Sub2 (news): New concurrency features!
+      Sub3 (sports): Team wins championship!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [09]  PATTERN 8 — TIMEOUT & SELECT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  CONCEPT
+  ───────
+  select in Go waits on multiple channel operations and proceeds with the
+  first one that's ready. Combined with time.After(), it implements timeouts.
+
+  This is far more elegant than Java's Future.get(timeout, unit) because:
+    • It works with any channel operation
+    • It composes naturally with cancellation
+    • No exceptions — just channel reads
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Example A: select_timeout.go
+  — Race between a slow result and a timeout
+  ──────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "time"
+)
+
+// fetchData simulates a slow network call
+func fetchData(delay time.Duration) <-chan string {
+    result := make(chan string, 1)
+    go func() {
+        time.Sleep(delay)
+        result <- "data from server"
+    }()
+    return result
+}
+
+func main() {
+    result := fetchData(2 * time.Second)   // takes 2 seconds
+
+    select {
+    case data := <-result:
+        fmt.Println("Got:", data)
+    case <-time.After(1 * time.Second):   // timeout after 1 second
+        fmt.Println("Timed out waiting for data")
+    }
+}
+
+  OUTPUT:
+      Timed out waiting for data
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Example B: select_nonblocking.go
+  — Non-blocking channel operations using default
+  ──────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+func main() {
+    ch := make(chan int, 1)
+
+    // Non-blocking send
+    select {
+    case ch <- 42:
+        fmt.Println("Sent 42")
+    default:
+        fmt.Println("Channel full, could not send")
+    }
+
+    // Non-blocking receive
+    select {
+    case val := <-ch:
+        fmt.Println("Received:", val)
+    default:
+        fmt.Println("Nothing to receive")
+    }
+
+    // Try to receive again (channel is now empty)
+    select {
+    case val := <-ch:
+        fmt.Println("Received:", val)
+    default:
+        fmt.Println("Nothing to receive")   // this runs
+    }
+}
+
+  KEY INSIGHT: SELECT FAIRNESS
+  ────────────────────────────
+  When multiple cases in a select are ready simultaneously, Go picks ONE at
+  RANDOM — not in order. This prevents starvation but means you can't rely
+  on ordering.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [10]  PATTERN 9 — OR-DONE CHANNEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  CONCEPT
+  ───────
+  When iterating over a channel in a pipeline, you want to stop cleanly when
+  a "done" signal arrives — but range doesn't support two channels at once.
+
+  The orDone wrapper goroutine solves this by bridging the done channel and
+  the data channel into one safe-to-range channel.
+
+  WHEN TO USE
+  ───────────
+    • Any pipeline stage that needs to respect a cancellation signal
+    • Replacing select{} boilerplate inside every for-range loop
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Example: or_done.go
+  — Wrap channel read with done awareness
+  ──────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+// orDone wraps a channel so consumers can range over it safely
+// while also respecting a done signal
+func orDone(done, c <-chan int) <-chan int {
+    relay := make(chan int)
+    go func() {
+        defer close(relay)
+        for {
+            select {
+            case <-done:
+                return   // stop relaying when done is closed
+            case v, ok := <-c:
+                if !ok {
+                    return   // source channel closed
+                }
+                select {
+                case relay <- v:
+                case <-done:
+                    return
+                }
+            }
+        }
+    }()
+    return relay
+}
+
+func main() {
+    done := make(chan int)
+    data := make(chan int)
+
+    // Feed some data
+    go func() {
+        for i := 0; i < 10; i++ {
+            data <- i
+        }
+    }()
+
+    // Cancel after reading 4 items
+    go func() {
+        // Read 4, then cancel
+        count := 0
+        for v := range orDone(done, data) {
+            fmt.Println("Received:", v)
+            count++
+            if count == 4 {
+                close(done)   // signal cancellation
+                return
+            }
+        }
+    }()
+
+    // Give goroutines time to run
+    import "time"
+    time.Sleep(100 * time.Millisecond)
+}
+
+  NOTE: In production, use context.WithCancel instead of a raw done channel
+  for cleaner integration with the standard library.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [11]  PATTERN 10 — TEE CHANNEL (STREAM SPLITTING)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  CONCEPT
+  ───────
+  A tee channel splits one input stream into two independent output streams,
+  both receiving the same values. Named after the Unix tee command.
+
+                        ┌──► out1
+  input channel ── tee ─┤
+                        └──► out2
+
+  Both consumers must read from their channel for the tee to keep flowing —
+  they're synchronized.
+
+  WHEN TO USE
+  ───────────
+    • Send data to two different processing paths simultaneously
+    • Log data while also processing it
+    • Audit/mirror a stream
+
+  ──────────────────────────────────────────────────────────────────────────────
+  Example: tee_channel.go
+  ──────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+// tee splits one channel into two
+func tee(done <-chan struct{}, in <-chan int) (<-chan int, <-chan int) {
+    out1 := make(chan int)
+    out2 := make(chan int)
+
+    go func() {
+        defer close(out1)
+        defer close(out2)
+        for val := range in {
+            // Use local vars to send to both — must send to both before
+            // reading the next value (they advance in lock-step)
+            var o1, o2 = out1, out2
+            for i := 0; i < 2; i++ {
+                select {
+                case <-done:
+                    return
+                case o1 <- val:
+                    o1 = nil   // disable this case after first send
+                case o2 <- val:
+                    o2 = nil   // disable this case after first send
+                }
+            }
+        }
+    }()
+    return out1, out2
+}
+
+func main() {
+    done := make(chan struct{})
+    defer close(done)
+
+    in := make(chan int, 4)
+    for _, v := range []int{10, 20, 30, 40} {
+        in <- v
+    }
+    close(in)
+
+    out1, out2 := tee(done, in)
+
+    for v1 := range out1 {
+        v2 := <-out2
+        fmt.Printf("out1: %d   out2: %d\n", v1, v2)
+    }
+}
+
+  OUTPUT:
+      out1: 10   out2: 10
+      out1: 20   out2: 20
+      out1: 30   out2: 30
+      out1: 40   out2: 40
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [12]  JAVA vs GO — CONCURRENCY PATTERN COMPARISON TABLE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌──────────────────────────┬───────────────────────────┬──────────────────────────────┐
+  │ Concept                  │ Java Equivalent           │ Go Approach                  │
+  ├──────────────────────────┼───────────────────────────┼──────────────────────────────┤
+  │ Thread / goroutine       │ new Thread(() -> {...})   │ go func() { ... }()          │
+  ├──────────────────────────┼───────────────────────────┼──────────────────────────────┤
+  │ Blocking queue /         │ BlockingQueue,            │ chan T (buffered or           │
+  │ message passing          │ LinkedBlockingQueue       │ unbuffered)                  │
+  ├──────────────────────────┼───────────────────────────┼──────────────────────────────┤
+  │ Thread pool              │ ExecutorService,          │ Worker Pool pattern with      │
+  │                          │ Executors.newFixedThread  │ goroutines + channels         │
+  ├──────────────────────────┼───────────────────────────┼──────────────────────────────┤
+  │ ForkJoin / parallel      │ ForkJoinPool,             │ Fan-Out / Fan-In with         │
+  │ processing               │ parallelStream()          │ goroutines + WaitGroup        │
+  ├──────────────────────────┼───────────────────────────┼──────────────────────────────┤
+  │ Cancellation             │ Future.cancel(),          │ context.WithCancel(),         │
+  │                          │ Thread.interrupt()        │ done channel                  │
+  ├──────────────────────────┼───────────────────────────┼──────────────────────────────┤
+  │ Timeout                  │ Future.get(t, unit),      │ context.WithTimeout(),        │
+  │                          │ CompletableFuture.orTimeout│ time.After() in select       │
+  ├──────────────────────────┼───────────────────────────┼──────────────────────────────┤
+  │ Semaphore                │ java.util.concurrent      │ Buffered channel              │
+  │                          │ .Semaphore                │ make(chan struct{}, N)         │
+  ├──────────────────────────┼───────────────────────────┼──────────────────────────────┤
+  │ Rate limiting            │ RateLimiter (Guava),      │ time.Tick() / time.Ticker     │
+  │                          │ Bucket4j                  │ + buffered chan                │
+  ├──────────────────────────┼───────────────────────────┼──────────────────────────────┤
+  │ Pub/Sub / EventBus       │ Guava EventBus,           │ Custom Broker with            │
+  │                          │ reactive streams          │ map + mutex + channels        │
+  ├──────────────────────────┼───────────────────────────┼──────────────────────────────┤
+  │ Select on multiple       │ CompletableFuture.anyOf() │ select { case <-ch1: ...      │
+  │ async operations         │                           │         case <-ch2: ... }     │
+  ├──────────────────────────┼───────────────────────────┼──────────────────────────────┤
+  │ Request-scoped data      │ ThreadLocal               │ context.WithValue()           │
+  ├──────────────────────────┼───────────────────────────┼──────────────────────────────┤
+  │ Broadcast to all         │ notifyAll() on monitor    │ close(done) — closing a       │
+  │ waiters                  │                           │ channel wakes ALL receivers   │
+  └──────────────────────────┴───────────────────────────┴──────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [13]  QUICK-REFERENCE CHEAT SHEET
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  CHANNEL OPERATIONS AT A GLANCE
+  ───────────────────────────────
+  make(chan T)          Unbuffered: sender blocks until receiver is ready
+  make(chan T, N)       Buffered: sender blocks only when buffer is full
+  close(ch)            Signal no more values will be sent
+  <-ch                 Receive; blocks if empty
+  ch <- v              Send; blocks if full (buffered) or no receiver (unbuffered)
+  v, ok := <-ch        ok = false means channel is closed and drained
+  for v := range ch    Loop until channel closed and empty
+  select { ... }       Wait on multiple channel ops; picks one ready case randomly
+  default in select    Makes select non-blocking
+
+  CONCURRENCY PRIMITIVE SELECTOR
+  ────────────────────────────────
+  Need to...                          Use...
+  ──────────────────────────────────  ─────────────────────────────────────────
+  Pass data between goroutines        chan T
+  Limit concurrency to N              make(chan struct{}, N)  [semaphore]
+  Cancel/broadcast stop signal        close(done chan struct{}) or context
+  Time-limited operation              context.WithTimeout or time.After
+  Rate-limit operations               time.Ticker + channel
+  Parallel work with merge            Fan-Out/Fan-In + WaitGroup
+  Chain processing stages             Pipeline (chan to chan)
+  Split stream to 2 consumers         Tee channel
+  Broadcast events to N consumers     Pub/Sub broker
+  Wait for N goroutines               sync.WaitGroup
+  Shared mutable state                sync.Mutex / sync.RWMutex
+
+  COMMON GOTCHAS
+  ──────────────
+  ✘ Goroutine leak      → Goroutine blocked forever on a channel nobody sends to.
+                          Fix: use done channel / context; always ensure goroutines
+                          can exit.
+
+  ✘ Sending to closed   → panic: send on closed channel
+    channel               Fix: only the sender closes; use sync.Once if multiple
+                          senders possible.
+
+  ✘ Deadlock            → All goroutines blocked on channel ops.
+                          Fix: ensure every send has a receiver, or use buffered
+                          channels appropriately.
+
+  ✘ Data race           → Two goroutines access shared memory without sync.
+                          Fix: prefer channels; use sync.Mutex for shared state;
+                          run with: go run -race main.go
+
+  ✘ Context not cancelled → Memory/goroutine leak.
+                            Fix: always defer cancel() immediately after
+                            context.WithCancel/Timeout.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [14]  INTERVIEW Q&A — MEDIOR LEVEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q1: What is a pipeline pattern in Go? When would you use it?            │
+  └─────────────────────────────────────────────────────────────────────────┘
+  A: A pipeline is a series of goroutines connected by channels where each
+     stage receives from an upstream channel, processes data, and sends to a
+     downstream channel. You'd use it for multi-step data transformations —
+     like parsing, validating, and storing records — where each step can run
+     concurrently with the others, increasing throughput.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q2: What's the difference between Fan-Out and Fan-In?                   │
+  └─────────────────────────────────────────────────────────────────────────┘
+  A: Fan-Out means distributing work from one channel to multiple goroutines
+     so they process items concurrently. Fan-In is the reverse — merging
+     results from multiple goroutines back into a single channel. Together,
+     they form a parallel work distribution and collection pattern.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q3: Why do we use chan struct{} for a "done" channel? Why not bool?      │
+  └─────────────────────────────────────────────────────────────────────────┘
+  A: struct{} is a zero-byte type — it consumes no memory. We never actually
+     send a value through the done channel; we just close() it. The zero-size
+     struct communicates that the channel is purely a signaling mechanism, not
+     a data channel. Using bool would still work but wastes a byte per send and
+     implies you might send actual values, which is misleading.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q4: How do you implement a semaphore in Go?                             │
+  └─────────────────────────────────────────────────────────────────────────┘
+  A: Using a buffered channel. The capacity of the channel defines the
+     maximum concurrency. To acquire, send an empty struct into the channel
+     (blocks if full). To release, receive from the channel. Example:
+
+         sem := make(chan struct{}, 3)   // max 3 concurrent goroutines
+         sem <- struct{}{}              // acquire
+         defer func() { <-sem }()      // release
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q5: What happens if you close() a channel and then try to send to it?  │
+  └─────────────────────────────────────────────────────────────────────────┘
+  A: It panics with "send on closed channel". Only the sender should close
+     a channel, and only after it's certain no more values will be sent.
+     Receiving from a closed channel, however, is safe — it returns the zero
+     value and false for the ok flag.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q6: What is the purpose of select's default case?                       │
+  └─────────────────────────────────────────────────────────────────────────┘
+  A: The default case makes a select statement non-blocking. If no channel
+     operation is immediately ready, the default branch executes instead of
+     blocking. This is useful for "try to send/receive, but don't wait" logic
+     — for example, checking if a semaphore is available without blocking.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q7: How would you rate-limit operations in Go?                          │
+  └─────────────────────────────────────────────────────────────────────────┘
+  A: Using time.Tick() or time.NewTicker() as a token bucket. Before each
+     operation, receive from the ticker channel (<-limiter). This ensures
+     operations happen at most once per tick interval. For burst support,
+     use a buffered channel pre-filled with tokens, refilled by a goroutine
+     running a ticker.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q8: When should you use context vs a done channel?                      │
+  └─────────────────────────────────────────────────────────────────────────┘
+  A: Use context for anything that needs:
+       • A timeout or deadline (WithTimeout, WithDeadline)
+       • Integration with the standard library (http, database/sql, etc.)
+       • Request-scoped values
+     Use a plain done channel only for simple internal cancellation where
+     you don't need deadlines or standard library integration. In practice,
+     context is almost always preferred in production code.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [15]  INTERVIEW Q&A — EXPERIENCED LEVEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q1: How do you safely close a fan-in channel when multiple goroutines   │
+  │     write to it?                                                        │
+  └─────────────────────────────────────────────────────────────────────────┘
+  A: Never close from any of the writers directly — that risks a panic if
+     another writer tries to send after close. The correct pattern:
+
+       1. Use a sync.WaitGroup, calling wg.Add(1) per writer.
+       2. Each writer calls wg.Done() when it finishes sending.
+       3. A separate goroutine calls wg.Wait(), then closes the channel.
+
+     This guarantees the channel is closed exactly once, after the last write.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q2: Explain a goroutine leak and how you'd detect and fix it.           │
+  └─────────────────────────────────────────────────────────────────────────┘
+  A: A goroutine leak occurs when a goroutine is started but never exits —
+     typically because it's blocked on a channel receive with no sender, or
+     a send with no receiver. Over time, leaked goroutines exhaust memory.
+
+     Detection:
+       • runtime.NumGoroutine() — monitor growth over time
+       • goleak library (uber-go/goleak) in tests
+       • pprof goroutine profile (/debug/pprof/goroutine)
+
+     Fix:
+       • Pass a context to every goroutine; check ctx.Done() in loops.
+       • Ensure all channels have a path to be closed or receive a done signal.
+       • Use defer cancel() immediately after context creation.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q3: How does select handle the case where multiple channels are ready    │
+  │     simultaneously?                                                     │
+  └─────────────────────────────────────────────────────────────────────────┘
+  A: Go's runtime picks a ready case uniformly at random. This prevents
+     starvation — no single channel will always win. However, it means you
+     cannot rely on ordering. If you need priority (e.g., always check done
+     before data), you need a two-level select or check the done channel
+     before entering the main select.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q4: What is the "nil channel" trick and when is it useful?              │
+  └─────────────────────────────────────────────────────────────────────────┘
+  A: A receive or send on a nil channel blocks forever. This is useful to
+     DISABLE a case in a select loop dynamically. In the tee pattern, after
+     we've sent a value to out1, we set o1 = nil to prevent that case from
+     being selected again in the same iteration. Only the o2 case remains
+     active, so the next select iteration sends to o2.
+
+     Example from tee pattern:
+         o1 = nil   // disabling this case after sending to out1 once
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q5: How would you build a concurrent pipeline with proper cancellation  │
+  │     and no goroutine leaks?                                             │
+  └─────────────────────────────────────────────────────────────────────────┘
+  A: The key requirements:
+       1. Pass a context (or done channel) to every stage function.
+       2. Every goroutine's main loop uses select with both the data channel
+          and ctx.Done().
+       3. On cancellation, goroutines return, triggering deferred close() on
+          their output channels.
+       4. Downstream stages see their input channel closed (from step 3) and
+          also return, propagating the shutdown downstream.
+
+     This creates a cascade: cancel context → all stages exit cleanly →
+     all channels closed → no goroutines left blocked.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q6: Buffered vs unbuffered channels — which should be your default?     │
+  └─────────────────────────────────────────────────────────────────────────┘
+  A: Unbuffered is the safe default. It enforces synchronous handoff —
+     the sender blocks until the receiver is ready, making the timing of
+     communication explicit. This makes bugs more reproducible.
+
+     Use buffered channels when:
+       • You have a known, bounded number of items (e.g., exactly 10 jobs)
+       • You want to decouple producer speed from consumer speed temporarily
+       • Implementing semaphores (capacity IS the constraint)
+       • Avoiding goroutine leaks in fire-and-forget scenarios
+
+     Avoid large buffer sizes just to "make it work" — that often masks
+     backpressure issues.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q7: How does context propagate through a call tree in Go?               │
+  └─────────────────────────────────────────────────────────────────────────┘
+  A: Context forms a tree of parent-child relationships. When you call
+     context.WithCancel(parentCtx), the returned child context inherits the
+     parent's cancellation. Crucially:
+       • Cancelling the parent automatically cancels ALL children.
+       • Cancelling a child does NOT affect the parent.
+
+     This means in an HTTP request handler, if you store the request's context
+     and pass it to all downstream calls (DB queries, external HTTP calls,
+     sub-goroutines), cancelling the request context — e.g., client disconnects
+     — cleanly propagates cancellation to every piece of work for that request.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q8: How is Go's concurrency model different from Java's thread model?   │
+  └─────────────────────────────────────────────────────────────────────────┘
+  A: Key differences:
+
+     Goroutines vs Threads:
+       • Java OS threads: ~1MB stack each; thousands = OOM.
+       • Goroutines: ~2KB initial stack, grows dynamically; millions possible.
+       • Goroutines are multiplexed onto OS threads by the Go scheduler (M:N).
+
+     Communication:
+       • Java default: share memory + locks (synchronized, volatile, Lock).
+       • Go default: channels (CSP model); mutex exists but is secondary.
+
+     Scheduler:
+       • Java: OS scheduler handles threads.
+       • Go: cooperative/preemptive M:N scheduler (GOMAXPROCS controls
+         OS threads). Go 1.14+ added asynchronous preemption.
+
+     Cancellation:
+       • Java: Thread.interrupt() (invasive), Future.cancel().
+       • Go: context package — clean, composable, explicit.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

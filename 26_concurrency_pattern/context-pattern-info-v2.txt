@@ -1,0 +1,381 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 🚀 Go Concurrency patterns
+════════════════════════════════════════════════════════════════════════════════════
+
+Go was designed with concurrency at its core. 
+- Concurrency = dealing with multiple tasks at the same time (they can overlap).
+- Parallelism = executing multiple tasks simultaneously (requires multiple CPUs).
+
+Key mantra from Rob Pike:
+    "Concurrency is about dealing with lots of things at once.
+     Parallelism is about doing lots of things at once."
+
+Go provides:
+1. Goroutines (lightweight threads)
+2. Channels (typed pipes for communication)
+3. Select statement
+4. sync package (Mutex, WaitGroup, Once, Cond, etc.)
+5. context package (cancellation, deadlines, values)
+
+Goroutines cost only ~2KB of stack (vs 1-2MB for OS threads) and are scheduled by Go runtime.
+
+GOROUTINES
+════════════════════════════════════════════════════════════════════════════════════
+- Created with `go` keyword.
+- Can run thousands/millions concurrently.
+- Main goroutine exits → program ends (even if others are running).
+
+Example - Basic Goroutine:
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func worker(id int) {
+	fmt.Printf("Worker %d started\n", id)
+	time.Sleep(1 * time.Second)
+	fmt.Printf("Worker %d finished\n", id)
+}
+
+func main() {
+	for i := 1; i <= 5; i++ {
+		go worker(i) // fire and forget
+	}
+	time.Sleep(2 * time.Second) // prevent main from exiting
+	fmt.Println("Main finished")
+}
+════════════════════════════════════════════════════════════════════════════════════
+CHANNELS
+
+Typed conduit for sending/receiving values between goroutines.
+Unbuffered (synchronous): send blocks until receive.
+Buffered: send doesn't block until buffer is full.
+
+Operations:
+
+ch <- value     // send
+value := <-ch   // receive
+close(ch)       // close (optional, signals no more values)
+
+Example - Simple Channel:
+Gopackage main
+
+import "fmt"
+
+func main() {
+	ch := make(chan int) // unbuffered channel
+
+	go func() {
+		ch <- 42 // send
+	}()
+
+	value := <-ch // receive
+	fmt.Println("Received:", value)
+}
+Buffered Channel Example:
+Goch := make(chan string, 3) // buffer size 3
+ch <- "a"
+ch <- "b"
+ch <- "c"
+// no blocking yet
+fmt.Println(<-ch) // "a"
+
+════════════════════════════════════════════════════════════════════════════════════
+
+SELECT STATEMENT
+
+Like switch but for channels.
+Chooses the first ready channel (random if multiple).
+
+Example:
+Goselect {
+case msg := <-ch1:
+    fmt.Println("Received from ch1:", msg)
+case msg := <-ch2:
+    fmt.Println("Received from ch2:", msg)
+case <-time.After(1 * time.Second):
+    fmt.Println("Timeout")
+}
+COMMON CONCURRENCY PATTERNS
+
+WAITGROUP PATTERN (sync.WaitGroup)
+Synchronize multiple goroutines to finish.
+Add(), Done(), Wait().
+
+
+Example:
+Gopackage main
+
+import (
+	"fmt"
+	"sync"
+	"time"
+)
+
+func main() {
+	var wg sync.WaitGroup
+
+	for i := 1; i <= 5; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done() // guaranteed to call even on panic
+			fmt.Printf("Task %d started\n", id)
+			time.Sleep(time.Duration(id) * 200 * time.Millisecond)
+			fmt.Printf("Task %d done\n", id)
+		}(i)
+	}
+
+	wg.Wait() // block until all Done()
+	fmt.Println("All tasks completed")
+}
+
+════════════════════════════════════════════════════════════════════════════════════
+
+WORKER POOL PATTERN
+Fixed number of workers process jobs from a channel.
+
+
+Example (Complete):
+Gopackage main
+
+import (
+	"fmt"
+	"sync"
+	"time"
+)
+
+type Job struct {
+	ID int
+}
+
+func worker(id int, jobs <-chan Job, results chan<- int, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for job := range jobs { // automatically exits when channel closed
+		fmt.Printf("Worker %d processing job %d\n", id, job.ID)
+		time.Sleep(500 * time.Millisecond) // simulate work
+		results <- job.ID * 10
+	}
+}
+
+func main() {
+	const numWorkers = 3
+	const numJobs = 10
+
+	jobs := make(chan Job, numJobs)
+	results := make(chan int, numJobs)
+	var wg sync.WaitGroup
+
+	// Start workers
+	for w := 1; w <= numWorkers; w++ {
+		wg.Add(1)
+		go worker(w, jobs, results, &wg)
+	}
+
+	// Send jobs
+	for j := 1; j <= numJobs; j++ {
+		jobs <- Job{ID: j}
+	}
+	close(jobs) // no more jobs
+
+	// Collect results
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	for result := range results {
+		fmt.Println("Result:", result)
+	}
+}
+
+════════════════════════════════════════════════════════════════════════════════════
+
+FAN-OUT / FAN-IN PATTERN
+Fan-out: start multiple goroutines for work.
+Fan-in: merge results from multiple channels into one.
+
+Example (Fan-in using select):
+Gofunc merge(channels ...<-chan int) <-chan int {
+	out := make(chan int)
+	var wg sync.WaitGroup
+	wg.Add(len(channels))
+
+	for _, ch := range channels {
+		go func(c <-chan int) {
+			defer wg.Done()
+			for v := range c {
+				out <- v
+			}
+		}(ch)
+	}
+
+	go func() {
+		wg.Wait()
+		close(out)
+	}()
+	return out
+}
+
+════════════════════════════════════════════════════════════════════════════════════
+
+PIPELINE PATTERN
+Chain of processing stages connected by channels.
+
+
+Example:
+Gofunc gen(nums ...int) <-chan int {
+	out := make(chan int)
+	go func() {
+		for _, n := range nums {
+			out <- n
+		}
+		close(out)
+	}()
+	return out
+}
+
+func sq(in <-chan int) <-chan int {
+	out := make(chan int)
+	go func() {
+		for n := range in {
+			out <- n * n
+		}
+		close(out)
+	}()
+	return out
+}
+
+// Usage:
+// for n := range sq(sq(gen(2, 3, 4))) {
+//     fmt.Println(n) // 16, 36, 64
+// }
+════════════════════════════════════════════════════════════════════════════════════
+
+RATE LIMITING PATTERN (using ticker + channel)
+
+Gofunc rateLimiter(limit int, interval time.Duration) chan struct{} {
+	ticker := time.NewTicker(interval)
+	limiter := make(chan struct{}, limit)
+
+	go func() {
+		for range ticker.C {
+			if len(limiter) < limit {
+				limiter <- struct{}{}
+			}
+		}
+	}()
+	return limiter
+}
+SYNCHRONIZATION PRIMITIVES (sync package)
+
+Mutex: mutual exclusion (Lock/Unlock)
+RWMutex: readers don't block readers
+Once: execute function only once
+Cond: condition variable
+Map: concurrent map (Go 1.9+)
+
+Mutex Example:
+Govar (
+	counter int
+	mu      sync.Mutex
+)
+
+func increment() {
+	mu.Lock()
+	defer mu.Unlock()
+	counter++
+}
+Context Package (cancellation)
+Best way to handle cancellation, timeouts, deadlines.
+Example:
+Goctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+defer cancel()
+
+select {
+case <-ctx.Done():
+    if ctx.Err() == context.DeadlineExceeded {
+        fmt.Println("Deadline exceeded")
+    }
+case result := <-someChannel:
+    // process result
+}
+
+════════════════════════════════════════════════════════════════════════════════════
+
+ERROR HANDLING IN CONCURRENCY
+
+Always check errors from goroutines.
+Common pattern: send error + value on a channel (struct{value, err}).
+
+════════════════════════════════════════════════════════════════════════════════════
+
+BEST PRACTICES
+
+Don't communicate by sharing memory → share memory by communicating (channels).
+Never send on a closed channel.
+Prefer for range over channels.
+Use sync.WaitGroup correctly (Add before starting goroutine).
+Avoid global variables; pass channels/context.
+Use go vet and staticcheck for race conditions.
+Run with -race flag to detect data races.
+Keep goroutines small and focused.
+
+════════════════════════════════════════════════════════════════════════════════════
+
+INTERVIEW QUESTIONS & ANSWERS
+
+Q1. What is the difference between concurrency and parallelism?
+A: Concurrency is about structure (multiple tasks that can overlap in time). 
+Parallelism is about execution (multiple tasks running at the exact same time on multiple CPUs). Go's GOMAXPROCS controls parallelism (default = number of CPUs).
+
+Q2. How does a channel work internally?
+A: Channels are typed FIFO queues with synchronization. 
+Unbuffered channels have zero capacity and block sender until receiver is ready (rendezvous). Buffered channels have capacity and act like a queue.
+
+Q3. What causes a deadlock and how to avoid it?
+A: All goroutines asleep (blocked) with no way to wake up. 
+Avoid by: proper channel closing, using select with default/timeout, careful mutex ordering, context cancellation.
+
+Q4. Why use sync.WaitGroup instead of time.Sleep?
+A: WaitGroup gives deterministic synchronization. time.Sleep is racy and non-deterministic.
+
+Q5. Explain the difference between unbuffered and buffered channels.
+A: Unbuffered: synchronous, send blocks until receive (guarantees exchange). Buffered: asynchronous up to buffer size.
+
+Q6. What is a race condition? How do you detect it?
+A: When two goroutines access shared data concurrently and at least one modifies it. Detect with go run -race main.go.
+
+Q7. When should you use Mutex vs RWMutex?
+A: Mutex when any access is exclusive. RWMutex when many readers + few writers (RUnlock/Rlock is cheaper).
+
+Q8. How do you gracefully shut down multiple goroutines?
+A: Use context.WithCancel or WithTimeout + select on ctx.Done() in every worker.
+
+Q9. What happens if you close a channel and then send to it?
+A: Panic: "send on closed channel".
+
+Q10. Explain the "for range" over a channel.
+A: It receives values until the channel is closed and the buffer is empty. Perfect for worker pools.
+
+Q11. What is the purpose of sync.Once?
+A: Ensures a function is executed exactly once, even if called concurrently from many goroutines (used for lazy initialization).
+
+Q12. How does the Go scheduler handle goroutines?
+A: Cooperative scheduling with preemption (since Go 1.14). Goroutines are multiplexed onto OS threads (M:N scheduling).
+
+Q13. Can you recover from a panic in a goroutine?
+A: Yes, but you must use defer + recover() inside that goroutine, otherwise the whole program crashes.
+
+Q14. What is the zero value of a channel variable?
+A: nil. Sending/receiving on nil channel blocks forever.
+
+Q15. How to implement a simple semaphore in Go?
+A: Use a buffered channel of size N as a counting semaphore.
+Gosem := make(chan struct{}, 5) // max 5 concurrent
+sem <- struct{}{} // acquire
+// work
+<-sem // release
+════════════════════════════════════════════════════════════════════════════════════
