@@ -1,0 +1,210 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 🚀 Go Worker Pool
+════════════════════════════════════════════════════════════════════════════════════
+================================================================
+1. What is a Worker Pool in Go?
+================================================================
+A worker pool is a classic concurrency design pattern in Go.
+It uses a FIXED number of goroutines (workers) that pull tasks
+from a shared channel (job queue). 
+
+Key benefits:
+- Limits maximum concurrency (prevents spawning thousands of goroutines)
+- Reuses goroutines → lower memory & CPU overhead
+- Clean shutdown using channel close + sync.WaitGroup
+- Perfect for CPU-bound, I/O-bound, or API-heavy tasks
+
+Without a pool: spawning one goroutine per task can crash your program
+under load (too many goroutines = memory explosion + scheduler thrashing).
+
+================================================================
+2. Core Components (Always Remember This Structure)
+================================================================
+1. jobs channel      → chan Task (buffered or unbuffered)
+2. worker goroutines → fixed count, each does "for job := range jobs"
+3. sync.WaitGroup    → track when all workers finish
+4. close(jobs)       → signal workers to stop after all tasks sent
+
+================================================================
+3. Step-by-Step Implementation Guide
+================================================================
+Step 1: Define your Task (can be struct, func, or interface)
+Step 2: Create buffered jobs channel (size = expected max jobs)
+Step 3: Launch N worker goroutines (N = desired concurrency limit)
+Step 4: Send all jobs into the channel from main
+Step 5: close(jobs) so workers know there is no more work
+Step 6: wg.Wait() to block until every worker has finished
+
+================================================================
+4. Example 1: Basic Worker Pool (Most Common Interview Version)
+================================================================
+This example processes 10 jobs with exactly 3 workers.
+Each job simulates 1 second of work.
+
+```go
+package main
+
+import (
+	"fmt"
+	"sync"
+	"time"
+)
+
+// Task struct - can be replaced with anything (string, int, API request, etc.)
+type Job struct {
+	ID   int
+	Name string
+}
+
+func worker(workerID int, jobs <-chan Job, wg *sync.WaitGroup) {
+	defer wg.Done() // Always call Done when worker exits
+
+	for job := range jobs { // This blocks until a job arrives or channel is closed
+		fmt.Printf("Worker %d started job #%d: %s\n", workerID, job.ID, job.Name)
+		
+		// Simulate real work (CPU, DB, API call, etc.)
+		time.Sleep(1 * time.Second)
+		
+		fmt.Printf("Worker %d finished job #%d: %s\n", workerID, job.ID, job.Name)
+	}
+	
+	fmt.Printf("Worker %d shutting down...\n", workerID)
+}
+
+func main() {
+	const numWorkers = 3
+	const numJobs = 10
+
+	jobs := make(chan Job, numJobs) // Buffered channel - important!
+	var wg sync.WaitGroup
+
+	// Step 1: Launch fixed number of workers
+	for i := 1; i <= numWorkers; i++ {
+		wg.Add(1)
+		go worker(i, jobs, &wg)
+	}
+
+	// Step 2: Send all jobs
+	for i := 1; i <= numJobs; i++ {
+		jobs <- Job{
+			ID:   i,
+			Name: fmt.Sprintf("Task-%d", i),
+		}
+	}
+
+	// Step 3: Close channel so workers know work is done
+	close(jobs)
+
+	// Step 4: Wait for all workers to finish
+	wg.Wait()
+
+	fmt.Println("All jobs completed. Program exiting.")
+}
+Output pattern you will see:
+Worker 1 started job #1...
+Worker 2 started job #2...
+Worker 3 started job #3...
+(then jobs are processed in parallel, max 3 at a time)
+================================================================
+5. Example 2: Generic Worker Pool (Using Function Tasks + Results)
+More advanced version: workers accept any function and return results.
+Gopackage main
+
+import (
+	"fmt"
+	"sync"
+	"time"
+)
+
+type Task func() (string, error) // Any function that returns result + error
+
+func worker(id int, tasks <-chan Task, results chan<- string, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for task := range tasks {
+		fmt.Printf("[Worker %d] executing task...\n", id)
+		result, err := task()
+		if err != nil {
+			results <- fmt.Sprintf("[Worker %d] ERROR: %v", id, err)
+			continue
+		}
+		results <- fmt.Sprintf("[Worker %d] SUCCESS: %s", id, result)
+	}
+}
+
+func main() {
+	const numWorkers = 4
+	tasks := make(chan Task, 20)
+	results := make(chan string, 20)
+	var wg sync.WaitGroup
+
+	// Launch workers
+	for i := 1; i <= numWorkers; i++ {
+		wg.Add(1)
+		go worker(i, tasks, results, &wg)
+	}
+
+	// Generate sample tasks (could be API calls, DB queries, etc.)
+	for i := 1; i <= 15; i++ {
+		taskID := i
+		tasks <- func() (string, error) {
+			time.Sleep(800 * time.Millisecond) // simulate work
+			if taskID%5 == 0 {
+				return "", fmt.Errorf("task %d failed", taskID)
+			}
+			return fmt.Sprintf("Task %d completed", taskID), nil
+		}
+	}
+
+	close(tasks)   // No more tasks
+	wg.Wait()      // Wait for workers
+	close(results) // Close results channel
+
+	// Collect results
+	for res := range results {
+		fmt.Println(res)
+	}
+
+	fmt.Println("Generic worker pool finished.")
+}
+================================================================
+6. Best Practices & Tips
+
+Always use buffered jobs channel (size >= numJobs or reasonable limit)
+Always close(jobs) after sending all work
+Use defer wg.Done() inside each worker
+For error handling → add results channel or use error group (golang.org/x/sync/errgroup)
+To make it generic in Go 1.18+: use generics or interface{}
+Panic safety: add defer func() { if r := recover(); r != nil { log it } }() in worker
+For production: consider libraries like github.com/uber-go/ratelimit or just use this pattern
+
+================================================================
+7. Common Pitfalls (Interview Traps)
+
+Forgetting to close(jobs) → program hangs forever
+Using unbuffered channel with many jobs → main goroutine blocks
+Not calling wg.Add(1) before go worker()
+Spawning workers inside a loop without proper wg management
+Ignoring errors from workers
+
+================================================================
+8. Interview Questions & Answers (Perfect for FAANG / Startups)
+Q1: What is a worker pool and why do we use it in Go?
+A1: A worker pool is a fixed set of goroutines that process tasks from a channel. We use it to limit concurrency, reduce memory overhead, and prevent goroutine explosion when handling hundreds/thousands of tasks.
+Q2: How is a worker pool different from just spawning a goroutine per task?
+A2: Spawning one goroutine per task can create too many goroutines (high memory, scheduler pressure). Worker pool reuses a fixed number of goroutines (e.g., 10 workers for 1000 tasks).
+Q3: Why do we close the jobs channel? What happens if we don't?
+A3: Closing signals workers that no more jobs are coming. The "for range jobs" loop exits. If you don't close it, workers block forever on receive and wg.Wait() never returns.
+Q4: Explain the full flow with WaitGroup in a worker pool.
+A4: wg.Add(1) before each go worker(). Each worker calls defer wg.Done() when its for-range loop ends. Main calls wg.Wait() after closing the channel.
+Q5: Can the jobs channel be buffered? Is it recommended?
+A5: Yes, and it is highly recommended. Buffered channel allows main to send all jobs quickly without blocking on every worker.
+Q6: How would you handle errors or return results from workers?
+A6: Create a second "results" channel. Workers send success/error to it. Main reads from results after wg.Wait().
+Q7: How do you make a worker pool generic (accept any task type)?
+A7: Use a channel of func(), or define an interface with Execute() method, or use generics (Go 1.18+) with type parameters.
+Q8: What happens if a worker panics?
+A8: The whole program crashes unless you add defer recover() inside the worker goroutine and log the panic.
+Q9: Give a real-world use case for worker pool.
+A9: Processing 500 image thumbnails, sending 200 API requests to a rate-limited external service, scraping multiple URLs, or handling file uploads in a web server.
+Q10: How do you dynamically adjust the number of workers?
+A10: For simple cases, just change the const. For advanced, use a pool that can grow/shrink (more complex, usually not needed). Or use external libraries.
