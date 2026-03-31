@@ -1,0 +1,2346 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 📘 Golang Standard Library
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+=== INDEX ===
+
+  [01]  fmt        — Formatted I/O
+  [02]  strings    — String Manipulation
+  [03]  strconv    — String Conversion
+  [04]  math       — Math Functions
+  [05]  sort       — Sorting
+  [06]  os         — OS Interaction
+  [07]  io         — I/O Primitives
+  [08]  bufio      — Buffered I/O
+  [09]  bytes      — Byte Slices
+  [10]  errors     — Error Handling
+  [11]  time       — Time & Duration
+  [12]  log        — Logging
+  [13]  math/rand  — Random Numbers
+  [14]  regexp     — Regular Expressions
+  [15]  encoding/json — JSON Encoding/Decoding
+  [16]  net/http   — HTTP Client & Server
+  [17]  sync       — Synchronization Primitives
+  [18]  context    — Context Propagation
+  [19]  filepath   — File Path Utilities
+  [20]  unicode    — Unicode Utilities
+  [21]  INTERVIEW Q&A — Medior Level
+  [22]  INTERVIEW Q&A — Experienced Level
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [01]  fmt  —  Formatted I/O
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  The fmt package implements formatted I/O similar to C's printf/scanf.
+  It is the most commonly used package in Go programs.
+
+  KEY FUNCTIONS:
+  ┌────────────────┬───────────────────────────────────────────────────────┐
+  │ Println        │ Print with spaces + newline                           │
+  │ Printf         │ Print with format verbs                               │
+  │ Sprintf        │ Return formatted string (no print)                    │
+  │ Fprintf        │ Write formatted output to io.Writer                   │
+  │ Errorf         │ Create formatted error (supports %w for wrapping)     │
+  │ Scan / Scanf   │ Read input from stdin                                 │
+  │ Sscanf         │ Parse from string                                     │
+  └────────────────┴───────────────────────────────────────────────────────┘
+
+  COMMON FORMAT VERBS:
+  ┌──────┬─────────────────────────────────────────────────────────────────┐
+  │  %v  │ Default format (struct: {field values})                         │
+  │  %+v │ Struct with field names                                         │
+  │  %#v │ Go-syntax representation                                        │
+  │  %T  │ Type of value                                                   │
+  │  %d  │ Integer (decimal)                                               │
+  │  %s  │ String                                                          │
+  │  %f  │ Float (default 6 decimal places)                                │
+  │  %.2f│ Float with 2 decimal places                                     │
+  │  %t  │ Boolean                                                         │
+  │  %p  │ Pointer address                                                 │
+  │  %x  │ Hexadecimal                                                     │
+  │  %b  │ Binary                                                          │
+  │  %q  │ Quoted string "hello"                                           │
+  │  %e  │ Scientific notation 1.23e+08                                    │
+  │  %w  │ Wrap error (only in Errorf)                                     │
+  └──────┴─────────────────────────────────────────────────────────────────┘
+
+── Example: fmt_basics.go ──────────────────────────────────────────────────────────────
+
+package main
+
+import "fmt"
+
+type Employee struct {
+    Name   string
+    Salary float64
+}
+
+func main() {
+    name := "Aditya"
+    age := 28
+    score := 98.567
+
+    // Basic printing
+    fmt.Println("Hello,", name)
+    fmt.Printf("Name: %s, Age: %d, Score: %.2f\n", name, age, score)
+
+    // Sprintf — returns formatted string
+    msg := fmt.Sprintf("Employee: %s is %d years old", name, age)
+    fmt.Println(msg)
+
+    // Struct formatting
+    emp := Employee{Name: "Ravi", Salary: 75000.50}
+    fmt.Printf("%v\n", emp)   // {Ravi 75000.5}
+    fmt.Printf("%+v\n", emp)  // {Name:Ravi Salary:75000.5}
+    fmt.Printf("%#v\n", emp)  // main.Employee{Name:"Ravi", Salary:75000.5}
+    fmt.Printf("%T\n", emp)   // main.Employee
+
+    // Error formatting
+    err := fmt.Errorf("failed to connect: %w", fmt.Errorf("timeout"))
+    fmt.Println(err)
+
+    // Padding and width
+    fmt.Printf("|%10s|\n", "right")  // right-aligned
+    fmt.Printf("|%-10s|\n", "left")  // left-aligned
+    fmt.Printf("|%010d|\n", 42)      // zero-padded: |0000000042|
+
+    // Read input from user
+    var input string
+    fmt.Print("Enter your name: ")
+    fmt.Scan(&input)
+    fmt.Printf("Hello, %s!\n", input)
+}
+
+────────────────────────────────────────────────────────────────────────────────────────
+
+  JAVA COMPARISON:
+  ┌──────────────────────────────────┬────────────────────────────────────────┐
+  │ Java                             │ Go                                     │
+  ├──────────────────────────────────┼────────────────────────────────────────┤
+  │ System.out.println("hi")         │ fmt.Println("hi")                      │
+  │ String.format("Hi %s", name)     │ fmt.Sprintf("Hi %s", name)             │
+  │ System.out.printf("%.2f", x)     │ fmt.Printf("%.2f\n", x)                │
+  │ new RuntimeException(msg)        │ fmt.Errorf("msg: %w", err)             │
+  │ System.err.println(msg)          │ fmt.Fprintln(os.Stderr, msg)           │
+  └──────────────────────────────────┴────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [02]  strings  —  String Manipulation
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  IMPORTANT: Strings in Go are immutable byte slices (UTF-8 encoded).
+  All strings functions return new strings — they never modify in place.
+
+  KEY FUNCTIONS:
+  ┌───────────────────────────┬──────────────────────────────────────────────┐
+  │ Contains(s, substr)       │ Check if s contains substr                   │
+  │ HasPrefix(s, prefix)      │ Check if s starts with prefix                │
+  │ HasSuffix(s, suffix)      │ Check if s ends with suffix                  │
+  │ Index(s, substr)          │ First index of substr in s (-1 if not found) │
+  │ Count(s, substr)          │ Count non-overlapping instances of substr    │
+  │ ToUpper(s)                │ Convert to uppercase                         │
+  │ ToLower(s)                │ Convert to lowercase                         │
+  │ TrimSpace(s)              │ Remove leading and trailing whitespace       │
+  │ Trim(s, cutset)           │ Remove chars in cutset from both ends        │
+  │ TrimLeft/TrimRight        │ Trim from one side only                      │
+  │ Replace(s, old, new, n)   │ Replace first n occurrences (-1 = all)       │
+  │ ReplaceAll(s, old, new)   │ Replace all occurrences                      │
+  │ Split(s, sep)             │ Split s by sep → []string                    │
+  │ SplitN(s, sep, n)         │ Split into at most n parts                   │
+  │ Join(elems, sep)          │ Join []string with sep                       │
+  │ Fields(s)                 │ Split by whitespace → []string               │
+  │ Repeat(s, count)          │ Repeat string n times                        │
+  │ EqualFold(s, t)           │ Case-insensitive equality check              │
+  │ Title(s)                  │ Capitalize first letter of each word         │
+  │ ContainsAny(s, chars)     │ Check if s contains any char in chars        │
+  │ Map(fn, s)                │ Apply fn to each rune and rebuild string     │
+  └───────────────────────────┴──────────────────────────────────────────────┘
+
+── Example: strings_operations.go ──────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "strings"
+)
+
+func main() {
+    s := "  Hello, Go World!  "
+
+    // Searching
+    fmt.Println(strings.Contains(s, "Go"))          // true
+    fmt.Println(strings.HasPrefix(s, "  Hello"))    // true
+    fmt.Println(strings.HasSuffix(s, "World!  "))   // true
+    fmt.Println(strings.Index(s, "Go"))             // 9
+    fmt.Println(strings.Count(s, "o"))              // 2
+
+    // Case and trim
+    fmt.Println(strings.ToUpper(s))                 // "  HELLO, GO WORLD!  "
+    fmt.Println(strings.ToLower(s))                 // "  hello, go world!  "
+    fmt.Println(strings.TrimSpace(s))               // "Hello, Go World!"
+    fmt.Println(strings.Trim(s, " "))               // "Hello, Go World!"
+
+    // Replace
+    fmt.Println(strings.ReplaceAll(s, "o", "0"))    // replaces all 'o' with '0'
+    fmt.Println(strings.Replace(s, "o", "0", 1))    // replaces first 'o' only
+
+    // Split and Join
+    parts := strings.Split("a,b,c,d", ",")
+    fmt.Println(parts)                              // [a b c d]
+    joined := strings.Join(parts, " | ")
+    fmt.Println(joined)                             // a | b | c | d
+
+    // Fields — split by whitespace
+    words := strings.Fields("  foo   bar  baz  ")
+    fmt.Println(words)                              // [foo bar baz]
+
+    // Repeat
+    fmt.Println(strings.Repeat("Go! ", 3))          // Go! Go! Go!
+
+    // Case-insensitive compare
+    fmt.Println(strings.EqualFold("GoLang", "golang")) // true
+
+    // strings.Builder — efficient string concatenation
+    var builder strings.Builder
+    for i := 0; i < 5; i++ {
+        builder.WriteString(fmt.Sprintf("item%d ", i))
+    }
+    fmt.Println(builder.String()) // item0 item1 item2 item3 item4
+}
+
+────────────────────────────────────────────────────────────────────────────────────────
+
+  TIP: Use strings.Builder for concatenation in loops.
+       Using + in a loop creates a new string every iteration (O(n^2)).
+       strings.Builder uses an internal buffer — amortized O(n).
+
+  JAVA COMPARISON:
+  ┌──────────────────────────────────────┬──────────────────────────────────────────┐
+  │ Java                                 │ Go                                       │
+  ├──────────────────────────────────────┼──────────────────────────────────────────┤
+  │ s.contains("go")                     │ strings.Contains(s, "go")                │
+  │ s.startsWith("He")                   │ strings.HasPrefix(s, "He")               │
+  │ s.replace("a", "b")                  │ strings.ReplaceAll(s, "a", "b")          │
+  │ s.split(",")                         │ strings.Split(s, ",")                    │
+  │ String.join(",", list)               │ strings.Join(slice, ",")                 │
+  │ s.toUpperCase()                      │ strings.ToUpper(s)                       │
+  │ s.trim()                             │ strings.TrimSpace(s)                     │
+  │ new StringBuilder()                  │ var b strings.Builder                    │
+  └──────────────────────────────────────┴──────────────────────────────────────────┘
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [03]  strconv  —  String Conversion
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  KEY FUNCTIONS:
+  ┌──────────────────────────────┬─────────────────────────────────────────────┐
+  │ Atoi(s)                      │ string → int (returns int, error)           │
+  │ Itoa(i)                      │ int → string                                │
+  │ ParseFloat(s, bitSize)       │ string → float64                            │
+  │ ParseBool(s)                 │ "true"/"1"/"false"/"0" → bool               │
+  │ ParseInt(s, base, bitSize)   │ string → int64 with base (2/8/10/16)        │
+  │ FormatFloat(f, fmt, prec, b) │ float64 → string                            │
+  │ FormatBool(b)                │ bool → "true"/"false"                       │
+  │ FormatInt(i, base)           │ int64 → string in given base                │
+  └──────────────────────────────┴─────────────────────────────────────────────┘
+
+── Example: strconv_conversions.go ──────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "strconv"
+)
+
+func main() {
+    // String → int
+    n, err := strconv.Atoi("42")
+    if err != nil {
+        fmt.Println("Error:", err)
+    } else {
+        fmt.Printf("Parsed int: %d (type: %T)\n", n, n) // 42 (type: int)
+    }
+
+    // int → string
+    s := strconv.Itoa(100)
+    fmt.Printf("Int to string: %s (type: %T)\n", s, s) // "100" (type: string)
+
+    // String → float64
+    f, err := strconv.ParseFloat("3.14159", 64)
+    if err == nil {
+        fmt.Printf("Float: %.5f\n", f) // 3.14159
+    }
+
+    // Float → string
+    fs := strconv.FormatFloat(3.14159, 'f', 2, 64)
+    fmt.Println("Formatted float:", fs) // "3.14"
+
+    // String → bool
+    b, _ := strconv.ParseBool("true")
+    fmt.Println("Bool:", b) // true
+
+    // Bool → string
+    fmt.Println(strconv.FormatBool(false)) // "false"
+
+    // String → int64 with base
+    hex, _ := strconv.ParseInt("FF", 16, 64)
+    fmt.Println("Hex FF =", hex) // 255
+
+    bin, _ := strconv.ParseInt("1010", 2, 64)
+    fmt.Println("Binary 1010 =", bin) // 10
+
+    // int → hex/binary string
+    fmt.Println(strconv.FormatInt(255, 16)) // "ff"
+    fmt.Println(strconv.FormatInt(10, 2))   // "1010"
+
+    // Error handling — invalid conversion
+    _, err = strconv.Atoi("abc")
+    if err != nil {
+        // err is *strconv.NumError
+        fmt.Println("Cannot convert 'abc':", err)
+    }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [04]  math  —  Mathematical Functions
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  KEY FUNCTIONS & CONSTANTS:
+  ┌──────────────────────┬──────────────────────────────────────────────────────┐
+  │ math.Abs(x)          │ Absolute value                                       │
+  │ math.Sqrt(x)         │ Square root                                          │
+  │ math.Pow(x, y)       │ x raised to y                                        │
+  │ math.Ceil(x)         │ Round up to nearest integer                          │
+  │ math.Floor(x)        │ Round down to nearest integer                        │
+  │ math.Round(x)        │ Round to nearest integer                             │
+  │ math.Max(x, y)       │ Larger of x and y                                    │
+  │ math.Min(x, y)       │ Smaller of x and y                                   │
+  │ math.Log(x)          │ Natural log (base e)                                 │
+  │ math.Log2(x)         │ Log base 2                                           │
+  │ math.Log10(x)        │ Log base 10                                          │
+  │ math.Sin / Cos / Tan │ Trigonometric functions (radians)                    │
+  │ math.Inf(1)          │ +Infinity   math.Inf(-1) = -Infinity                 │
+  │ math.IsNaN(x)        │ Check if value is NaN                                │
+  │ math.Pi              │ π = 3.14159...                                       │
+  │ math.E               │ e = 2.71828...                                       │
+  │ math.MaxInt64        │ Max int64 value                                      │
+  │ math.MaxFloat64      │ Max float64 value                                    │
+  └──────────────────────┴──────────────────────────────────────────────────────┘
+
+── Example: math_operations.go ─────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "math"
+)
+
+func main() {
+    fmt.Printf("Abs(-5.5)   = %.1f\n", math.Abs(-5.5))    // 5.5
+    fmt.Printf("Sqrt(16)    = %.1f\n", math.Sqrt(16))     // 4.0
+    fmt.Printf("Pow(2, 10)  = %.0f\n", math.Pow(2, 10))   // 1024
+    fmt.Printf("Ceil(2.1)   = %.0f\n", math.Ceil(2.1))    // 3
+    fmt.Printf("Floor(2.9)  = %.0f\n", math.Floor(2.9))   // 2
+    fmt.Printf("Round(2.5)  = %.0f\n", math.Round(2.5))   // 3
+    fmt.Printf("Max(3,7)    = %.0f\n", math.Max(3, 7))    // 7
+    fmt.Printf("Min(3,7)    = %.0f\n", math.Min(3, 7))    // 3
+    fmt.Printf("Log(e)      = %.1f\n", math.Log(math.E))  // 1.0
+    fmt.Printf("Pi          = %.5f\n", math.Pi)           // 3.14159
+
+    // Degrees to radians
+    deg := 90.0
+    rad := deg * math.Pi / 180
+    fmt.Printf("Sin(90°) = %.1f\n", math.Sin(rad)) // 1.0
+
+    // Check special values
+    inf := math.Inf(1)
+    fmt.Println("IsInf:", math.IsInf(inf, 1)) // true
+
+    nan := math.NaN()
+    fmt.Println("IsNaN:", math.IsNaN(nan)) // true
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [05]  sort  —  Sorting
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  The sort package provides primitives for sorting slices and user-defined data.
+  Sort is NOT stable by default; use sort.Stable() for stable sort.
+
+  KEY FUNCTIONS:
+  ┌──────────────────────────────────┬──────────────────────────────────────────┐
+  │ sort.Ints([]int)                 │ Sort int slice ascending                 │
+  │ sort.Strings([]string)           │ Sort string slice ascending              │
+  │ sort.Float64s([]float64)         │ Sort float64 slice ascending             │
+  │ sort.Slice(slice, lessFunc)      │ Sort any slice with custom comparator    │
+  │ sort.SliceStable(slice, less)    │ Stable sort with custom comparator       │
+  │ sort.Search(n, fn)               │ Binary search — find smallest index      │
+  │ sort.IntsAreSorted([]int)        │ Check if already sorted                  │
+  │ sort.Reverse(data)               │ Reverse sort order                       │
+  └──────────────────────────────────┴──────────────────────────────────────────┘
+
+── Example: sort_operations.go ────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "sort"
+)
+
+type Employee struct {
+    Name   string
+    Salary int
+    Age    int
+}
+
+func main() {
+    // Sort int slice
+    nums := []int{5, 2, 8, 1, 9, 3}
+    sort.Ints(nums)
+    fmt.Println("Sorted ints:", nums) // [1 2 3 5 8 9]
+
+    // Sort strings
+    words := []string{"banana", "apple", "cherry", "date"}
+    sort.Strings(words)
+    fmt.Println("Sorted strings:", words) // [apple banana cherry date]
+
+    // Sort descending
+    sort.Sort(sort.Reverse(sort.IntSlice(nums)))
+    fmt.Println("Descending:", nums) // [9 8 5 3 2 1]
+
+    // Custom sort — sort structs by Salary
+    employees := []Employee{
+        {"Alice", 90000, 30},
+        {"Bob", 70000, 25},
+        {"Charlie", 85000, 35},
+    }
+
+    sort.Slice(employees, func(i, j int) bool {
+        return employees[i].Salary < employees[j].Salary
+    })
+    fmt.Println("\nSorted by salary (asc):")
+    for _, e := range employees {
+        fmt.Printf("  %s: %d\n", e.Name, e.Salary)
+    }
+
+    // Sort by multiple fields (salary desc, then name asc)
+    sort.SliceStable(employees, func(i, j int) bool {
+        if employees[i].Salary != employees[j].Salary {
+            return employees[i].Salary > employees[j].Salary
+        }
+        return employees[i].Name < employees[j].Name
+    })
+    fmt.Println("\nSorted by salary desc, then name asc:")
+    for _, e := range employees {
+        fmt.Printf("  %s: %d\n", e.Name, e.Salary)
+    }
+
+    // Binary search
+    sorted := []int{1, 3, 5, 7, 9, 11}
+    target := 7
+    idx := sort.SearchInts(sorted, target)
+    fmt.Printf("\nIndex of %d: %d\n", target, idx) // 3
+
+    // Check if sorted
+    fmt.Println("Is sorted:", sort.IntsAreSorted(sorted)) // true
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [06]  os  —  Operating System Interaction
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  KEY FUNCTIONS:
+  ┌─────────────────────────────────┬───────────────────────────────────────────┐
+  │ os.Args                         │ Command-line arguments ([]string)         │
+  │ os.Getenv(key)                  │ Get environment variable                  │
+  │ os.Setenv(key, value)           │ Set environment variable                  │
+  │ os.Exit(code)                   │ Exit program with code                    │
+  │ os.Open(name)                   │ Open file for reading                     │
+  │ os.Create(name)                 │ Create file for writing                   │
+  │ os.OpenFile(name, flag, perm)   │ Open file with flags and permissions      │
+  │ os.ReadFile(name)               │ Read entire file → []byte                 │
+  │ os.WriteFile(name, data, perm)  │ Write []byte to file                      │
+  │ os.Remove(name)                 │ Delete file                               │
+  │ os.Rename(old, new)             │ Rename/move file                          │
+  │ os.Mkdir(name, perm)            │ Create directory                          │
+  │ os.MkdirAll(path, perm)         │ Create directory tree                     │
+  │ os.Stat(name)                   │ Get file info (size, mode, time...)       │
+  │ os.Getwd()                      │ Get current working directory             │
+  │ os.Hostname()                   │ Get hostname                              │
+  │ os.Stdin/Stdout/Stderr          │ Standard streams                          │
+  └─────────────────────────────────┴───────────────────────────────────────────┘
+
+── Example: os_operations.go ───────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "os"
+)
+
+func main() {
+    // Command-line args (os.Args[0] = program name)
+    fmt.Println("Args:", os.Args)
+
+    // Environment variables
+    home := os.Getenv("HOME")
+    fmt.Println("HOME:", home)
+
+    os.Setenv("APP_MODE", "development")
+    fmt.Println("APP_MODE:", os.Getenv("APP_MODE"))
+
+    // Write to file
+    content := []byte("Hello, Go file system!\nLine 2\n")
+    err := os.WriteFile("example.txt", content, 0644)
+    if err != nil {
+        fmt.Println("Write error:", err)
+        os.Exit(1)
+    }
+    fmt.Println("File written successfully")
+
+    // Read entire file
+    data, err := os.ReadFile("example.txt")
+    if err != nil {
+        fmt.Println("Read error:", err)
+    } else {
+        fmt.Print("File contents:\n", string(data))
+    }
+
+    // File stats
+    info, err := os.Stat("example.txt")
+    if err == nil {
+        fmt.Printf("Name: %s, Size: %d bytes, Mode: %v\n",
+            info.Name(), info.Size(), info.Mode())
+    }
+
+    // Create directory
+    err = os.MkdirAll("logs/2024", 0755)
+    if err != nil {
+        fmt.Println("Mkdir error:", err)
+    }
+
+    // Open file manually (caller must close it)
+    file, err := os.Open("example.txt")
+    if err != nil {
+        fmt.Println("Open error:", err)
+    } else {
+        defer file.Close()
+        // Read using file.Read(buf)...
+        fmt.Println("File opened:", file.Name())
+    }
+
+    // Cleanup
+    os.Remove("example.txt")
+    os.RemoveAll("logs") // removes directory recursively
+}
+
+────────────────────────────────────────────────────────────────────────────────────────
+
+  FILE FLAGS (for os.OpenFile):
+  ┌──────────────┬───────────────────────────────────────────────────────────┐
+  │ os.O_RDONLY  │ Read-only                                                 │
+  │ os.O_WRONLY  │ Write-only                                                │
+  │ os.O_RDWR    │ Read-write                                                │
+  │ os.O_APPEND  │ Append to file                                            │
+  │ os.O_CREATE  │ Create if not exists                                      │
+  │ os.O_TRUNC   │ Truncate file on open                                     │
+  └──────────────┴───────────────────────────────────────────────────────────┘
+
+  Example: os.OpenFile("app.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [07]  io  —  I/O Primitives
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  io defines fundamental interfaces that almost all I/O in Go implements.
+
+  KEY INTERFACES:
+  ┌──────────────────┬────────────────────────────────────────────────────────┐
+  │ io.Reader        │ Read(p []byte) (n int, err error)                      │
+  │ io.Writer        │ Write(p []byte) (n int, err error)                     │
+  │ io.Closer        │ Close() error                                          │
+  │ io.ReadWriter    │ Combines Reader + Writer                               │
+  │ io.ReadCloser    │ Combines Reader + Closer                               │
+  │ io.WriteCloser   │ Combines Writer + Closer                               │
+  │ io.Seeker        │ Seek(offset int64, whence int) (int64, error)          │
+  └──────────────────┴────────────────────────────────────────────────────────┘
+
+  KEY FUNCTIONS:
+  ┌─────────────────────────────┬────────────────────────────────────────────┐
+  │ io.Copy(dst, src)           │ Copy from Reader to Writer                 │
+  │ io.CopyN(dst, src, n)       │ Copy exactly n bytes                       │
+  │ io.ReadAll(r)               │ Read all bytes from reader → []byte        │
+  │ io.ReadFull(r, buf)         │ Read exactly len(buf) bytes                │
+  │ io.WriteString(w, s)        │ Write a string to a writer                 │
+  │ io.Discard                  │ Writer that discards all bytes             │
+  │ io.EOF                      │ Standard end-of-file sentinel error        │
+  │ io.LimitReader(r, n)        │ Wrap reader to read at most n bytes        │
+  │ io.MultiReader(r1, r2, ...) │ Read from multiple readers sequentially    │
+  │ io.MultiWriter(w1, w2, ...) │ Write to multiple writers simultaneously   │
+  │ io.Pipe()                   │ Create synchronous in-memory pipe          │
+  └─────────────────────────────┴────────────────────────────────────────────┘
+
+── Example: io_operations.go ───────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "io"
+    "os"
+    "strings"
+)
+
+func main() {
+    // io.Copy — copy file content to stdout
+    file, _ := os.Open("example.txt")
+    defer file.Close()
+    io.Copy(os.Stdout, file)
+
+    // ReadAll — read all content from reader
+    reader := strings.NewReader("Hello from string reader!")
+    data, err := io.ReadAll(reader)
+    if err == nil {
+        fmt.Println("\nRead:", string(data))
+    }
+
+    // WriteString — write string to writer
+    io.WriteString(os.Stdout, "Written via io.WriteString\n")
+
+    // LimitReader — read at most N bytes
+    r := strings.NewReader("This is a long string")
+    limited := io.LimitReader(r, 7)
+    buf, _ := io.ReadAll(limited)
+    fmt.Println("Limited read:", string(buf)) // "This is"
+
+    // MultiWriter — tee: write to multiple destinations
+    file2, _ := os.Create("copy.txt")
+    defer file2.Close()
+    mw := io.MultiWriter(os.Stdout, file2)
+    io.WriteString(mw, "Goes to both stdout and file\n")
+
+    // MultiReader — chain multiple readers
+    r1 := strings.NewReader("Hello ")
+    r2 := strings.NewReader("World ")
+    r3 := strings.NewReader("from MultiReader!")
+    mr := io.MultiReader(r1, r2, r3)
+    content, _ := io.ReadAll(mr)
+    fmt.Println(string(content)) // Hello World from MultiReader!
+
+    // io.Pipe — used for goroutine-to-goroutine streaming
+    pr, pw := io.Pipe()
+    go func() {
+        defer pw.Close()
+        fmt.Fprintln(pw, "piped data from goroutine")
+    }()
+    pipeData, _ := io.ReadAll(pr)
+    fmt.Print(string(pipeData))
+
+    // io.Discard — useful to drain a reader
+    io.Copy(io.Discard, strings.NewReader("ignored content"))
+
+    os.Remove("copy.txt")
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [08]  bufio  —  Buffered I/O
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  bufio wraps io.Reader/Writer with a buffer, reducing system calls.
+  Essential for reading line-by-line from files or stdin.
+
+  KEY TYPES & METHODS:
+  ┌───────────────────────────────┬────────────────────────────────────────────┐
+  │ bufio.NewReader(r)            │ Create buffered reader (default 4096 bytes)│
+  │ bufio.NewReaderSize(r, n)     │ Create buffered reader with size n         │
+  │ bufio.NewWriter(w)            │ Create buffered writer                     │
+  │ bufio.NewScanner(r)           │ Create scanner for line-by-line reading    │
+  │ scanner.Scan()                │ Advance to next token (returns bool)       │
+  │ scanner.Text()                │ Get current token as string                │
+  │ scanner.Bytes()               │ Get current token as []byte                │
+  │ scanner.Split(bufio.ScanXxx)  │ Set split function (Words, Lines, Bytes)   │
+  │ reader.ReadString(delim)      │ Read until delimiter byte                  │
+  │ reader.ReadLine()             │ Read single line                           │
+  │ writer.WriteString(s)         │ Write string to buffer                     │
+  │ writer.Flush()                │ CRITICAL: flush buffer to underlying writer│
+  └───────────────────────────────┴────────────────────────────────────────────┘
+
+── Example: bufio_operations.go ────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "bufio"
+    "fmt"
+    "os"
+    "strings"
+)
+
+func main() {
+    // Scanner — read file line by line (most common pattern)
+    content := "Line 1\nLine 2\nLine 3\nLine 4\n"
+    reader := strings.NewReader(content)
+
+    scanner := bufio.NewScanner(reader)
+    lineNum := 1
+    for scanner.Scan() {
+        fmt.Printf("  [%d] %s\n", lineNum, scanner.Text())
+        lineNum++
+    }
+    if err := scanner.Err(); err != nil {
+        fmt.Println("Scanner error:", err)
+    }
+
+    // Scan words instead of lines
+    wordReader := strings.NewReader("hello world foo bar")
+    wordScanner := bufio.NewScanner(wordReader)
+    wordScanner.Split(bufio.ScanWords)
+    words := []string{}
+    for wordScanner.Scan() {
+        words = append(words, wordScanner.Text())
+    }
+    fmt.Println("Words:", words) // [hello world foo bar]
+
+    // Buffered writer — MUST call Flush()
+    bw := bufio.NewWriter(os.Stdout)
+    bw.WriteString("Buffered line 1\n")
+    bw.WriteString("Buffered line 2\n")
+    bw.Flush() // Without Flush(), output may be lost!
+
+    // Reading from stdin
+    fmt.Print("Enter text: ")
+    stdinScanner := bufio.NewScanner(os.Stdin)
+    if stdinScanner.Scan() {
+        line := stdinScanner.Text()
+        fmt.Println("You entered:", line)
+    }
+
+    // bufio.Reader — ReadString reads up to delimiter
+    br := bufio.NewReader(strings.NewReader("hello|world|go"))
+    for {
+        part, err := br.ReadString('|')
+        fmt.Printf("Part: %q\n", part)
+        if err != nil {
+            break // io.EOF
+        }
+    }
+}
+
+───────────────────────────────────────────────────────────────────────────────────────
+
+  IMPORTANT: Always call writer.Flush() — data in buffer is NOT written
+             to underlying writer until Flush() is called (or buffer is full).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [09]  bytes  —  Byte Slice Operations
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  The bytes package mirrors the strings package but operates on []byte.
+  bytes.Buffer is the equivalent of strings.Builder for byte slices.
+
+  KEY FUNCTIONS:
+  ┌────────────────────────────────┬───────────────────────────────────────────┐
+  │ bytes.Contains(b, sub)         │ Check if b contains sub                   │
+  │ bytes.Split(b, sep)            │ Split byte slice                          │
+  │ bytes.Join(slices, sep)        │ Join byte slices                          │
+  │ bytes.Replace(b, old, new, n)  │ Replace byte patterns                     │
+  │ bytes.ToUpper/ToLower(b)       │ Case conversion                           │
+  │ bytes.TrimSpace(b)             │ Trim whitespace bytes                     │
+  │ bytes.Equal(a, b)              │ Compare byte slices                       │
+  │ bytes.Compare(a, b)            │ Lexicographic compare (-1, 0, 1)          │
+  │ bytes.Count(b, sub)            │ Count occurrences                         │
+  │ bytes.HasPrefix/HasSuffix      │ Prefix/Suffix checks                      │
+  └────────────────────────────────┴───────────────────────────────────────────┘
+
+── Example: bytes_operations.go ────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "bytes"
+    "fmt"
+)
+
+func main() {
+    b := []byte("Hello, Go World!")
+
+    fmt.Println(bytes.Contains(b, []byte("Go")))          // true
+    fmt.Println(bytes.HasPrefix(b, []byte("Hello")))      // true
+    fmt.Println(bytes.ToUpper(b))                         // HELLO, GO WORLD!
+    fmt.Println(string(bytes.TrimSpace([]byte("  hi  ")))) // "hi"
+
+    // Split and Join
+    parts := bytes.Split([]byte("a:b:c"), []byte(":"))
+    for _, p := range parts {
+        fmt.Printf("%q ", p) // "a" "b" "c"
+    }
+    fmt.Println()
+    joined := bytes.Join(parts, []byte(" | "))
+    fmt.Println(string(joined)) // a | b | c
+
+    // bytes.Buffer — efficient byte accumulation
+    var buf bytes.Buffer
+    buf.WriteString("Hello")
+    buf.WriteByte(',')
+    buf.WriteString(" World!")
+    fmt.Println(buf.String()) // Hello, World!
+
+    // Buffer implements io.Reader and io.Writer
+    buf.Reset() // clear buffer for reuse
+    fmt.Fprintf(&buf, "Formatted: %d %.2f", 42, 3.14)
+    fmt.Println(buf.String()) // Formatted: 42 3.14
+
+    // bytes.NewReader — create io.Reader from []byte
+    r := bytes.NewReader([]byte("byte reader content"))
+    chunk := make([]byte, 4)
+    for {
+        n, err := r.Read(chunk)
+        if n > 0 {
+            fmt.Printf("%q ", chunk[:n])
+        }
+        if err != nil {
+            break
+        }
+    }
+    fmt.Println()
+}
+  
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [10]  errors  —  Error Handling
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  The errors package provides utilities for creating and inspecting errors.
+  Combined with fmt.Errorf(%w), it enables structured error chains.
+
+  KEY FUNCTIONS:
+  ┌──────────────────────────────┬─────────────────────────────────────────────┐
+  │ errors.New(text)             │ Create simple error from string             │
+  │ errors.Is(err, target)       │ Check if err (or chain) matches target      │
+  │ errors.As(err, target)       │ Unwrap to specific error type               │
+  │ errors.Unwrap(err)           │ Get the wrapped error one level deep        │
+  └──────────────────────────────┴─────────────────────────────────────────────┘
+
+── Example: errors_handling.go ─────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "errors"
+    "fmt"
+)
+
+// Sentinel errors — package-level error values for comparison
+var (
+    ErrNotFound   = errors.New("not found")
+    ErrPermission = errors.New("permission denied")
+)
+
+// Custom error type with structured context
+type ValidationError struct {
+    Field   string
+    Message string
+}
+
+func (e *ValidationError) Error() string {
+    return fmt.Sprintf("validation error: field '%s' - %s", e.Field, e.Message)
+}
+
+// Function that returns wrapped errors
+func findUser(id int) error {
+    if id <= 0 {
+        return fmt.Errorf("findUser(%d): %w", id, ErrNotFound)
+    }
+    return nil
+}
+
+func processUser(id int) error {
+    if err := findUser(id); err != nil {
+        return fmt.Errorf("processUser: %w", err) // wrap again
+    }
+    return nil
+}
+
+func validateAge(age int) error {
+    if age < 0 {
+        return &ValidationError{Field: "age", Message: "must be non-negative"}
+    }
+    return nil
+}
+
+func main() {
+    // errors.Is — check through error chain
+    err := processUser(-1)
+    fmt.Println("Error:", err)
+
+    if errors.Is(err, ErrNotFound) {
+        fmt.Println("Cause: user not found") // This prints
+    }
+    if errors.Is(err, ErrPermission) {
+        fmt.Println("Cause: permission denied") // This does NOT print
+    }
+
+    // errors.As — extract typed error from chain
+    valErr := validateAge(-5)
+    var ve *ValidationError
+    if errors.As(valErr, &ve) {
+        fmt.Printf("Field: %s, Message: %s\n", ve.Field, ve.Message)
+    }
+
+    // errors.Unwrap — manually walk the chain
+    wrapped := fmt.Errorf("outer: %w", fmt.Errorf("inner: %w", ErrNotFound))
+    fmt.Println("Unwrap 1:", errors.Unwrap(wrapped))
+    fmt.Println("Unwrap 2:", errors.Unwrap(errors.Unwrap(wrapped)))
+
+    // errors.Join (Go 1.20+) — join multiple errors
+    err1 := errors.New("database error")
+    err2 := errors.New("cache error")
+    joined := errors.Join(err1, err2)
+    fmt.Println("\nJoined:", joined)
+    fmt.Println("Is db error:", errors.Is(joined, err1)) // true
+}
+
+────────────────────────────────────────────────────────────────────────────────────────
+
+  ERROR HANDLING PATTERNS:
+  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+  │  1. Sentinel errors   — var ErrXxx = errors.New(...)  → compare with errors.Is()    │
+  │  2. Custom types      — struct with Error() string    → check with errors.As()      │
+  │  3. Wrapped errors    — fmt.Errorf("ctx: %w", err)   → preserves chain              │
+  │  4. errors.Join       — combine multiple errors        → Go 1.20+                   │
+  └─────────────────────────────────────────────────────────────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [11]  time  —  Time and Duration
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  KEY TYPES:
+  ┌──────────────────┬────────────────────────────────────────────────────────┐
+  │ time.Time        │ Represents an instant in time                          │
+  │ time.Duration    │ int64 nanoseconds; aliases: Second, Minute, Hour etc.  │
+  │ time.Ticker      │ Sends time on channel repeatedly at interval           │
+  │ time.Timer       │ Fires once after a duration                            │
+  └──────────────────┴────────────────────────────────────────────────────────┘
+
+  KEY FUNCTIONS:
+  ┌──────────────────────────────────┬─────────────────────────────────────────┐
+  │ time.Now()                       │ Current local time                      │
+  │ time.Since(t)                    │ Duration since t (Now() - t)            │
+  │ time.Until(t)                    │ Duration until t (t - Now())            │
+  │ time.Sleep(d)                    │ Pause current goroutine for d           │
+  │ time.Parse(layout, value)        │ Parse time string                       │
+  │ time.ParseInLocation(l, v, loc)  │ Parse in specific timezone              │
+  │ t.Format(layout)                 │ Format time as string                   │
+  │ t.Add(d)                         │ Add Duration to Time                    │
+  │ t.Sub(t2)                        │ Difference between two Times            │
+  │ t.Before(t2) / t.After(t2)       │ Time comparison                         │
+  │ t.Unix()                         │ Unix timestamp (seconds)                │
+  │ t.UnixMilli()                    │ Unix timestamp (milliseconds)           │
+  │ time.Unix(sec, ns)               │ Create Time from Unix timestamp         │
+  │ time.NewTicker(d)                │ Create repeating ticker                 │
+  │ time.AfterFunc(d, fn)            │ Call fn after duration d                │
+  └──────────────────────────────────┴─────────────────────────────────────────┘
+
+  TIME LAYOUT REFERENCE (Go uses a reference time: Mon Jan 2 15:04:05 MST 2006):
+  ┌──────────────────────────────────────────────────────────────────────────────────────┐
+  │  "2006-01-02"                 →  2024-12-25                                          │
+  │  "15:04:05"                   →  14:30:00                                            │
+  │  "2006-01-02 15:04:05"        →  2024-12-25 14:30:00                                 │
+  │  "02 Jan 2006"                →  25 Dec 2024                                         │
+  │  time.RFC3339                 →  2024-12-25T14:30:00Z (ISO 8601)                     │
+  │  time.RFC822                  →  25 Dec 24 14:30 UTC                                 │
+  └──────────────────────────────────────────────────────────────────────────────────────┘
+
+  ── Example: time_operations.go ─────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "time"
+)
+
+func main() {
+    // Current time
+    now := time.Now()
+    fmt.Println("Now:", now)
+    fmt.Printf("Year: %d, Month: %s, Day: %d\n",
+        now.Year(), now.Month(), now.Day())
+
+    // Formatting
+    fmt.Println("Formatted:", now.Format("2006-01-02 15:04:05"))
+    fmt.Println("RFC3339:", now.Format(time.RFC3339))
+
+    // Parsing
+    t, err := time.Parse("2006-01-02", "2024-12-25")
+    if err == nil {
+        fmt.Println("Parsed:", t)
+    }
+
+    // Duration arithmetic
+    oneHour := time.Hour
+    oneDay := 24 * time.Hour
+    tomorrow := now.Add(oneDay)
+    fmt.Println("Tomorrow:", tomorrow.Format("2006-01-02"))
+
+    past := now.Add(-2 * oneHour)
+    fmt.Println("2 hours ago:", past.Format("15:04:05"))
+
+    // time.Since / time.Until
+    future := now.Add(5 * time.Minute)
+    fmt.Printf("Until future: %v\n", time.Until(future).Round(time.Second))
+    fmt.Printf("Since start: %v\n", time.Since(now))
+
+    // Duration constants
+    d := 2*time.Hour + 30*time.Minute + 15*time.Second
+    fmt.Printf("Duration: %v\n", d)                  // 2h30m15s
+    fmt.Printf("Seconds: %.0f\n", d.Seconds())       // 9015
+    fmt.Printf("Hours: %.2f\n", d.Hours())           // 2.50
+
+    // Benchmarking with time.Now()
+    start := time.Now()
+    time.Sleep(100 * time.Millisecond) // simulate work
+    elapsed := time.Since(start)
+    fmt.Printf("Elapsed: %v\n", elapsed)
+
+    // Ticker — fires every interval
+    ticker := time.NewTicker(200 * time.Millisecond)
+    defer ticker.Stop()
+    count := 0
+    for t := range ticker.C {
+        fmt.Println("Tick at", t.Format("15:04:05.000"))
+        count++
+        if count == 3 {
+            break
+        }
+    }
+
+    // Unix timestamps
+    unix := now.Unix()
+    fmt.Printf("Unix: %d\n", unix)
+    back := time.Unix(unix, 0)
+    fmt.Printf("From Unix: %v\n", back)
+
+    // Timezone
+    ist, _ := time.LoadLocation("Asia/Kolkata")
+    nowIST := now.In(ist)
+    fmt.Println("IST:", nowIST.Format("2006-01-02 15:04:05 MST"))
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [12]  log  —  Logging
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  KEY FUNCTIONS:
+  ┌────────────────────────────┬───────────────────────────────────────────────┐
+  │ log.Print / Println        │ Log message                                   │
+  │ log.Printf                 │ Log formatted message                         │
+  │ log.Fatal / Fatalf         │ Log then call os.Exit(1)                      │
+  │ log.Panic / Panicf         │ Log then panic                                │
+  │ log.SetPrefix(prefix)      │ Set prefix for all log messages               │
+  │ log.SetFlags(flags)        │ Set flags (date/time/file info)               │
+  │ log.SetOutput(w)           │ Redirect log output to writer                 │
+  │ log.New(w, prefix, flags)  │ Create custom logger                          │
+  └────────────────────────────┴───────────────────────────────────────────────┘
+
+  LOG FLAGS:
+  ┌───────────────┬──────────────────────────────────────────────────────────┐
+  │ log.Ldate     │ Date: 2009/11/10                                          │
+  │ log.Ltime     │ Time: 23:00:00                                            │
+  │ log.Lmicro    │ Microsecond: 23:00:00.000000                              │
+  │ log.Llongfile │ Full file path: /a/b/c/main.go:23                         │
+  │ log.Lshortfile│ Short file: main.go:23                                    │
+  │ log.LUTC      │ Use UTC instead of local time                             │
+  │ log.LstdFlags │ Ldate | Ltime (default)                                   │
+  └───────────────┴──────────────────────────────────────────────────────────┘
+
+── Example: log_usage.go ───────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "log"
+    "os"
+)
+
+func main() {
+    // Default logger — writes to stderr with date+time
+    log.Println("Application started")
+    log.Printf("Processing %d records", 100)
+
+    // Custom prefix and flags
+    log.SetPrefix("[APP] ")
+    log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+    log.Println("Custom logger output")
+    // Output: [APP] 2024/12/25 14:30:00 main.go:15: Custom logger output
+
+    // Log to file
+    logFile, _ := os.OpenFile("app.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+    defer logFile.Close()
+    fileLogger := log.New(logFile, "[FILE] ", log.LstdFlags|log.Lshortfile)
+    fileLogger.Println("Logged to file")
+
+    // Multiple loggers for different levels
+    infoLogger := log.New(os.Stdout, "[INFO]  ", log.LstdFlags)
+    warnLogger := log.New(os.Stdout, "[WARN]  ", log.LstdFlags)
+    errorLogger := log.New(os.Stderr, "[ERROR] ", log.LstdFlags|log.Lshortfile)
+
+    infoLogger.Println("User logged in")
+    warnLogger.Println("High memory usage")
+    errorLogger.Println("Database connection failed")
+
+    // log.Fatal = log + os.Exit(1)
+    // log.Panic = log + panic()
+    // Use them carefully — Fatal doesn't run defer statements!
+    // log.Fatal("Critical error, exiting")
+    os.Remove("app.log")
+}
+
+NOTE: For production Go apps, use structured logging with
+    log/slog (Go 1.21+), zerolog, or zap.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [13]  math/rand  —  Random Numbers
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  KEY FUNCTIONS:
+  ┌────────────────────────────┬───────────────────────────────────────────────┐
+  │ rand.Int()                 │ Random non-negative int                       │
+  │ rand.Intn(n)               │ Random int in [0, n)                          │
+  │ rand.Float64()             │ Random float64 in [0.0, 1.0)                  │
+  │ rand.Float32()             │ Random float32 in [0.0, 1.0)                  │
+  │ rand.Shuffle(n, swap)      │ Shuffle slice in-place                        │
+  │ rand.Perm(n)               │ Random permutation of [0, n)                  │
+  │ rand.New(src)              │ Create local rand with source                 │
+  │ rand.NewSource(seed)       │ Create seeded source                          │
+  └────────────────────────────┴───────────────────────────────────────────────┘
+
+── Example: rand_operations.go ─────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "math/rand"
+    "time"
+)
+
+func main() {
+    // Go 1.20+: global rand is automatically seeded — no manual seeding needed
+    fmt.Println("Random int:", rand.Int())
+    fmt.Println("Random 0-99:", rand.Intn(100))
+    fmt.Printf("Random float: %.4f\n", rand.Float64())
+
+    // Custom seeded source (for reproducible results)
+    src := rand.NewSource(time.Now().UnixNano())
+    rng := rand.New(src)
+    fmt.Println("Seeded random:", rng.Intn(1000))
+
+    // Random range [min, max]
+    min, max := 10, 50
+    n := min + rand.Intn(max-min+1)
+    fmt.Printf("Random in [%d, %d]: %d\n", min, max, n)
+
+    // Shuffle slice
+    items := []string{"apple", "banana", "cherry", "date", "elderberry"}
+    rand.Shuffle(len(items), func(i, j int) {
+        items[i], items[j] = items[j], items[i]
+    })
+    fmt.Println("Shuffled:", items)
+
+    // Random permutation
+    perm := rand.Perm(5)
+    fmt.Println("Permutation:", perm) // e.g., [3 0 4 1 2]
+
+    // Pick random element from slice
+    fruits := []string{"mango", "kiwi", "grape", "melon"}
+    pick := fruits[rand.Intn(len(fruits))]
+    fmt.Println("Random pick:", pick)
+
+    // crypto/rand — for secure random (passwords, tokens)
+    // import "crypto/rand"
+    // b := make([]byte, 16)
+    // crypto/rand.Read(b)  // fills with cryptographically secure bytes
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [14]  regexp  —  Regular Expressions
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Go uses RE2 syntax (no lookahead/lookbehind).
+  Always use MustCompile for package-level patterns.
+
+  KEY FUNCTIONS:
+  ┌─────────────────────────────────────┬────────────────────────────────────────┐
+  │ regexp.Compile(pattern)             │ Compile pattern → returns error        │
+  │ regexp.MustCompile(pattern)         │ Compile or panic (use at package level) │
+  │ regexp.MatchString(pattern, s)      │ Quick match check                       │
+  │ re.MatchString(s)                   │ Check if s matches                      │
+  │ re.FindString(s)                    │ First match                             │
+  │ re.FindAllString(s, n)              │ All matches (-1 = all)                  │
+  │ re.FindStringSubmatch(s)            │ First match + capture groups            │
+  │ re.FindAllStringSubmatch(s, n)      │ All matches + capture groups            │
+  │ re.ReplaceAllString(s, repl)        │ Replace all matches                     │
+  │ re.ReplaceAllStringFunc(s, fn)      │ Replace with function                   │
+  │ re.Split(s, n)                      │ Split by pattern                        │
+  └─────────────────────────────────────┴────────────────────────────────────────┘
+
+── Example: regexp_operations.go ───────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "regexp"
+)
+
+// Package-level: compiled once, reused efficiently
+var (
+    emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+    phoneRegex = regexp.MustCompile(`\d{10}`)
+    wordRegex  = regexp.MustCompile(`\b\w+\b`)
+)
+
+func main() {
+    // Simple match
+    fmt.Println(emailRegex.MatchString("user@example.com")) // true
+    fmt.Println(emailRegex.MatchString("not-an-email"))     // false
+
+    // Find first match
+    text := "Call us at 9876543210 or 1234567890"
+    match := phoneRegex.FindString(text)
+    fmt.Println("First phone:", match) // 9876543210
+
+    // Find all matches
+    phones := phoneRegex.FindAllString(text, -1)
+    fmt.Println("All phones:", phones) // [9876543210 1234567890]
+
+    // Capture groups
+    re := regexp.MustCompile(`(\w+)\s(\w+)`)
+    s := "John Doe Jane Smith"
+    matches := re.FindAllStringSubmatch(s, -1)
+    for _, m := range matches {
+        fmt.Printf("Full: %q, First: %q, Last: %q\n", m[0], m[1], m[2])
+    }
+
+    // Replace
+    spaceRe := regexp.MustCompile(`\s+`)
+    cleaned := spaceRe.ReplaceAllString("hello    world   go", " ")
+    fmt.Println("Cleaned:", cleaned) // "hello world go"
+
+    // Replace with function
+    digitRe := regexp.MustCompile(`\d+`)
+    result := digitRe.ReplaceAllStringFunc("abc123def456", func(s string) string {
+        return "[" + s + "]"
+    })
+    fmt.Println("Replaced:", result) // abc[123]def[456]
+
+    // Named capture groups
+    dateRe := regexp.MustCompile(`(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})`)
+    date := "2024-12-25"
+    subm := dateRe.FindStringSubmatch(date)
+    names := dateRe.SubexpNames()
+    for i, name := range names {
+        if i != 0 && name != "" {
+            fmt.Printf("%s: %s\n", name, subm[i])
+        }
+    }
+    // year: 2024, month: 12, day: 25
+}
+
+  ────────────────────────────────────────────────────────────────────────────────────────
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [15]  encoding/json  —  JSON Encoding / Decoding
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  KEY FUNCTIONS:
+  ┌──────────────────────────────┬────────────────────────────────────────────┐
+  │ json.Marshal(v)              │ Encode Go value → JSON []byte              │
+  │ json.MarshalIndent(v, p, i)  │ Encode with pretty-print indentation       │
+  │ json.Unmarshal(data, &v)     │ Decode JSON []byte → Go value              │
+  │ json.NewEncoder(w)           │ Stream encoder to io.Writer                │
+  │ json.NewDecoder(r)           │ Stream decoder from io.Reader              │
+  │ encoder.Encode(v)            │ Write JSON + newline to stream             │
+  │ decoder.Decode(&v)           │ Read next JSON value from stream           │
+  └──────────────────────────────┴────────────────────────────────────────────┘
+
+  JSON STRUCT TAGS:
+  ┌──────────────────────────────────────────────────────────────────────────────────────┐
+  │  json:"fieldName"            → rename field in JSON                                  │
+  │  json:"fieldName,omitempty"  → omit field if zero value                              │
+  │  json:"-"                    → always exclude this field                             │
+  │  json:",string"              → encode number as JSON string                          │
+  └──────────────────────────────────────────────────────────────────────────────────────┘
+
+  ── Example: json_operations.go ──────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "strings"
+)
+
+type Address struct {
+    Street string `json:"street"`
+    City   string `json:"city"`
+    Zip    string `json:"zip,omitempty"`
+}
+
+type Employee struct {
+    ID        int     `json:"id"`
+    Name      string  `json:"name"`
+    Email     string  `json:"email,omitempty"`
+    Salary    float64 `json:"salary"`
+    Address   Address `json:"address"`
+    Password  string  `json:"-"` // never serialized
+}
+
+func main() {
+    // Marshal (Go → JSON)
+    emp := Employee{
+        ID:     1,
+        Name:   "Aditya",
+        Salary: 90000,
+        Address: Address{
+            Street: "123 MG Road",
+            City:   "Pune",
+        },
+        Password: "secret123",
+    }
+
+    data, err := json.Marshal(emp)
+    if err != nil {
+        fmt.Println("Marshal error:", err)
+        return
+    }
+    fmt.Println("JSON:", string(data))
+    // Password is excluded; Zip and Email are omitted (zero values)
+
+    // MarshalIndent — pretty print
+    pretty, _ := json.MarshalIndent(emp, "", "  ")
+    fmt.Println("\nPretty JSON:")
+    fmt.Println(string(pretty))
+
+    // Unmarshal (JSON → Go)
+    jsonStr := `{"id":2,"name":"Ravi","salary":75000,"address":{"street":"456 FC Road","city":"Mumbai","zip":"400001"}}`
+    var emp2 Employee
+    err = json.Unmarshal([]byte(jsonStr), &emp2)
+    if err != nil {
+        fmt.Println("Unmarshal error:", err)
+        return
+    }
+    fmt.Printf("\nDecoded: %+v\n", emp2)
+
+    // Decode to map[string]interface{} (dynamic JSON)
+    var result map[string]interface{}
+    json.Unmarshal([]byte(jsonStr), &result)
+    fmt.Println("\nDynamic decode:")
+    fmt.Println("  name:", result["name"])
+    fmt.Println("  salary:", result["salary"]) // float64
+
+    // Streaming with Encoder/Decoder
+    var buf strings.Builder
+    encoder := json.NewEncoder(&buf)
+    encoder.SetIndent("", "  ")
+    employees := []Employee{emp, emp2}
+    for _, e := range employees {
+        encoder.Encode(e)
+    }
+    fmt.Println("\nStreamed JSON:")
+    fmt.Println(buf.String())
+
+    // Decode JSON array from stream
+    jsonArray := `[{"id":1,"name":"A","salary":1},{"id":2,"name":"B","salary":2}]`
+    decoder := json.NewDecoder(strings.NewReader(jsonArray))
+    var decoded []Employee
+    decoder.Decode(&decoded)
+    fmt.Printf("Decoded array: %d employees\n", len(decoded))
+}
+
+  ────────────────────────────────────────────────────────────────────────────────────────
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [16]  net/http  —  HTTP Client & Server
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  KEY SERVER FUNCTIONS:
+  ┌──────────────────────────────────┬────────────────────────────────────────┐
+  │ http.HandleFunc(pattern, fn)     │ Register handler function              │
+  │ http.Handle(pattern, handler)    │ Register http.Handler implementation   │
+  │ http.ListenAndServe(addr, mux)   │ Start HTTP server (blocks)             │
+  │ http.NewServeMux()               │ Create custom multiplexer              │
+  │ w.WriteHeader(code)              │ Set response status code               │
+  │ w.Header().Set(key, val)         │ Set response header                    │
+  │ json.NewEncoder(w).Encode(v)     │ Write JSON response                    │
+  │ r.URL.Query().Get(key)           │ Get query parameter                    │
+  │ r.PathValue(key)                 │ Get path parameter (Go 1.22+)          │
+  └──────────────────────────────────┴────────────────────────────────────────┘
+
+  KEY CLIENT FUNCTIONS:
+  ┌──────────────────────────────────┬────────────────────────────────────────┐
+  │ http.Get(url)                    │ HTTP GET request                       │
+  │ http.Post(url, ctype, body)      │ HTTP POST request                      │
+  │ http.NewRequest(method, url, b)  │ Build custom request                   │
+  │ client.Do(req)                   │ Execute request                        │
+  │ resp.Body.Close()                │ ALWAYS defer this                      │
+  │ io.ReadAll(resp.Body)            │ Read response body                     │
+  └──────────────────────────────────┴────────────────────────────────────────┘
+
+  ── Example: http_server.go ─────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "log"
+    "net/http"
+    "time"
+)
+
+type Response struct {
+    Status  string `json:"status"`
+    Message string `json:"message"`
+    Time    string `json:"time"`
+}
+
+// Middleware — logs every request
+func loggingMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        start := time.Now()
+        next.ServeHTTP(w, r)
+        log.Printf("%s %s %v", r.Method, r.URL.Path, time.Since(start))
+    })
+}
+
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(Response{
+        Status:  "ok",
+        Message: "service is healthy",
+        Time:    time.Now().Format(time.RFC3339),
+    })
+}
+
+func greetHandler(w http.ResponseWriter, r *http.Request) {
+    name := r.URL.Query().Get("name")
+    if name == "" {
+        name = "World"
+    }
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(Response{
+        Status:  "ok",
+        Message: fmt.Sprintf("Hello, %s!", name),
+    })
+}
+
+func main() {
+    mux := http.NewServeMux()
+    mux.HandleFunc("GET /health", healthHandler)
+    mux.HandleFunc("GET /greet", greetHandler)
+
+    server := &http.Server{
+        Addr:         ":8080",
+        Handler:      loggingMiddleware(mux),
+        ReadTimeout:  10 * time.Second,
+        WriteTimeout: 10 * time.Second,
+        IdleTimeout:  30 * time.Second,
+    }
+
+    log.Println("Server starting on :8080")
+    if err := server.ListenAndServe(); err != nil {
+        log.Fatal("Server error:", err)
+    }
+}
+
+  ── Example: http_client.go ─────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "context"
+    "encoding/json"
+    "fmt"
+    "io"
+    "net/http"
+    "strings"
+    "time"
+)
+
+func main() {
+    // Simple GET
+    resp, err := http.Get("https://api.github.com/users/golang")
+    if err != nil {
+        fmt.Println("Error:", err)
+        return
+    }
+    defer resp.Body.Close() // ALWAYS close response body
+
+    body, _ := io.ReadAll(resp.Body)
+    fmt.Printf("Status: %d\nBody (first 100 chars): %s\n",
+        resp.StatusCode, body[:100])
+
+    // POST with JSON body
+    payload := `{"name":"John","age":30}`
+    postResp, err := http.Post(
+        "https://httpbin.org/post",
+        "application/json",
+        strings.NewReader(payload),
+    )
+    if err == nil {
+        defer postResp.Body.Close()
+        fmt.Println("POST status:", postResp.Status)
+    }
+
+    // Custom client with timeout
+    client := &http.Client{Timeout: 10 * time.Second}
+
+    // Custom request with headers
+    req, _ := http.NewRequest("GET", "https://api.github.com/users/golang", nil)
+    req.Header.Set("Accept", "application/json")
+    req.Header.Set("User-Agent", "MyGoApp/1.0")
+
+    res, err := client.Do(req)
+    if err == nil {
+        defer res.Body.Close()
+        var result map[string]interface{}
+        json.NewDecoder(res.Body).Decode(&result)
+        fmt.Println("Name:", result["name"])
+    }
+
+    // Request with Context (for cancellation/timeout)
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+
+    reqCtx, _ := http.NewRequestWithContext(ctx, "GET",
+        "https://api.github.com/users/golang", nil)
+    resCtx, err := client.Do(reqCtx)
+    if err == nil {
+        defer resCtx.Body.Close()
+        fmt.Println("Status with context:", resCtx.Status)
+    }
+}
+
+  ────────────────────────────────────────────────────────────────────────────────────────
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [17]  sync  —  Synchronization Primitives
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  KEY TYPES:
+  ┌─────────────────┬──────────────────────────────────────────────────────────┐
+  │ sync.Mutex      │ Mutual exclusion lock                                    │
+  │ sync.RWMutex    │ Read-write lock (multiple readers OR one writer)         │
+  │ sync.WaitGroup  │ Wait for goroutines to finish                            │
+  │ sync.Once       │ Run a function exactly once                              │
+  │ sync.Map        │ Concurrent-safe map                                      │
+  │ sync.Pool       │ Pool of reusable objects                                 │
+  │ sync.Cond       │ Condition variable for goroutine coordination            │
+  └─────────────────┴──────────────────────────────────────────────────────────┘
+
+  ── Example: sync_operations.go ─────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "sync"
+    "time"
+)
+
+// Thread-safe counter using Mutex
+type SafeCounter struct {
+    mu    sync.Mutex
+    count int
+}
+
+func (c *SafeCounter) Increment() {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    c.count++
+}
+
+func (c *SafeCounter) Value() int {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    return c.count
+}
+
+// Cache using RWMutex
+type Cache struct {
+    mu   sync.RWMutex
+    data map[string]string
+}
+
+func (c *Cache) Get(key string) (string, bool) {
+    c.mu.RLock() // multiple goroutines can hold RLock simultaneously
+    defer c.mu.RUnlock()
+    v, ok := c.data[key]
+    return v, ok
+}
+
+func (c *Cache) Set(key, value string) {
+    c.mu.Lock() // exclusive write lock
+    defer c.mu.Unlock()
+    c.data[key] = value
+}
+
+func main() {
+    // WaitGroup — wait for multiple goroutines
+    var wg sync.WaitGroup
+    counter := &SafeCounter{}
+
+    for i := 0; i < 1000; i++ {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            counter.Increment()
+        }()
+    }
+    wg.Wait()
+    fmt.Println("Counter:", counter.Value()) // always 1000
+
+    // Once — initialise once (singleton pattern)
+    var once sync.Once
+    var instance string
+    initInstance := func() {
+        instance = "initialized"
+        fmt.Println("This prints only once")
+    }
+    for i := 0; i < 5; i++ {
+        once.Do(initInstance) // only first call executes
+    }
+    fmt.Println("Instance:", instance)
+
+    // sync.Map — concurrent map
+    var sm sync.Map
+    sm.Store("key1", "value1")
+    sm.Store("key2", "value2")
+
+    val, ok := sm.Load("key1")
+    fmt.Printf("key1: %v, found: %v\n", val, ok)
+
+    sm.Range(func(k, v interface{}) bool {
+        fmt.Printf("  %v = %v\n", k, v)
+        return true // return false to stop iteration
+    })
+
+    sm.Delete("key1")
+    _, ok = sm.Load("key1")
+    fmt.Println("After delete, found:", ok) // false
+
+    // sync.Pool — reuse objects to reduce GC pressure
+    pool := &sync.Pool{
+        New: func() interface{} {
+            fmt.Println("  Creating new buffer")
+            return make([]byte, 1024)
+        },
+    }
+    buf := pool.Get().([]byte) // gets or creates
+    _ = buf
+    pool.Put(buf)              // return to pool for reuse
+
+    // Cache using RWMutex
+    cache := &Cache{data: make(map[string]string)}
+    cache.Set("city", "Pune")
+    v, _ := cache.Get("city")
+    fmt.Println("Cache city:", v)
+
+    // Parallel workers with WaitGroup
+    jobs := []int{1, 2, 3, 4, 5}
+    var wg2 sync.WaitGroup
+    for _, job := range jobs {
+        wg2.Add(1)
+        go func(j int) {
+            defer wg2.Done()
+            time.Sleep(10 * time.Millisecond) // simulate work
+            fmt.Printf("  Job %d done\n", j)
+        }(job)
+    }
+    wg2.Wait()
+    fmt.Println("All jobs done")
+}
+
+  ────────────────────────────────────────────────────────────────────────────────────────
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [18]  context  —  Context Propagation
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Context carries deadlines, cancellation signals, and request-scoped
+  values across API boundaries and goroutines.
+
+  KEY FUNCTIONS:
+  ┌──────────────────────────────────────┬──────────────────────────────────────┐
+  │ context.Background()                 │ Root context (never cancelled)        │
+  │ context.TODO()                       │ Placeholder context                   │
+  │ context.WithCancel(parent)           │ Returns (ctx, cancelFunc)             │
+  │ context.WithTimeout(parent, d)       │ Cancels after duration d              │
+  │ context.WithDeadline(parent, t)      │ Cancels at absolute time t            │
+  │ context.WithValue(parent, key, val)  │ Attach request-scoped value           │
+  │ ctx.Done()                           │ Channel closed on cancellation        │
+  │ ctx.Err()                            │ context.Canceled or DeadlineExceeded  │
+  │ ctx.Value(key)                       │ Retrieve stored value                 │
+  └──────────────────────────────────────┴──────────────────────────────────────┘
+
+  ── Example: context_usage.go ───────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "context"
+    "fmt"
+    "time"
+)
+
+type contextKey string
+
+const userIDKey contextKey = "userID"
+
+// Simulated DB query that respects context
+func fetchData(ctx context.Context, query string) (string, error) {
+    done := make(chan string, 1)
+
+    go func() {
+        time.Sleep(200 * time.Millisecond) // simulate DB work
+        done <- fmt.Sprintf("result for: %s", query)
+    }()
+
+    select {
+    case result := <-done:
+        return result, nil
+    case <-ctx.Done():
+        return "", ctx.Err() // context.DeadlineExceeded or Canceled
+    }
+}
+
+func processRequest(ctx context.Context) {
+    // Retrieve value from context
+    userID := ctx.Value(userIDKey)
+    fmt.Println("Processing request for user:", userID)
+
+    result, err := fetchData(ctx, "SELECT * FROM orders")
+    if err != nil {
+        fmt.Println("Error:", err)
+    } else {
+        fmt.Println("Result:", result)
+    }
+}
+
+func main() {
+    // WithCancel — manual cancellation
+    ctx, cancel := context.WithCancel(context.Background())
+
+    go func() {
+        time.Sleep(100 * time.Millisecond)
+        cancel() // cancel from another goroutine
+    }()
+
+    _, err := fetchData(ctx, "slow query")
+    if err != nil {
+        fmt.Println("Cancelled:", err) // context.Canceled
+    }
+
+    // WithTimeout — automatic cancellation after 150ms
+    ctx2, cancel2 := context.WithTimeout(context.Background(), 150*time.Millisecond)
+    defer cancel2() // always defer cancel to free resources
+
+    result, err := fetchData(ctx2, "fast query") // 200ms > 150ms → times out
+    if err != nil {
+        fmt.Println("Timeout:", err) // context.DeadlineExceeded
+    } else {
+        fmt.Println("Fast result:", result)
+    }
+
+    // WithValue — pass request-scoped data
+    ctx3 := context.WithValue(context.Background(), userIDKey, "user-42")
+    ctx4, cancel4 := context.WithTimeout(ctx3, 500*time.Millisecond)
+    defer cancel4()
+
+    processRequest(ctx4)
+
+    // Cascading cancellation
+    parent, parentCancel := context.WithCancel(context.Background())
+    child, childCancel := context.WithTimeout(parent, 10*time.Second)
+    defer childCancel()
+
+    parentCancel() // cancels parent AND all children
+    fmt.Println("Child cancelled:", child.Err()) // context.Canceled
+}
+
+  ────────────────────────────────────────────────────────────────────────────────────────
+
+  CONTEXT BEST PRACTICES:
+  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+  │  1. Always pass context as FIRST parameter: func(ctx context.Context, ...)          │
+  │  2. Always defer cancel() even for WithTimeout/WithDeadline — prevents leaks        │
+  │  3. Use context.Background() at program entry points (main, tests, init)            │
+  │  4. Use context.TODO() as a placeholder when unsure which context to use            │
+  │  5. WithValue keys should be unexported custom types — not string or int            │
+  │  6. Do NOT store contexts in structs — always pass explicitly                       │
+  └─────────────────────────────────────────────────────────────────────────────────────┘
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [19]  path/filepath  —  File Path Utilities
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  KEY FUNCTIONS:
+  ┌────────────────────────────────┬──────────────────────────────────────────┐
+  │ filepath.Join(elem...)         │ Join path elements (OS-appropriate sep)  │
+  │ filepath.Base(path)            │ Last element of path                     │
+  │ filepath.Dir(path)             │ Directory part of path                   │
+  │ filepath.Ext(path)             │ File extension (e.g., ".txt")            │
+  │ filepath.Abs(path)             │ Absolute path                            │
+  │ filepath.Clean(path)           │ Normalize path                           │
+  │ filepath.Match(pattern, name)  │ Glob pattern match                       │
+  │ filepath.Walk(root, fn)        │ Walk directory tree                      │
+  │ filepath.WalkDir(root, fn)     │ Walk tree (more efficient, Go 1.16+)     │
+  │ filepath.Glob(pattern)         │ Return matching file names               │
+  │ filepath.Split(path)           │ Split into dir and file                  │
+  │ filepath.Rel(base, targpath)   │ Relative path                            │
+  │ filepath.IsAbs(path)           │ Check if path is absolute                │
+  └────────────────────────────────┴──────────────────────────────────────────┘
+
+  ── Example: filepath_operations.go ─────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "path/filepath"
+    "os"
+)
+
+func main() {
+    // Join paths (cross-platform)
+    p := filepath.Join("home", "user", "docs", "file.txt")
+    fmt.Println("Joined:", p) // home/user/docs/file.txt (on Linux)
+
+    fmt.Println("Base:", filepath.Base(p))  // file.txt
+    fmt.Println("Dir:", filepath.Dir(p))    // home/user/docs
+    fmt.Println("Ext:", filepath.Ext(p))    // .txt
+
+    // Split
+    dir, file := filepath.Split(p)
+    fmt.Printf("Dir: %q, File: %q\n", dir, file)
+
+    // Abs — get absolute path
+    abs, _ := filepath.Abs("relative/path")
+    fmt.Println("Abs:", abs)
+
+    // Clean — normalize
+    dirty := "/home/user/../user/./docs"
+    fmt.Println("Clean:", filepath.Clean(dirty)) // /home/user/docs
+
+    // Walk directory
+    os.MkdirAll("testdir/sub", 0755)
+    os.WriteFile("testdir/a.txt", []byte("a"), 0644)
+    os.WriteFile("testdir/b.txt", []byte("b"), 0644)
+    os.WriteFile("testdir/sub/c.go", []byte("c"), 0644)
+
+    fmt.Println("\nWalking testdir:")
+    filepath.WalkDir("testdir", func(path string, d os.DirEntry, err error) error {
+        if err != nil {
+            return err
+        }
+        if d.IsDir() {
+            fmt.Printf("  [DIR]  %s\n", path)
+        } else {
+            info, _ := d.Info()
+            fmt.Printf("  [FILE] %s (%d bytes)\n", path, info.Size())
+        }
+        return nil
+    })
+
+    // Glob — find files matching pattern
+    matches, _ := filepath.Glob("testdir/*.txt")
+    fmt.Println("\nGlob *.txt:", matches)
+
+    // Cleanup
+    os.RemoveAll("testdir")
+}
+
+  ────────────────────────────────────────────────────────────────────────────────────────
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [20]  unicode  —  Unicode Utilities
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  KEY FUNCTIONS (operate on rune, which is int32 / Unicode code point):
+  ┌─────────────────────┬─────────────────────────────────────────────────────┐
+  │ unicode.IsLetter(r) │ Check if rune is a letter                           │
+  │ unicode.IsDigit(r)  │ Check if rune is a digit                            │
+  │ unicode.IsSpace(r)  │ Check if rune is whitespace                         │
+  │ unicode.IsUpper(r)  │ Check if rune is uppercase                          │
+  │ unicode.IsLower(r)  │ Check if rune is lowercase                          │
+  │ unicode.ToUpper(r)  │ Convert rune to uppercase                           │
+  │ unicode.ToLower(r)  │ Convert rune to lowercase                           │
+  │ unicode.IsPunct(r)  │ Check if rune is punctuation                        │
+  └─────────────────────┴─────────────────────────────────────────────────────┘
+
+  ── Example: unicode_runes.go ───────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "unicode"
+)
+
+func main() {
+    // Go strings are UTF-8. A rune is one Unicode code point.
+    s := "Hello, 世界! 123"
+
+    fmt.Printf("len(s) = %d bytes\n", len(s)) // bytes, not characters
+
+    // Iterate by rune (Unicode-safe)
+    fmt.Println("\nRunes:")
+    for i, r := range s {
+        fmt.Printf("  index=%d char=%c rune=%d\n", i, r, r)
+    }
+
+    // Count runes
+    runes := []rune(s)
+    fmt.Printf("\nCharacter count: %d\n", len(runes))
+
+    // unicode functions
+    fmt.Println("\nCharacter classification:")
+    for _, r := range "Aa1 !" {
+        fmt.Printf("  %c: letter=%v digit=%v upper=%v lower=%v space=%v\n",
+            r,
+            unicode.IsLetter(r),
+            unicode.IsDigit(r),
+            unicode.IsUpper(r),
+            unicode.IsLower(r),
+            unicode.IsSpace(r))
+    }
+
+    // strings.Map using unicode
+    import_note := "Hello World 123"
+    _ = import_note // used below conceptually
+
+    // Useful: count letters in string
+    count := 0
+    for _, r := range "Hello World 123!" {
+        if unicode.IsLetter(r) {
+            count++
+        }
+    }
+    fmt.Println("\nLetter count:", count) // 10
+}
+
+  ────────────────────────────────────────────────────────────────────────────────────────
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [21]  INTERVIEW Q&A — MEDIOR LEVEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+  │  Q1. What is the difference between fmt.Print, fmt.Println, and fmt.Printf?         │
+  └─────────────────────────────────────────────────────────────────────────────────────┘
+
+  A: fmt.Print writes its arguments with no automatic spacing or trailing newline.
+     fmt.Println adds spaces between arguments and always appends a newline.
+     fmt.Printf formats using verbs like %s, %d, %v and does not add a newline.
+
+     fmt.Print("a", "b")      // Output: ab
+     fmt.Println("a", "b")    // Output: a b\n
+     fmt.Printf("%s%s\n", "a", "b") // Output: ab\n
+
+
+  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+  │  Q2. Why should you use strings.Builder instead of + for string concatenation?      │
+  └─────────────────────────────────────────────────────────────────────────────────────┘
+
+  A: Go strings are immutable. Using + in a loop allocates a new string each time,
+     resulting in O(n^2) memory usage. strings.Builder maintains an internal byte
+     buffer and only allocates once (or grows amortized), giving O(n) performance.
+
+     var b strings.Builder
+     for i := 0; i < 1000; i++ {
+         b.WriteString("hello")
+     }
+     result := b.String()
+
+
+  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+  │  Q3. What does strconv.Atoi return and when would it fail?                          │
+  └─────────────────────────────────────────────────────────────────────────────────────┘
+
+  A: strconv.Atoi(s string) (int, error) converts a decimal string to int.
+     It returns an error (*strconv.NumError) when:
+     - The string is empty
+     - The string contains non-numeric characters (e.g., "abc", "12.5")
+     - The number overflows int
+     Always check the returned error before using the int value.
+
+
+  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+  │  Q4. How do you sort a slice of structs in Go?                                      │
+  └─────────────────────────────────────────────────────────────────────────────────────┘
+
+  A: Use sort.Slice(slice, lessFunc) with a custom comparison function:
+
+     sort.Slice(employees, func(i, j int) bool {
+         return employees[i].Salary < employees[j].Salary
+     })
+
+     For stable sort (preserving original order for equal elements), use:
+     sort.SliceStable(employees, lessFunc)
+
+
+  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+  │  Q5. What is the difference between os.Open and os.Create?                          │
+  └─────────────────────────────────────────────────────────────────────────────────────┘
+
+  A: os.Open(name) opens an existing file for reading only (O_RDONLY).
+     If the file doesn't exist, it returns an error.
+
+     os.Create(name) creates or truncates a file for writing (O_WRONLY|O_CREATE|O_TRUNC).
+     If the file exists, its contents are erased. If it doesn't, it is created.
+
+     For append or read-write with custom flags, use os.OpenFile(name, flags, perm).
+
+
+  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+  │  Q6. Why must you call bufio.Writer.Flush()?                                        │
+  └─────────────────────────────────────────────────────────────────────────────────────┘
+
+  A: bufio.Writer accumulates writes in an in-memory buffer to reduce system calls.
+     Data is written to the underlying writer only when the buffer is full OR when
+     Flush() is explicitly called. Failing to call Flush() can result in data loss
+     (partial or empty files). Always use defer writer.Flush() after creating a bufio.Writer.
+
+
+  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+  │  Q7. What is the difference between errors.New and fmt.Errorf?                      │
+  └─────────────────────────────────────────────────────────────────────────────────────┘
+
+  A: errors.New(text) creates a simple error from a static string. It has no
+     formatting or wrapping capability.
+
+     fmt.Errorf(format, args...) creates a formatted error. Crucially, when used
+     with the %w verb, it wraps another error, allowing errors.Is() and errors.As()
+     to inspect the error chain.
+
+     var ErrNotFound = errors.New("not found")
+     wrapped := fmt.Errorf("findUser: %w", ErrNotFound)
+     errors.Is(wrapped, ErrNotFound) // true
+
+
+  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+  │  Q8. What is Go's time layout reference time and why is it unusual?                 │
+  └─────────────────────────────────────────────────────────────────────────────────────┘
+
+  A: Go uses a specific reference time: Mon Jan 2 15:04:05 MST 2006
+     (Unix time 1136239445). This is unique — instead of using symbols like
+     YYYY or MM, Go uses the actual values of the reference time.
+     - Year is 2006, Month is 01 (Jan), Day is 02
+     - Hour is 15 (3 PM), Minute is 04, Second is 05
+
+     t.Format("2006-01-02")  →  "2024-12-25"
+     t.Format("15:04:05")    →  "14:30:00"
+
+
+  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+  │  Q9. How do you read a file line by line in Go?                                     │
+  └─────────────────────────────────────────────────────────────────────────────────────┘
+
+  A: Use bufio.Scanner with ScanLines (default):
+
+     file, err := os.Open("data.txt")
+     if err != nil { log.Fatal(err) }
+     defer file.Close()
+
+     scanner := bufio.NewScanner(file)
+     for scanner.Scan() {
+         line := scanner.Text()
+         // process line
+     }
+     if err := scanner.Err(); err != nil {
+         log.Fatal(err)
+     }
+
+
+  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+  │  Q10. What is io.EOF and how should you handle it?                                  │
+  └─────────────────────────────────────────────────────────────────────────────────────┘
+
+  A: io.EOF is a sentinel error returned by Read() when there is no more data.
+     It is NOT a real error — it signals successful end of data.
+     The convention: if n > 0 AND err == io.EOF, process the n bytes first.
+
+     for {
+         n, err := r.Read(buf)
+         if n > 0 {
+             process(buf[:n]) // process before checking error
+         }
+         if err == io.EOF {
+             break // done, not an error
+         }
+         if err != nil {
+             return err // real error
+         }
+     }
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [22]  INTERVIEW Q&A — EXPERIENCED LEVEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+  │  Q1. Explain the difference between errors.Is and errors.As.                        │
+  └─────────────────────────────────────────────────────────────────────────────────────┘
+
+  A: errors.Is(err, target) walks the error chain using Unwrap() and reports true
+     if any error in the chain equals target. Used to match sentinel errors.
+
+     errors.As(err, &target) walks the chain and assigns to target if any error
+     matches the type of *target. Used to extract a typed error from the chain.
+
+     var ErrDB = errors.New("db error")
+     wrapped := fmt.Errorf("layer2: %w", fmt.Errorf("layer1: %w", ErrDB))
+     errors.Is(wrapped, ErrDB)   // true  — chain match
+
+     var ve *ValidationError
+     errors.As(wrapped, &ve)     // true if any error in chain is *ValidationError
+
+
+  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+  │  Q2. What is the role of context.WithValue and what are its pitfalls?               │
+  └─────────────────────────────────────────────────────────────────────────────────────┘
+
+  A: context.WithValue attaches a request-scoped key-value pair to a context.
+     It's intended for metadata that crosses API boundaries (e.g., request IDs,
+     auth tokens, trace IDs) — NOT for passing optional parameters to functions.
+
+     Pitfalls:
+     1. Keys must be unexported custom types to avoid collisions across packages:
+        type ctxKey string  // NOT string or int directly
+     2. Values are retrieved as interface{}, requiring type assertions
+     3. Overuse leads to "context soup" — unclear dependencies, hard to test
+     4. Contexts are immutable; WithValue creates a new child context each time
+
+
+  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+  │  Q3. How does sort.Search (binary search) work in Go?                               │
+  └─────────────────────────────────────────────────────────────────────────────────────┘
+
+  A: sort.Search(n int, f func(int) bool) int uses binary search on [0, n).
+     It returns the smallest index i where f(i) is true, assuming f is false
+     for [0, i) and true for [i, n). Returns n if f is never true.
+
+     // Find index of 7 in sorted slice
+     a := []int{1, 3, 5, 7, 9, 11}
+     i := sort.Search(len(a), func(i int) bool { return a[i] >= 7 })
+     if i < len(a) && a[i] == 7 {
+         fmt.Println("Found 7 at index", i) // index 3
+     }
+
+     sort.SearchInts, sort.SearchFloat64s, sort.SearchStrings are convenience wrappers.
+
+
+  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+  │  Q4. How does JSON decoding into an interface{} work, and what types result?        │
+  └─────────────────────────────────────────────────────────────────────────────────────┘
+
+  A: When unmarshaling into interface{}, the json package uses these Go types:
+     ┌──────────────┬──────────────────────┐
+     │ JSON         │ Go type              │
+     ├──────────────┼──────────────────────┤
+     │ boolean      │ bool                 │
+     │ number       │ float64              │
+     │ string       │ string               │
+     │ array        │ []interface{}        │
+     │ object       │ map[string]interface{}│
+     │ null         │ nil                  │
+     └──────────────┴──────────────────────┘
+
+     Important: Numbers are ALWAYS float64 by default. To get int, use
+     json.Decoder.UseNumber() which yields json.Number, then call .Int64().
+
+
+  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+  │  Q5. What are the differences between sync.Mutex and sync.RWMutex? When use each?  │
+  └─────────────────────────────────────────────────────────────────────────────────────┘
+
+  A: sync.Mutex has two states: locked and unlocked. Only one goroutine can hold
+     Lock() at a time. Use for any shared mutable state.
+
+     sync.RWMutex has three modes:
+     - RLock() / RUnlock(): multiple readers can hold simultaneously
+     - Lock() / Unlock(): exclusive write lock, blocks all readers and writers
+
+     Use sync.RWMutex when:
+     - Reads are significantly more frequent than writes (e.g., in-memory cache)
+     - Read operations are long enough that concurrent reads matter
+
+     RWMutex has higher overhead than Mutex. For write-heavy workloads, Mutex
+     is often faster.
+
+
+  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+  │  Q6. What is io.Pipe and what is it used for?                                       │
+  └─────────────────────────────────────────────────────────────────────────────────────┘
+
+  A: io.Pipe() returns a connected (*PipeReader, *PipeWriter) pair.
+     Writes to PipeWriter block until PipeReader reads the data (synchronous, no buffer).
+     It enables goroutine-to-goroutine streaming without intermediate buffering.
+
+     Common use case: connect a component that writes (e.g., json.Encoder, gzip.Writer)
+     to one that reads (e.g., http.Request.Body, io.ReadAll) without allocating a
+     full intermediate bytes.Buffer:
+
+     pr, pw := io.Pipe()
+     go func() {
+         defer pw.Close()
+         json.NewEncoder(pw).Encode(data)
+     }()
+     resp, _ := http.Post(url, "application/json", pr)
+
+
+  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+  │  Q7. What is the danger of log.Fatal and when should you avoid it?                  │
+  └─────────────────────────────────────────────────────────────────────────────────────┘
+
+  A: log.Fatal calls os.Exit(1) after logging. os.Exit() does NOT run deferred
+     functions, does not trigger finalizers, and bypasses graceful shutdown.
+
+     Avoid log.Fatal:
+     - Inside HTTP handlers (kills the entire server for one failed request)
+     - In goroutines (unpredictable behavior)
+     - When defer statements are needed for cleanup (file close, DB disconnect)
+     - In library code (callers should decide how to handle errors)
+
+     Use log.Fatal only in main() for unrecoverable startup errors. In all other
+     cases, return errors and let the caller decide.
+
+
+  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+  │  Q8. Explain the net/http ServeMux new features in Go 1.22+.                        │
+  └─────────────────────────────────────────────────────────────────────────────────────┘
+
+  A: Go 1.22 enhanced the default ServeMux with:
+     1. METHOD routing: "GET /path" and "POST /path" are distinct routes
+     2. Path parameters: "/users/{id}" — retrieve with r.PathValue("id")
+     3. Wildcard: "/files/{path...}" — matches remaining path segments
+     4. Exact match: trailing slash "/" matches subtree; adding {$} forces exact match
+
+     mux.HandleFunc("GET /users/{id}", func(w http.ResponseWriter, r *http.Request) {
+         id := r.PathValue("id")
+         fmt.Fprintf(w, "User: %s", id)
+     })
+
+     Before 1.22, method routing required third-party routers (gorilla/mux, chi).
+
+
+  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+  │  Q9. What is sync.Pool and how does it work under the hood?                         │
+  └─────────────────────────────────────────────────────────────────────────────────────┘
+
+  A: sync.Pool is a set of temporary objects that may be saved and reused to reduce
+     GC pressure. Each P (logical processor) has a local pool; Get() checks local
+     pool first, then steals from other Ps, then calls New().
+
+     Important behaviors:
+     - Objects can be collected at any GC cycle — do not rely on persistence
+     - Pool is safe for concurrent use
+     - Reset objects before returning to pool (security: clear sensitive data)
+     - Best for short-lived, frequently allocated objects (byte buffers, etc.)
+
+     pool := &sync.Pool{New: func() interface{} { return &bytes.Buffer{} }}
+     buf := pool.Get().(*bytes.Buffer)
+     buf.Reset() // always reset before use
+     // ... use buf ...
+     pool.Put(buf)
+
+
+  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+  │  Q10. How would you implement a context-aware HTTP middleware in Go?                │
+  └─────────────────────────────────────────────────────────────────────────────────────┘
+
+  A: A middleware wraps an http.Handler and returns a new http.Handler.
+     To add context values (e.g., request ID) and propagate cancellation:
+
+     type ctxKey string
+     const requestIDKey ctxKey = "requestID"
+
+     func requestIDMiddleware(next http.Handler) http.Handler {
+         return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+             // Generate or extract request ID
+             reqID := r.Header.Get("X-Request-ID")
+             if reqID == "" {
+                 reqID = fmt.Sprintf("%d", time.Now().UnixNano())
+             }
+             // Attach to context
+             ctx := context.WithValue(r.Context(), requestIDKey, reqID)
+             // Pass enriched request to next handler
+             next.ServeHTTP(w, r.WithContext(ctx))
+         })
+     }
+
+     // Usage
+     mux.Handle("/api/", requestIDMiddleware(apiHandler))
+
+     In a handler, retrieve with:
+     reqID := r.Context().Value(requestIDKey).(string)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                         QUICK REFERENCE CHEAT SHEET
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─────────────┬────────────────────────────┬─────────────────────────────────────────┐
+  │ Package     │ Primary Use                │ Key Types / Functions                   │
+  ├─────────────┼────────────────────────────┼─────────────────────────────────────────┤
+  │ fmt         │ I/O & formatting           │ Printf, Sprintf, Errorf                 │
+  │ strings     │ String operations          │ Contains, Split, Join, Builder          │
+  │ strconv     │ Type conversion            │ Atoi, Itoa, ParseFloat, FormatFloat     │
+  │ math        │ Math functions             │ Sqrt, Pow, Abs, Floor, Ceil, Pi         │
+  │ sort        │ Sorting                    │ Ints, Strings, Slice, Search            │
+  │ os          │ OS access                  │ Args, Getenv, Open, ReadFile, Exit      │
+  │ io          │ I/O interfaces             │ Reader, Writer, Copy, ReadAll, Pipe     │
+  │ bufio       │ Buffered I/O               │ Scanner, NewReader, NewWriter, Flush    │
+  │ bytes       │ Byte slice ops             │ Contains, Split, Buffer, NewReader      │
+  │ errors      │ Error handling             │ New, Is, As, Unwrap, Join               │
+  │ time        │ Time & duration            │ Now, Sleep, Parse, Format, Ticker       │
+  │ log         │ Logging                    │ Print, Fatal, New, SetFlags             │
+  │ math/rand   │ Random numbers             │ Intn, Float64, Shuffle, Perm            │
+  │ regexp      │ Regular expressions        │ MustCompile, FindAll, ReplaceAll        │
+  │ encoding/json│ JSON marshaling           │ Marshal, Unmarshal, Encoder, Decoder    │
+  │ net/http    │ HTTP client/server         │ Get, Post, HandleFunc, ListenAndServe   │
+  │ sync        │ Concurrency                │ Mutex, RWMutex, WaitGroup, Once, Map    │
+  │ context     │ Cancellation/propagation   │ Background, WithCancel, WithTimeout     │
+  │ path/filepath│ File paths                │ Join, Base, Dir, Ext, WalkDir           │
+  │ unicode     │ Unicode/rune ops           │ IsLetter, IsDigit, IsSpace, ToUpper     │
+  └─────────────┴────────────────────────────┴─────────────────────────────────────────┘
+
+  COMMON GOTCHAS:
+  ┌─────────────────────────────────────────────────────────────────────────────────────┐
+  │  1. Always defer resp.Body.Close() in HTTP clients                                  │
+  │  2. Always call bufio.Writer.Flush() or data may be lost                            │
+  │  3. log.Fatal does NOT run deferred functions (calls os.Exit)                       │
+  │  4. JSON decodes numbers to float64 in interface{} — use UseNumber() for int        │
+  │  5. sort.Slice is NOT stable — use sort.SliceStable for equal element ordering      │
+  │  6. time.Format uses reference time (2006-01-02), not symbols like YYYY             │
+  │  7. io.EOF is NOT an error — it's end-of-stream signal; handle n bytes before err   │
+  │  8. Context keys MUST be unexported custom types to prevent collisions              │
+  │  9. os.Exit() in goroutines terminates the whole program immediately                │
+  │  10. sync.Pool objects can be GC'd at any time — never rely on persistence          │
+  └─────────────────────────────────────────────────────────────────────────────────────┘

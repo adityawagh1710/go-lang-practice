@@ -1,0 +1,381 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📘 Golang Standard Library
+════════════════════════════════════════════════════════════════════════════════════
+
+=== 1. Builtin (Predeclared Identifiers) ===
+
+No import needed. Includes: 
+len, cap, append, make, new, delete, copy, close, panic, 
+recover, complex, real, imag, true/false, nil, etc.
+
+Example:
+```go
+
+package main
+
+import "fmt"
+
+func main() {
+    s := []int{1, 2, 3}
+    fmt.Println(len(s))        // 3
+    s = append(s, 4, 5)
+    fmt.Println(cap(s))        // >=5 (may be more due to growth)
+    fmt.Println("Hello")
+}
+
+════════════════════════════════════════════════════════════════════════════════════
+
+=== 2. fmt - Formatted I/O ===
+Most used package for printing and scanning.
+Key functions: Print, Printf, Println, Sprintf, Scan, Errorf, etc.
+
+Example:
+
+Gopackage main
+
+import "fmt"
+
+func main() {
+    name := "Alice"
+    age := 30
+    fmt.Printf("Name: %s, Age: %d\n", name, age)
+
+    // Formatted string
+    msg := fmt.Sprintf("Hello %s!", name)
+    fmt.Println(msg)
+
+    // Error
+    err := fmt.Errorf("user %s not found", name)
+    fmt.Println(err)
+}
+
+════════════════════════════════════════════════════════════════════════════════════
+
+=== 3. strings - String Operations ===
+Manipulation of UTF-8 strings.
+Key: Contains, HasPrefix, HasSuffix, Split, Join, Trim, Replace, ToUpper, ToLower, etc.
+
+Example:
+
+Gopackage main
+
+import (
+    "fmt"
+    "strings"
+)
+
+func main() {
+    s := "  Hello, World!  "
+    fmt.Println(strings.TrimSpace(s))                    // "Hello, World!"
+    fmt.Println(strings.Contains(s, "World"))            // true
+    fmt.Println(strings.Split(s, ","))                   // ["  Hello" " World!  "]
+    fmt.Println(strings.Join([]string{"a", "b", "c"}, "-")) // "a-b-c"
+}
+
+════════════════════════════════════════════════════════════════════════════════════
+
+=== 4. strconv - String Conversions ===
+Convert between strings and basic types.
+
+Key: Atoi, Itoa, ParseInt, ParseBool, FormatInt, FormatFloat, etc.
+
+Example:
+
+Gopackage main
+
+import (
+    "fmt"
+    "strconv"
+)
+
+func main() {
+    i, _ := strconv.Atoi("42")
+    fmt.Println(i) // 42
+
+    s := strconv.Itoa(100)
+    fmt.Println(s) // "100"
+
+    b, _ := strconv.ParseBool("true")
+    fmt.Println(b) // true
+}
+
+════════════════════════════════════════════════════════════════════════════════════
+
+=== 5. bytes - Byte Slice Operations ===
+Similar to strings but works on []byte.
+Key: Equal, HasPrefix, Contains, etc.
+
+Example:
+
+Gopackage main
+
+import (
+    "bytes"
+    "fmt"
+)
+
+func main() {
+    b := []byte("Hello World")
+    fmt.Println(bytes.HasPrefix(b, []byte("Hello"))) // true
+    fmt.Println(bytes.Equal(b, []byte("Hello World"))) // true
+}
+
+════════════════════════════════════════════════════════════════════════════════════
+
+=== 6. io - I/O Primitives ===
+Interfaces: Reader, Writer, Closer, etc.
+Key: Copy, MultiReader, TeeReader, Pipe, etc.
+
+Example:
+
+Gopackage main
+
+import (
+    "fmt"
+    "io"
+    "strings"
+)
+
+func main() {
+    r := strings.NewReader("Hello from io")
+    var buf strings.Builder
+    io.Copy(&buf, r)
+    fmt.Println(buf.String())
+}
+
+════════════════════════════════════════════════════════════════════════════════════
+
+=== 7. os - Operating System Functionality ===
+File, process, environment handling.
+Key: Open, Create, ReadFile, WriteFile, Getwd, Environ, Exit, etc.
+
+Example (Read/Write file):
+
+Gopackage main
+
+import (
+    "fmt"
+    "os"
+)
+
+func main() {
+    data := []byte("Hello from Go!")
+    err := os.WriteFile("test.txt", data, 0644)
+    if err != nil {
+        fmt.Println(err)
+        return
+    }
+
+    content, _ := os.ReadFile("test.txt")
+    fmt.Println(string(content))
+}
+
+════════════════════════════════════════════════════════════════════════════════════
+
+=== 8. time - Time and Duration ===
+Key: Time, Duration, Now, Parse, Format, Sleep, Tick, After, etc.
+
+Example:
+
+Gopackage main
+
+import (
+    "fmt"
+    "time"
+)
+
+func main() {
+    now := time.Now()
+    fmt.Println(now.Format(time.RFC3339))
+
+    future := now.Add(24 * time.Hour)
+    fmt.Println(future)
+
+    time.Sleep(100 * time.Millisecond)
+}
+
+════════════════════════════════════════════════════════════════════════════════════
+
+=== 9. context - Request Context Cancellation ===
+Essential for servers and timeouts.
+Key: Background, WithCancel, WithTimeout, WithValue, etc.
+
+Example:
+
+Gopackage main
+
+import (
+    "context"
+    "fmt"
+    "time"
+)
+
+func main() {
+    ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+    defer cancel()
+
+    select {
+    case <-time.After(3 * time.Second):
+        fmt.Println("Operation completed")
+    case <-ctx.Done():
+        fmt.Println("Timeout:", ctx.Err())
+    }
+}
+
+════════════════════════════════════════════════════════════════════════════════════
+
+=== 10. net/http - HTTP Client and Server ===
+One of Go's strongest packages.
+
+Example - Simple HTTP Server:
+
+Gopackage main
+
+import (
+    "fmt"
+    "net/http"
+)
+
+func handler(w http.ResponseWriter, r *http.Request) {
+    fmt.Fprintf(w, "Hello, %s!", r.URL.Path[1:])
+}
+
+func main() {
+    http.HandleFunc("/", handler)
+    fmt.Println("Server starting on :8080")
+    http.ListenAndServe(":8080", nil)
+}
+
+════════════════════════════════════════════════════════════════════════════════════
+
+Example - HTTP Client:
+
+Gopackage main
+
+import (
+    "fmt"
+    "io"
+    "net/http"
+)
+
+func main() {
+    resp, err := http.Get("https://example.com")
+    if err != nil {
+        fmt.Println(err)
+        return
+    }
+    defer resp.Body.Close()
+
+    body, _ := io.ReadAll(resp.Body)
+    fmt.Println(string(body))
+}
+
+════════════════════════════════════════════════════════════════════════════════════
+
+=== 11. encoding/json - JSON Handling ===
+Key: Marshal, Unmarshal, NewEncoder, NewDecoder.
+
+Example:
+
+Gopackage main
+
+import (
+    "encoding/json"
+    "fmt"
+)
+
+type Person struct {
+    Name string `json:"name"`
+    Age  int    `json:"age"`
+}
+
+func main() {
+    p := Person{Name: "Bob", Age: 25}
+    data, _ := json.Marshal(p)
+    fmt.Println(string(data))
+
+    var p2 Person
+    json.Unmarshal(data, &p2)
+    fmt.Println(p2)
+}
+
+════════════════════════════════════════════════════════════════════════════════════
+
+=== 12. sync - Synchronization Primitives ===
+Mutex, RWMutex, WaitGroup, Once, Pool, Map, etc.
+
+Example (WaitGroup):
+
+Gopackage main
+
+import (
+    "fmt"
+    "sync"
+)
+
+func worker(id int, wg *sync.WaitGroup) {
+    defer wg.Done()
+    fmt.Printf("Worker %d done\n", id)
+}
+
+func main() {
+    var wg sync.WaitGroup
+    for i := 1; i <= 3; i++ {
+        wg.Add(1)
+        go worker(i, &wg)
+    }
+    wg.Wait()
+    fmt.Println("All workers done")
+}
+
+════════════════════════════════════════════════════════════════════════════════════
+
+=== 13. Other Important Packages ===
+
+log          : Simple logging
+flag         : Command-line flag parsing
+regexp       : Regular expressions
+math/rand    : Random numbers (use math/rand/v2 in newer Go)
+crypto       : Cryptography (sha256, aes, etc.)
+database/sql : SQL database abstraction
+html/template : Safe HTML templating
+bufio        : Buffered I/O
+sort         : Sorting slices
+path/filepath : File path manipulation
+
+════════════════════════════════════════════════════════════════════════════════════
+
+=== Common Interview Questions & Answers ===
+Q1: What is the difference between fmt.Printf and fmt.Println?
+A: Println adds spaces between arguments and a newline. Printf requires format verbs (%s, %d, etc.) 
+and does not add spaces automatically.
+
+Q2: Why should you prefer io.Copy over manual read/write loops?
+A: io.Copy is efficient, handles buffering internally when possible, and is idiomatic.
+
+Q3: How do you handle JSON in Go? What are struct tags for?
+A: Use encoding/json. Struct tags like json:"name" control field mapping, omitempty, etc.
+
+Q4: Explain context package usage in servers.
+A: Context carries deadlines, cancellation signals, and request-scoped values across API boundaries. 
+Always pass ctx to functions that may be long-running.
+
+Q5: Difference between bytes and strings package?
+A: strings works on UTF-8 strings (immutable), bytes works on []byte (mutable byte slices). Use bytes for binary data.
+
+Q6: How does sync.WaitGroup work?
+A: Add(n) before starting goroutines, Done() in each goroutine, Wait() blocks until counter reaches zero.
+
+Q7: Why is time.Tick or time.After useful?
+A: They create channels that send time signals — perfect for rate limiting or timeouts.
+
+Q8: How do you read a file efficiently in Go?
+A: Prefer os.ReadFile for small files. For large/streaming files, use os.Open + bufio.Scanner or io.Copy.
+
+Q9: What is the zero value of a struct, slice, map?
+A: Struct: zero values of fields. Slice/Map: nil.
+
+Q10: Why is Go's net/http server concurrent by default?
+A: Each request runs in its own goroutine automatically.
+
+════════════════════════════════════════════════════════════════════════════════════

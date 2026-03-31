@@ -1,0 +1,406 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📘 Golang Standard Library
+════════════════════════════════════════════════════════════════════════════════════
+
+## 📌 What is the Go Standard Library?
+
+The **Go Standard Library** is a collection of built-in packages that come with Go.
+It provides ready-to-use functionality for:
+
+* File handling
+* Networking
+* HTTP servers
+* JSON/XML processing
+* Concurrency
+* Cryptography
+* Logging
+* Testing
+
+👉 You don’t need external dependencies for most tasks.
+
+════════════════════════════════════════════════════════════════════════════════════
+
+## 📦 Commonly Used Standard Library Packages
+
+| Category    | Package                         | Description             |
+| ----------- | ------------------------------- | ----------------------- |
+| I/O         | `fmt`, `io`, `bufio`            | Input/output operations |
+| OS          | `os`, `path/filepath`           | OS-level operations     |
+| HTTP/Web    | `net/http`                      | HTTP server & client    |
+| Encoding    | `encoding/json`, `encoding/xml` | Data parsing            |
+| Concurrency | `sync`, `context`               | Goroutines coordination |
+| Time        | `time`                          | Time & scheduling       |
+| Logging     | `log`                           | Logging                 |
+| Strings     | `strings`, `strconv`            | String manipulation     |
+| Math        | `math`, `math/rand`             | Math utilities          |
+| Testing     | `testing`                       | Unit testing            |
+
+════════════════════════════════════════════════════════════════════════════════════
+
+## 🧾 1. fmt Package (Formatted I/O)
+
+### Example:
+
+```go
+package main
+
+import "fmt"
+
+func main() {
+    name := "Aditya"
+    age := 25
+
+    fmt.Println("Hello", name)
+    fmt.Printf("Age: %d\n", age)
+}
+```
+════════════════════════════════════════════════════════════════════════════════════
+
+## 📂 2. os Package (File & OS Operations)
+
+### Example:
+
+```go
+package main
+
+import (
+    "fmt"
+    "os"
+)
+
+func main() {
+    file, err := os.Create("test.txt")
+    if err != nil {
+        fmt.Println("Error:", err)
+        return
+    }
+    defer file.Close()
+
+    file.WriteString("Hello Go Standard Library")
+}
+```
+════════════════════════════════════════════════════════════════════════════════════
+
+## 🌐 3. net/http Package (HTTP Server)
+
+### Example:
+
+```go
+package main
+
+import (
+    "fmt"
+    "net/http"
+)
+
+func handler(w http.ResponseWriter, r *http.Request) {
+    fmt.Fprintf(w, "Hello, World!")
+}
+
+func main() {
+    http.HandleFunc("/", handler)
+    http.ListenAndServe(":8080", nil)
+}
+```
+════════════════════════════════════════════════════════════════════════════════════
+
+## 📄 4. encoding/json Package
+
+### Example:
+
+```go
+package main
+
+import (
+    "encoding/json"
+    "fmt"
+)
+
+type User struct {
+    Name string
+    Age  int
+}
+
+func main() {
+    user := User{Name: "Aditya", Age: 25}
+
+    jsonData, _ := json.Marshal(user)
+    fmt.Println(string(jsonData))
+
+    var decoded User
+    json.Unmarshal(jsonData, &decoded)
+    fmt.Println(decoded.Name)
+}
+```
+════════════════════════════════════════════════════════════════════════════════════
+
+## ⏱️ 5. time Package
+
+### Example:
+
+```go
+package main
+
+import (
+    "fmt"
+    "time"
+)
+
+func main() {
+    now := time.Now()
+    fmt.Println("Current Time:", now)
+
+    time.Sleep(2 * time.Second)
+    fmt.Println("After 2 seconds")
+}
+```
+════════════════════════════════════════════════════════════════════════════════════
+
+## 🔄 6. sync Package (Concurrency Control)
+
+### Example (WaitGroup):
+
+```go
+package main
+
+import (
+    "fmt"
+    "sync"
+)
+
+func worker(wg *sync.WaitGroup) {
+    defer wg.Done()
+    fmt.Println("Worker executed")
+}
+
+func main() {
+    var wg sync.WaitGroup
+
+    wg.Add(1)
+    go worker(&wg)
+
+    wg.Wait()
+}
+```
+════════════════════════════════════════════════════════════════════════════════════
+
+## 🔤 7. strings Package
+
+### Example:
+
+```go
+package main
+
+import (
+    "fmt"
+    "strings"
+)
+
+func main() {
+    str := "hello world"
+
+    fmt.Println(strings.ToUpper(str))
+    fmt.Println(strings.Contains(str, "world"))
+}
+```
+════════════════════════════════════════════════════════════════════════════════════
+
+## 🔢 8. strconv Package (String Conversion)
+
+### Example:
+
+```go
+package main
+
+import (
+    "fmt"
+    "strconv"
+)
+
+func main() {
+    numStr := "123"
+    num, _ := strconv.Atoi(numStr)
+
+    fmt.Println(num + 10)
+}
+```
+════════════════════════════════════════════════════════════════════════════════════
+
+## 🧮 9. math Package
+
+### Example:
+
+```go
+package main
+
+import (
+    "fmt"
+    "math"
+)
+
+func main() {
+    fmt.Println(math.Sqrt(16))
+    fmt.Println(math.Pow(2, 3))
+}
+```
+════════════════════════════════════════════════════════════════════════════════════
+
+## 🧪 10. testing Package
+
+### Example:
+
+```go
+package main
+
+import "testing"
+
+func Add(a, b int) int {
+    return a + b
+}
+
+func TestAdd(t *testing.T) {
+    result := Add(2, 3)
+    if result != 5 {
+        t.Errorf("Expected 5, got %d", result)
+    }
+}
+```
+════════════════════════════════════════════════════════════════════════════════════
+
+# 🔥 Combined Real-World Example
+
+```go
+package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "net/http"
+    "time"
+)
+
+type Response struct {
+    Message string `json:"message"`
+    Time    string `json:"time"`
+}
+
+func handler(w http.ResponseWriter, r *http.Request) {
+    res := Response{
+        Message: "Hello API",
+        Time:    time.Now().Format(time.RFC3339),
+    }
+
+    json.NewEncoder(w).Encode(res)
+}
+
+func main() {
+    http.HandleFunc("/", handler)
+    fmt.Println("Server running on :8080")
+    http.ListenAndServe(":8080", nil)
+}
+```
+════════════════════════════════════════════════════════════════════════════════════
+
+# 🎯 Interview Questions & Answers
+
+════════════════════════════════════════════════════════════════════════════════════
+
+## ❓ 1. What is the Go Standard Library?
+
+**Answer:**
+It is a set of pre-built packages that provide common functionality like I/O, HTTP, JSON, concurrency, and more without needing external dependencies.
+
+════════════════════════════════════════════════════════════════════════════════════
+
+## ❓ 2. Which package is used for HTTP servers?
+
+**Answer:**
+`net/http`
+
+════════════════════════════════════════════════════════════════════════════════════
+
+## ❓ 3. Difference between fmt.Println and fmt.Printf?
+
+**Answer:**
+
+* `Println` → simple printing with newline
+* `Printf` → formatted output
+
+════════════════════════════════════════════════════════════════════════════════════
+
+## ❓ 4. How do you parse JSON in Go?
+
+**Answer:**
+Using `encoding/json`:
+
+```go
+json.Unmarshal(data, &struct)
+```
+
+════════════════════════════════════════════════════════════════════════════════════
+
+## ❓ 5. What is sync.WaitGroup used for?
+
+**Answer:**
+To wait for multiple goroutines to finish execution.
+
+════════════════════════════════════════════════════════════════════════════════════
+
+## ❓ 6. How do you read/write files?
+
+**Answer:**
+Using `os` package (`os.Create`, `os.Open`, `file.WriteString`)
+
+════════════════════════════════════════════════════════════════════════════════════
+
+## ❓ 7. What is strconv used for?
+
+**Answer:**
+String ↔ numeric conversions (`Atoi`, `Itoa`)
+
+════════════════════════════════════════════════════════════════════════════════════
+
+## ❓ 8. How do you handle time in Go?
+
+**Answer:**
+Using `time` package (`time.Now()`, `time.Sleep()`)
+
+════════════════════════════════════════════════════════════════════════════════════
+
+## ❓ 9. Is Go Standard Library enough for production?
+
+**Answer:**
+Yes, for most cases. Many production systems rely 
+heavily on it with minimal external libraries.
+
+════════════════════════════════════════════════════════════════════════════════════
+
+## ❓ 10. What are advantages of using standard library?
+
+**Answer:**
+
+* Stable & well-tested
+* No external dependency
+* Optimized performance
+* Maintained by Go team
+
+════════════════════════════════════════════════════════════════════════════════════
+
+# 🚀 Pro Tips (Senior-Level Insight)
+
+* Prefer standard library before adding third-party libs
+* `net/http` is powerful enough for most APIs
+* Use `context` for cancellation & timeouts
+* Combine `sync` + channels for scalable concurrency
+* Standard library is **production-grade by default**
+
+════════════════════════════════════════════════════════════════════════════════════
+
+# ✅ Summary
+
+* Go standard library is **rich, minimal, and powerful**
+* Covers almost all backend use cases
+* Encourages clean, dependency-free code
+* Essential for interviews and real-world systems
+
+════════════════════════════════════════════════════════════════════════════════════
