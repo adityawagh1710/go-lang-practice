@@ -1,5 +1,5 @@
 # 🚀 Go Language: Defer, Panic, Recover — Complete Notes
-──────────────────────────────────────────────────────
+────────────────────────────────────────────────────────
 📌 1. DEFER - The Cleanup Hero
 What is defer?
 Defer schedules a function call to run just before the current function returns (normal return or panic).
@@ -21,13 +21,16 @@ func main() {
 
     fmt.Println("✅ Main ends")
 }
+
 // Output:
 // 🚀 Main starts
 // ✅ Main ends
 // ⭐ Deferred call #2 - runs first among defers
 // 🌟 Deferred call #1 - runs last
 Real-world Example - File Handling
+
 Gopackage main
+
 import (
     "fmt"
     "os"
@@ -35,13 +38,18 @@ import (
 
 func main() {
     f, err := os.Create("data.txt")
-    if err != nil { panic(err) }
-    defer f.Close()                    // 🔥 Guaranteed close even on panic!
-    defer fmt.Println("✅ File closed safely")
+    
+    if err != nil { 
+        panic(err) 
+    }
+    
+    defer f.Close() // Guaranteed close even on panic!
+    
+    defer fmt.Println("File closed safely")
 
     f.WriteString("Hello from defer!")
 }
-──────────────────────────────────────────────────────
+────────────────────────────────────────────────────────
 📌 2. PANIC - The "Stop Everything" Signal
 What is panic?
 Built-in function that stops normal execution and starts unwinding the stack.
@@ -62,12 +70,13 @@ func main() {
     panic("💥 Critical failure! Database connection lost")
     fmt.Println("This line never runs") // unreachable
 }
+
 // Output: (program crashes)
 // 🚀 Program starts
 // panic: 💥 Critical failure! Database connection lost
 // goroutine 1 [running]:
 // main.main()
-──────────────────────────────────────────────────────
+────────────────────────────────────────────────────────
 📌 3. RECOVER - The Safety Net
 What is recover?
 Built-in function that stops a panic and returns the value passed to panic().
@@ -88,42 +97,45 @@ func main() {
     panic("💥 Something went wrong!")
     fmt.Println("This never runs")
 }
+
 // Output:
 // 🚀 Program starts
 // 🛡️ Recovered from panic: 💥 Something went wrong!
 Pro Tip: You can even re-panic after recovering!
+
 Godefer func() {
     if r := recover(); r != nil {
         fmt.Println("🛡️ Recovered:", r)
         panic("🔥 Re-panicked with better message") // crashes again
     }
 }()
-──────────────────────────────────────────────────────
+────────────────────────────────────────────────────────
 📌 4. FULL COMBINED EXAMPLE (Defer + Panic + Recover)
 Gopackage main
 import "fmt"
 
 func riskyOperation() {
-    defer fmt.Println("🧹 Cleanup: resources released")
-    panic("💥 Unexpected error in riskyOperation")
+    defer fmt.Println("Cleanup: resources released")
+    panic("Unexpected error in riskyOperation")
 }
 
 func main() {
     defer func() {
         if r := recover(); r != nil {
-            fmt.Println("🛡️ Main recovered:", r)
+            fmt.Println("Main recovered:", r)
         }
     }()
 
     fmt.Println("🚀 Starting program...")
     riskyOperation()
-    fmt.Println("✅ Program completed successfully")
+    fmt.Println("Program completed successfully")
 }
+
 // Output:
-// 🚀 Starting program...
-// 🧹 Cleanup: resources released
-// 🛡️ Main recovered: 💥 Unexpected error in riskyOperation
-──────────────────────────────────────────────────────
+// Starting program...
+// Cleanup: resources released
+// Main recovered: Unexpected error in riskyOperation
+────────────────────────────────────────────────────────
 📌 5. BEST PRACTICES & GOTCHAS
 
 ✅ Use defer for cleanup (files, mutexes, connections)
@@ -133,25 +145,35 @@ func main() {
 ❌ Never recover in library code — let the caller decide
 ⚡ Defers have a tiny performance cost — don’t overuse
 💡 Named return values can be modified by defer functions!
-──────────────────────────────────────────────────────
+────────────────────────────────────────────────────────
 🎯 INTERVIEW QUESTIONS & ANSWERS
 Q1: What is the purpose of defer in Go?
-Ans: It schedules a function call to execute right before the surrounding function returns, regardless of whether it returns normally or panics. Great for resource cleanup.
+Ans: It schedules a function call to execute right before the surrounding function returns, 
+regardless of whether it returns normally or panics. Great for resource cleanup.
+
 Q2: In what order do multiple defer statements execute?
 Ans: Last-In-First-Out (LIFO). The most recent defer runs first.
+
 Q3: What happens when panic() is called?
 Ans: Execution stops, deferred functions run, and the panic propagates up the call stack until the program crashes or is recovered.
+
 Q4: How do you recover from a panic?
 Ans: Call recover() inside a deferred anonymous function. It returns the panic value (or nil if no panic).
+
 Q5: Why must recover() be called from a deferred function?
 Ans: Because recover() only works during stack unwinding caused by a panic. If called normally, it does nothing.
+
 Q6: Can you recover from a panic in a different goroutine?
 Ans: No. Each goroutine has its own panic state. Recover must be in the same goroutine that panicked.
+
 Q7: Difference between panic and returning an error?
 Ans: error is for expected, recoverable failures. panic is for unrecoverable, programmer-level errors. Use errors 99% of the time.
+
 Q8: What happens to deferred functions when a panic occurs?
 Ans: They still execute in LIFO order while the stack unwinds — this is why cleanup is safe.
+
 Q9: Can a deferred function itself call panic()?
 Ans: Yes! The new panic will override the previous one.
+
 Q10: Bonus Tricky Question - Does defer affect named return values?
 Ans: Yes! You can modify named return values inside a deferred function before the actual return happens.

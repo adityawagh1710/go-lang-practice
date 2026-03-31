@@ -15,7 +15,9 @@ func main() {
 	}()
 
 	fmt.Println("Starting program...")
+
 	riskyOperation()
+
 	fmt.Println("Program completed successfully")
 }
 
