@@ -1,0 +1,308 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 GO `context` PACKAGE
+════════════════════════════════════════════════════════════════════════════════════
+
+## 1. Introduction to context Package
+
+The `context` package (import "context") is part of Go's standard library since Go 1.7.
+It defines the `Context` interface that carries:
+- Cancellation signals
+- Deadlines / timeouts
+- Request-scoped values
+
+It is used to propagate information across API boundaries and between goroutines, especially in servers handling requests.
+
+**Core Context Interface:**
+```go
+type Context interface {
+    Deadline() (deadline time.Time, ok bool)  // Returns deadline and whether one is set
+    Done() <-chan struct{}                    // Channel closed when context is canceled or deadline exceeded
+    Err() error                               // Returns why Done() was closed: Canceled or DeadlineExceeded
+    Value(key any) any                        // Returns value for the key (if any)
+}
+Predefined Contexts:
+
+context.Background(): Root context (no deadline, no cancellation, no values). Use at the top level (e.g., main).
+context.TODO(): Placeholder when you're unsure which context to use (replace before production).
+
+Important Errors:
+Govar (
+    Canceled          = errors.New("context canceled")
+    DeadlineExceeded  = errors.New("context deadline exceeded")
+)
+Contexts are immutable — functions like WithCancel, WithTimeout, etc., return a derived (child) context.
+
+════════════════════════════════════════════════════════════════════════════════════
+
+2. Key Functions
+
+WithCancel(parent Context) (ctx Context, cancel CancelFunc)
+Returns a context that can be manually canceled.
+cancel() closes the Done channel.
+
+WithTimeout(parent Context, timeout time.Duration) (ctx Context, cancel CancelFunc)
+Cancels automatically after the timeout.
+Also returns a cancel function (useful to cancel early).
+
+WithDeadline(parent Context, d time.Time) (ctx Context, cancel CancelFunc)
+Cancels at a specific absolute time.
+
+WithValue(parent Context, key, val any) Context
+Adds request-scoped value (use unexported key types to avoid collisions).
+
+
+Best Practice for Creation:
+Always do:
+Goctx, cancel := context.WithTimeout(parent, duration)
+defer cancel()  // Always call cancel to release resources!
+
+════════════════════════════════════════════════════════════════════════════════════
+
+3. Complete Copy-Pasteable Examples
+
+Example 1: Manual Cancellation with WithCancel
+Gopackage main
+
+import (
+	"context"
+	"fmt"
+	"time"
+)
+
+func worker(ctx context.Context, id int) {
+	for {
+		select {
+		case <-ctx.Done():
+			fmt.Printf("Worker %d stopped: %v\n", id, ctx.Err())
+			return
+		default:
+			fmt.Printf("Worker %d is working...\n", id)
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+}
+
+func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go worker(ctx, 1)
+	go worker(ctx, 2)
+
+	time.Sleep(2 * time.Second)
+	fmt.Println("Canceling workers...")
+	cancel()
+
+	time.Sleep(1 * time.Second) // Give time for workers to stop
+}
+
+════════════════════════════════════════════════════════════════════════════════════
+
+Example 2: Timeout with WithTimeout
+Gopackage main
+
+import (
+	"context"
+	"fmt"
+	"time"
+)
+
+func longRunningTask(ctx context.Context) error {
+	for i := 0; i < 10; i++ {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			fmt.Printf("Task progress: %d/10\n", i+1)
+			time.Sleep(300 * time.Millisecond)
+		}
+	}
+	return nil
+}
+
+func main() {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	if err := longRunningTask(ctx); err != nil {
+		fmt.Printf("Task failed: %v\n", err)
+	} else {
+		fmt.Println("Task completed successfully")
+	}
+}
+
+════════════════════════════════════════════════════════════════════════════════════
+
+Example 3: Deadline with WithDeadline
+Gopackage main
+
+import (
+	"context"
+	"fmt"
+	"time"
+)
+
+func main() {
+	deadline := time.Now().Add(1500 * time.Millisecond)
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	defer cancel()
+
+	select {
+	case <-time.After(2 * time.Second):
+		fmt.Println("Operation completed in time")
+	case <-ctx.Done():
+		fmt.Printf("Deadline exceeded: %v\n", ctx.Err())
+	}
+}
+
+════════════════════════════════════════════════════════════════════════════════════
+
+Example 4: Passing Request-Scoped Values with WithValue
+Gopackage main
+
+import (
+	"context"
+	"fmt"
+	"time"
+)
+
+// Use unexported type for key to prevent collisions
+type ctxKey string
+
+const (
+	userIDKey ctxKey = "userID"
+	traceIDKey ctxKey = "traceID"
+)
+
+func processRequest(ctx context.Context) {
+	userID := ctx.Value(userIDKey).(int)
+	traceID := ctx.Value(traceIDKey).(string)
+
+	fmt.Printf("Processing request - UserID: %d, TraceID: %s\n", userID, traceID)
+
+	// Simulate work with timeout check
+	select {
+	case <-time.After(1 * time.Second):
+		fmt.Println("Request processed")
+	case <-ctx.Done():
+		fmt.Printf("Request canceled: %v\n", ctx.Err())
+	}
+}
+
+func main() {
+	ctx := context.WithValue(context.Background(), userIDKey, 12345)
+	ctx = context.WithValue(ctx, traceIDKey, "abc-xyz-123")
+
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	processRequest(ctx)
+}
+
+════════════════════════════════════════════════════════════════════════════════════
+
+Example 5: HTTP Server Context (Real-world pattern)
+Gopackage main
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"time"
+)
+
+func helloHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context() // Context from HTTP request (auto-canceled on client disconnect)
+
+	select {
+	case <-time.After(2 * time.Second):
+		fmt.Fprintln(w, "Hello, World!")
+	case <-ctx.Done():
+		fmt.Println("Request canceled by client")
+		return
+	}
+}
+
+func main() {
+	http.HandleFunc("/hello", helloHandler)
+	fmt.Println("Server starting on :8080")
+	http.ListenAndServe(":8080", nil)
+}
+
+════════════════════════════════════════════════════════════════════════════════════
+
+4. Best Practices
+
+Always pass context.Context as the first parameter to functions.
+Never store contexts in structs or global variables.
+Always defer cancel() immediately after creating a cancellable context.
+Use context.Background() only at the entry point of your application.
+Use unexported types (or struct{}) for context keys to avoid key collisions between packages.
+Check ctx.Err() to distinguish between context.Canceled and context.DeadlineExceeded.
+Do not use context values for passing optional function parameters or business logic data — only for request-scoped metadata (tracing, auth, request ID).
+In long loops, always use select with case <-ctx.Done().
+
+════════════════════════════════════════════════════════════════════════════════════
+
+5. Common Pitfalls
+
+Forgetting to call cancel() → resource leaks.
+Using context.Background() deep in the call stack.
+Storing mutable values in context.
+Not checking ctx.Err() after <-ctx.Done().
+
+6. Interview Questions & Answers
+
+Q1: What is the purpose of the context package in Go?
+A: The context package provides a standardized way to carry deadlines, cancellation signals, 
+and request-scoped values across API boundaries and goroutines. 
+It helps gracefully stop long-running operations when a request is canceled or times out.
+
+Q2: Explain the difference between context.Background() and context.TODO().
+A: Background() is the root context with no values/deadline/cancellation. 
+Use it at the top level. TODO() is a placeholder when you don't know which context to use yet. 
+It behaves like Background but signals "this should be replaced."
+
+Q3: How do you cancel a goroutine using context?
+A: Create a context with WithCancel, pass it to the goroutine, 
+and have the goroutine listen on ctx.Done() using select. Call cancel() when you want to stop it.
+
+Q4: What is the difference between WithTimeout and WithDeadline?
+A: WithTimeout takes a relative duration from now. WithDeadline takes an absolute time.Time. Both return a cancel function.
+
+Q5: Why should we use unexported types for context keys?
+A: To prevent key collisions when different packages use WithValue. 
+If two packages use the same string key, one can overwrite the other's value.
+
+Q6: What happens if you don't call cancel() on a context created with WithCancel/WithTimeout?
+A: The context and its timer (for timeout) will live until the parent context is done or the program ends, 
+potentially leaking resources (especially timers).
+
+Q7: How do you retrieve a value from context?
+A: Use ctx.Value(key). Always type-assert the result. Prefer helper functions for type safety:
+Gofunc UserID(ctx context.Context) (int, bool) {
+    if id, ok := ctx.Value(userIDKey).(int); ok {
+        return id, true
+    }
+    return 0, false
+}
+
+Q8: In an HTTP handler, how do you get the context?
+A: ctx := r.Context() — the net/http package automatically provides a context that cancels when the client disconnects or the request is done.
+
+Q9: Can you use context for passing database connections or large objects?
+A: No. Context values should only be used for small, request-scoped metadata (request ID, user ID, trace ID). Do not pass dependencies or business data.
+
+Q10: How do you handle context cancellation in a loop?
+A: Always use:
+Goselect {
+case <-ctx.Done():
+    return ctx.Err()
+default:
+    // do work
+}
+Or check after each unit of work.
+Bonus Question: What are the possible values of ctx.Err()?
+A: nil (not done), context.Canceled, or context.DeadlineExceeded.
+
+════════════════════════════════════════════════════════════════════════════════════

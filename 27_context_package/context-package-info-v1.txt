@@ -1,0 +1,322 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 GO `context` PACKAGE
+════════════════════════════════════════════════════════════════════════════════════
+
+## 🔹 WHAT IS `context` PACKAGE?
+
+The `context` package in Go is used to carry deadlines, cancellation signals, 
+and request-scoped values across API boundaries and goroutines.
+
+👉 It helps manage:
+
+* Cancellation of operations
+* Timeouts / deadlines
+* Passing request-scoped data
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 🔹 WHY DO WE NEED CONTEXT?
+
+Without context:
+
+* Goroutines may leak
+* No way to cancel long-running operations
+* No timeout control
+
+With context:
+✔ Graceful cancellation
+✔ Controlled execution
+✔ Better resource management
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 🔹 CORE INTERFACES
+
+```
+type Context interface {
+    Deadline() (deadline time.Time, ok bool)
+    Done() <-chan struct{}
+    Err() error
+    Value(key any) any
+}
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 🔹 IMPORTANT FUNCTIONS
+
+1. context.Background()
+   → Root context (used at top-level)
+
+2. context.TODO()
+   → Placeholder (when unsure)
+
+3. context.WithCancel(parent)
+   → Manual cancellation
+
+4. context.WithTimeout(parent, duration)
+   → Auto cancel after time
+
+5. context.WithDeadline(parent, time)
+   → Cancel at specific time
+
+6. context.WithValue(parent, key, value)
+   → Attach data (use carefully)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 🔹 EXAMPLE 1: BASIC CONTEXT USAGE
+
+```
+package main
+
+import (
+    "context"
+    "fmt"
+)
+
+func main() {
+    ctx := context.Background()
+    fmt.Println(ctx)
+}
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 🔹 EXAMPLE 2: CONTEXT WITH CANCEL
+
+```
+package main
+
+import (
+    "context"
+    "fmt"
+    "time"
+)
+
+func worker(ctx context.Context) {
+    for {
+        select {
+        case <-ctx.Done():
+            fmt.Println("Worker stopped:", ctx.Err())
+            return
+        default:
+            fmt.Println("Working...")
+            time.Sleep(1 * time.Second)
+        }
+    }
+}
+
+func main() {
+    ctx, cancel := context.WithCancel(context.Background())
+
+    go worker(ctx)
+
+    time.Sleep(3 * time.Second)
+    cancel()
+
+    time.Sleep(1 * time.Second)
+}
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 🔹 EXAMPLE 3: CONTEXT WITH TIMEOUT
+
+```
+package main
+
+import (
+    "context"
+    "fmt"
+    "time"
+)
+
+func main() {
+    ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+    defer cancel()
+
+    select {
+    case <-time.After(3 * time.Second):
+        fmt.Println("Completed work")
+    case <-ctx.Done():
+        fmt.Println("Timeout:", ctx.Err())
+    }
+}
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 🔹 EXAMPLE 4: CONTEXT WITH DEADLINE
+
+```
+package main
+
+import (
+    "context"
+    "fmt"
+    "time"
+)
+
+func main() {
+    deadline := time.Now().Add(2 * time.Second)
+
+    ctx, cancel := context.WithDeadline(context.Background(), deadline)
+    defer cancel()
+
+    select {
+    case <-time.After(3 * time.Second):
+        fmt.Println("Work done")
+    case <-ctx.Done():
+        fmt.Println("Deadline exceeded:", ctx.Err())
+    }
+}
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 🔹 EXAMPLE 5: CONTEXT WITH VALUE
+
+⚠ Use only for request-scoped data (NOT for optional params)
+
+```
+package main
+
+import (
+    "context"
+    "fmt"
+)
+
+type keyType string
+
+func main() {
+    ctx := context.WithValue(context.Background(), keyType("userID"), 101)
+
+    process(ctx)
+}
+
+func process(ctx context.Context) {
+    userID := ctx.Value(keyType("userID"))
+    fmt.Println("User ID:", userID)
+}
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 🔹 BEST PRACTICES
+
+✔ Always pass context as first parameter:
+
+```
+func DoSomething(ctx context.Context)
+```
+
+✔ Never store context in struct
+
+✔ Always call cancel() when using WithCancel/Timeout
+
+✔ Do NOT use context for:
+
+* Passing optional params
+* Large data
+
+✔ Use custom key types (avoid collisions)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 🔹 COMMON ERRORS
+
+❌ Forgetting cancel() → memory leak
+❌ Using context.Background() everywhere
+❌ Passing nil context
+❌ Using string as key (collision risk)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 🔹 REAL-WORLD USE CASES
+
+✔ HTTP request lifecycle
+✔ Database queries
+✔ Microservices communication
+✔ Goroutine cancellation
+✔ Time-bound API calls
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 🔹 INTERVIEW QUESTIONS & ANSWERS
+
+1️⃣ What is context in Go?
+👉 It manages cancellation, deadlines, and request-scoped data across goroutines.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+2️⃣ Why is context important?
+👉 Prevents goroutine leaks and controls execution flow.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+3️⃣ Difference between WithCancel and WithTimeout?
+
+👉 WithCancel:
+
+* Manual cancellation
+
+👉 WithTimeout:
+
+* Auto cancel after duration
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+4️⃣ What does ctx.Done() do?
+
+👉 Returns a channel that is closed when context is canceled.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+5️⃣ What is ctx.Err()?
+
+👉 Returns reason:
+
+* context.Canceled
+* context.DeadlineExceeded
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+6️⃣ Why context should not be stored in struct?
+
+👉 It should be passed explicitly to maintain control and clarity.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+7️⃣ Can we pass nil context?
+
+👉 ❌ No — always use context.Background()
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+8️⃣ What is context.TODO()?
+
+👉 Placeholder when context is not decided yet.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+9️⃣ Is context thread-safe?
+
+👉 ✔ Yes, safe for concurrent use.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔟 When to use context.WithValue?
+
+👉 Only for request-scoped metadata (e.g., auth, request ID)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 🔹 SUMMARY
+
+* Context controls lifecycle of operations
+* Helps avoid leaks and hanging goroutines
+* Essential for production-grade Go systems
+* Always use properly with cancel/timeout
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
