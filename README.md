@@ -80,3 +80,13 @@ go run main.go
 * Maps
 * Structs
 * Goroutines & Channels
+
+## 📌 More training websites
+
+https://go.dev/tour	
+
+https://go.dev/doc/effective_go	
+
+https://pkg.go.dev	
+
+https://github.com/golang/go/wiki/CodeReviewComments	
