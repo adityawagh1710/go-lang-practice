@@ -1,0 +1,391 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📘 Golang I/O & FILE
+════════════════════════════════════════════════════════════════════════════════════
+
+1. INTRODUCTION
+
+══════════════════════════════════════════════════════════════════
+
+Go provides powerful APIs for file and I/O operations using:
+
+* os (file operations)
+* io (interfaces)
+* bufio (buffered I/O)
+
+══════════════════════════════════════════════════════════════════
+
+2. BASIC FILE OPERATIONS
+
+══════════════════════════════════════════════════════════════════
+
+## 2.1 Create a File
+
+```go
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	file, err := os.Create("example.txt")
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+	defer file.Close()
+
+	fmt.Println("File created successfully")
+}
+```
+
+══════════════════════════════════════════════════════════════════
+
+## 2.2 Write to File
+
+```go
+package main
+
+import (
+	"os"
+)
+
+func main() {
+	file, err := os.Create("write.txt")
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	_, err = file.WriteString("Hello, Go File Handling!\n")
+	if err != nil {
+		return
+	}
+}
+```
+
+══════════════════════════════════════════════════════════════════
+
+## 2.3 Read File (Simple)
+
+```go
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	data, err := os.ReadFile("write.txt")
+	if err != nil {
+		fmt.Println("Error:", err)
+		return
+	}
+
+	fmt.Println(string(data))
+}
+```
+
+══════════════════════════════════════════════════════════════════
+
+## 2.4 Append to File
+
+```go
+package main
+
+import (
+	"os"
+)
+
+func main() {
+	file, err := os.OpenFile("write.txt", os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	_, err = file.WriteString("Appending new line\n")
+	if err != nil {
+		return
+	}
+}
+```
+
+══════════════════════════════════════════════════════════════════
+
+3. BUFFERED I/O (bufio)
+
+══════════════════════════════════════════════════════════════════
+
+## 3.1 Buffered Writing
+
+```go
+package main
+
+import (
+	"bufio"
+	"os"
+)
+
+func main() {
+	file, err := os.Create("buffer.txt")
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	writer := bufio.NewWriter(file)
+
+	_, err = writer.WriteString("Buffered Write Example\n")
+	if err != nil {
+		return
+	}
+
+	writer.Flush()
+}
+```
+
+══════════════════════════════════════════════════════════════════
+## 3.2 Buffered Reading (Line by Line)
+
+```go
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+)
+
+func main() {
+	file, err := os.Open("buffer.txt")
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		fmt.Println(scanner.Text())
+	}
+
+	if err := scanner.Err(); err != nil {
+		fmt.Println("Error:", err)
+	}
+}
+```
+
+══════════════════════════════════════════════════════════════════
+4. USING io PACKAGE
+══════════════════════════════════════════════════════════════════
+## 4.1 Copy File Content
+
+```go
+package main
+
+import (
+	"io"
+	"os"
+)
+
+func main() {
+	src, err := os.Open("source.txt")
+	if err != nil {
+		return
+	}
+	defer src.Close()
+
+	dst, err := os.Create("dest.txt")
+	if err != nil {
+		return
+	}
+	defer dst.Close()
+
+	_, err = io.Copy(dst, src)
+	if err != nil {
+		return
+	}
+}
+```
+══════════════════════════════════════════════════════════════════
+## 4.2 Read with io.Reader
+
+```go
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	file, err := os.Open("write.txt")
+	if err != nil {
+		return
+	}
+	defer file.Close()
+
+	buffer := make([]byte, 1024)
+
+	n, err := file.Read(buffer)
+	if err != nil {
+		return
+	}
+
+	fmt.Println(string(buffer[:n]))
+}
+```
+══════════════════════════════════════════════════════════════════
+5. FILE METADATA
+══════════════════════════════════════════════════════════════════
+
+```go
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	info, err := os.Stat("write.txt")
+	if err != nil {
+		return
+	}
+
+	fmt.Println("Name:", info.Name())
+	fmt.Println("Size:", info.Size())
+	fmt.Println("IsDir:", info.IsDir())
+	fmt.Println("Permissions:", info.Mode())
+}
+```
+
+══════════════════════════════════════════════════════════════════
+6. FILE & DIRECTORY OPERATIONS
+══════════════════════════════════════════════════════════════════
+
+Create Directory:
+
+```go
+os.Mkdir("mydir", 0755)
+```
+
+Remove File:
+
+```go
+os.Remove("write.txt")
+```
+
+Rename File:
+
+```go
+os.Rename("old.txt", "new.txt")
+```
+
+══════════════════════════════════════════════════════════════════
+7. IMPORTANT FLAGS
+══════════════════════════════════════════════════════════════════
+
+```go
+os.O_RDONLY  // read only
+os.O_WRONLY  // write only
+os.O_RDWR    // read + write
+os.O_APPEND  // append
+os.O_CREATE  // create if not exists
+os.O_TRUNC   // truncate
+```
+
+Example:
+
+```go
+file, err := os.OpenFile("file.txt", os.O_CREATE|os.O_WRONLY, 0644)
+if err != nil {
+	return
+}
+defer file.Close()
+```
+
+══════════════════════════════════════════════════════════════════
+8. COMMON PATTERNS
+══════════════════════════════════════════════════════════════════
+
+Read Entire File:
+
+```go
+data, err := os.ReadFile("file.txt")
+if err != nil {
+	return
+}
+```
+
+Write File:
+
+```go
+err := os.WriteFile("file.txt", []byte("Hello"), 0644)
+if err != nil {
+	return
+}
+```
+
+══════════════════════════════════════════════════════════════════
+9. INTERVIEW QUESTIONS & ANSWERS
+══════════════════════════════════════════════════════════════════
+
+Q1: Difference between os.ReadFile and bufio.Scanner?
+A:
+* os.ReadFile → loads entire file into memory
+* bufio.Scanner → reads line by line (efficient)
+
+══════════════════════════════════════════════════════════════════
+
+Q2: Why use bufio.Writer?
+A:
+* Reduces system calls
+* Improves performance
+
+══════════════════════════════════════════════════════════════════
+
+Q3: What is io.Reader / io.Writer?
+A:
+* Interfaces for reading/writing streams
+* Core abstraction in Go
+
+══════════════════════════════════════════════════════════════════
+
+Q4: Why defer file.Close()?
+A:
+* Ensures file is closed properly
+* Prevents resource leaks
+
+══════════════════════════════════════════════════════════════════
+
+Q5: os.Create vs os.OpenFile?
+A:
+* os.Create → create + truncate
+* os.OpenFile → full control with flags
+
+══════════════════════════════════════════════════════════════════
+
+Q6: Handling large files?
+A:
+* Use bufio.Scanner / bufio.Reader
+* Avoid full memory loading
+
+══════════════════════════════════════════════════════════════════
+
+Q7: What is io.Copy?
+A:
+* Efficient stream copy between Reader & Writer
+
+══════════════════════════════════════════════════════════════════
+
+Q8: Meaning of 0644?
+A:
+* Owner: read/write
+* Group: read
+* Others: read
+
+══════════════════════════════════════════════════════════════════

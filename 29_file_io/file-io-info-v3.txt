@@ -1,0 +1,1727 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📘 Golang I/O & FILE
+════════════════════════════════════════════════════════════════════════════════════
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  TABLE OF CONTENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  [01] Go I/O Philosophy & Core Interfaces
+  [02] Reading Files — os, bufio, io
+  [03] Writing Files — Create, Append, Truncate
+  [04] File Metadata & os.Stat
+  [05] Directory Operations
+  [06] bufio — Buffered I/O
+  [07] io Package — Readers, Writers, Pipes
+  [08] fmt Package — Formatted I/O
+  [09] os.Stdin / os.Stdout / os.Stderr
+  [10] Working with Paths — path/filepath
+  [11] Temporary Files & Directories
+  [12] File Permissions & Modes
+  [13] io/fs — Filesystem Abstraction (Go 1.16+)
+  [14] Reading/Writing Structured Data (JSON, CSV)
+  [15] Java vs Go I/O Comparison Table
+  [16] Interview Q&A — Medior Level
+  [17] Interview Q&A — Experienced Level
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [01] GO I/O PHILOSOPHY & CORE INTERFACES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Go's I/O is built on two tiny interfaces from the "io" package:
+
+    io.Reader  — anything that can be read from
+    io.Writer  — anything that can be written to
+
+This is the "composition over inheritance" design. In Java you have:
+    InputStream → BufferedInputStream → FileInputStream (inheritance chain)
+
+In Go:
+    os.File implements io.Reader and io.Writer
+    bufio.Reader wraps any io.Reader to add buffering
+    strings.NewReader wraps a string as an io.Reader
+
+KEY INTERFACES:
+
+    type Reader interface {
+        Read(p []byte) (n int, err error)
+    }
+
+    type Writer interface {
+        Write(p []byte) (n int, err error)
+    }
+
+    type Closer interface {
+        Close() error
+    }
+
+    type ReadWriter interface {
+        Reader
+        Writer
+    }
+
+    type ReadCloser interface {
+        Reader
+        Closer
+    }
+
+    type ReadWriteCloser interface {
+        Reader
+        Writer
+        Closer
+    }
+
+IMPORTANT CONSTANTS:
+    io.EOF           — signals end of data stream (not really an error, it's expected)
+    io.ErrUnexpectedEOF — stream ended before expected amount was read
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [02] READING FILES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+── EXAMPLE 01: Read Entire File at Once (os.ReadFile) ───────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "log"
+    "os"
+)
+
+func main() {
+    // os.ReadFile reads the complete file into memory
+    // Returns []byte, error
+    data, err := os.ReadFile("notes.txt")
+    if err != nil {
+        log.Fatalf("Failed to read file: %v", err)
+    }
+
+    // Convert []byte to string for display
+    content := string(data)
+    fmt.Println(content)
+    fmt.Printf("Read %d bytes\n", len(data))
+}
+
+// NOTE: os.ReadFile is equivalent to Java's Files.readAllBytes(Path)
+// Use for small/medium files. Avoid for large files (loads all into RAM).
+
+── EXAMPLE 02: Open File Manually and Read ──────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "io"
+    "log"
+    "os"
+)
+
+func main() {
+    // os.Open opens a file for reading only (O_RDONLY)
+    file, err := os.Open("notes.txt")
+    if err != nil {
+        log.Fatalf("Cannot open file: %v", err)
+    }
+    defer file.Close() // Always defer Close() right after successful open
+
+    // io.ReadAll reads everything from any io.Reader
+    data, err := io.ReadAll(file)
+    if err != nil {
+        log.Fatalf("Cannot read file: %v", err)
+    }
+
+    fmt.Println(string(data))
+}
+
+// NOTE: defer file.Close() runs when the surrounding function returns
+// This is Go's equivalent of Java try-with-resources
+
+── EXAMPLE 03: Read File Line by Line (bufio.Scanner) ───────────────────────────────
+
+package main
+
+import (
+    "bufio"
+    "fmt"
+    "log"
+    "os"
+)
+
+func main() {
+    file, err := os.Open("employees.txt")
+    if err != nil {
+        log.Fatalf("Cannot open file: %v", err)
+    }
+    defer file.Close()
+
+    scanner := bufio.NewScanner(file)
+
+    lineNumber := 0
+    for scanner.Scan() {        // Scan() returns false at EOF or on error
+        lineNumber++
+        line := scanner.Text()  // Get the current line as a string
+        fmt.Printf("Line %d: %s\n", lineNumber, line)
+    }
+
+    // Always check for scanner errors after the loop
+    if err := scanner.Err(); err != nil {
+        log.Fatalf("Scanner error: %v", err)
+    }
+}
+
+// NOTE: bufio.Scanner is like Java's BufferedReader.readLine() in a loop
+// Default split function is ScanLines (splits on \n)
+
+── EXAMPLE 04: Read File in Fixed-Size Chunks ───────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "io"
+    "log"
+    "os"
+)
+
+func main() {
+    file, err := os.Open("bigfile.bin")
+    if err != nil {
+        log.Fatalf("Cannot open file: %v", err)
+    }
+    defer file.Close()
+
+    buffer := make([]byte, 1024) // 1KB chunk
+
+    for {
+        n, err := file.Read(buffer)
+        if n > 0 {
+            fmt.Printf("Read %d bytes: %s\n", n, buffer[:n])
+        }
+        if err == io.EOF {
+            break // Reached end of file — not an error
+        }
+        if err != nil {
+            log.Fatalf("Read error: %v", err) // Real error
+        }
+    }
+}
+
+// CRITICAL: Always check n > 0 BEFORE checking err
+// Read() can return both n > 0 AND err == io.EOF simultaneously
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [03] WRITING FILES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+── EXAMPLE 05: Write Entire File at Once (os.WriteFile) ─────────────────────────────
+
+package main
+
+import (
+    "log"
+    "os"
+)
+
+func main() {
+    content := []byte("Hello, Go I/O!\nLine 2\nLine 3\n")
+
+    // os.WriteFile creates or truncates the file, then writes
+    // 0644 = owner can read/write, group and others can read
+    err := os.WriteFile("output.txt", content, 0644)
+    if err != nil {
+        log.Fatalf("Failed to write file: %v", err)
+    }
+}
+
+// NOTE: os.WriteFile is equivalent to Java's Files.write(Path, bytes)
+// It creates the file if it doesn't exist, or TRUNCATES it if it does.
+
+── EXAMPLE 06: Create and Write with os.Create ──────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "log"
+    "os"
+)
+
+func main() {
+    // os.Create creates or truncates a file (always starts fresh)
+    file, err := os.Create("report.txt")
+    if err != nil {
+        log.Fatalf("Cannot create file: %v", err)
+    }
+    defer file.Close()
+
+    // Write a raw byte slice
+    _, err = file.Write([]byte("Employee Report\n"))
+    if err != nil {
+        log.Fatalf("Write error: %v", err)
+    }
+
+    // WriteString is a convenience method — writes a string directly
+    _, err = file.WriteString("Name: Alice\n")
+    if err != nil {
+        log.Fatalf("WriteString error: %v", err)
+    }
+
+    // fmt.Fprintf writes formatted output to any io.Writer
+    fmt.Fprintf(file, "Salary: %d\n", 95000)
+}
+
+// NOTE: os.Create is like Java's new FileWriter(path, false) — overwrites
+
+── EXAMPLE 07: Append to an Existing File ───────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "log"
+    "os"
+)
+
+func main() {
+    // os.OpenFile gives fine-grained control over open flags
+    // O_APPEND — write operations append to the end
+    // O_WRONLY — open for writing only
+    // O_CREATE — create if it doesn't exist
+    file, err := os.OpenFile("log.txt", os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+    if err != nil {
+        log.Fatalf("Cannot open file for appending: %v", err)
+    }
+    defer file.Close()
+
+    fmt.Fprintln(file, "2024-01-15 10:30:00 - Server started")
+    fmt.Fprintln(file, "2024-01-15 10:30:01 - Listening on :8080")
+}
+
+// NOTE: Java equivalent: new FileWriter(path, true) — append mode = true
+//
+// Common os.OpenFile flag combinations:
+//   Read only:    os.O_RDONLY
+//   Write+Create: os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+//   Append:       os.O_WRONLY | os.O_CREATE | os.O_APPEND
+//   Read+Write:   os.O_RDWR
+
+── EXAMPLE 08: Buffered Writing (bufio.Writer) ──────────────────────────────────────
+
+package main
+
+import (
+    "bufio"
+    "fmt"
+    "log"
+    "os"
+)
+
+func main() {
+    file, err := os.Create("bulk_output.txt")
+    if err != nil {
+        log.Fatalf("Cannot create file: %v", err)
+    }
+    defer file.Close()
+
+    // Wrap file in a buffered writer (default 4096 byte buffer)
+    writer := bufio.NewWriter(file)
+
+    // Writes go into the buffer first — efficient for many small writes
+    for i := 1; i <= 1000; i++ {
+        fmt.Fprintf(writer, "Record #%d\n", i)
+    }
+
+    // CRITICAL: Flush() must be called to write remaining buffered data to the file
+    // Without Flush(), last chunk of data may be LOST
+    if err := writer.Flush(); err != nil {
+        log.Fatalf("Flush error: %v", err)
+    }
+}
+
+// NOTE: bufio.Writer is like Java's BufferedWriter
+// Flush() is equivalent to Java's flush() method
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [04] FILE METADATA — os.Stat
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+── EXAMPLE 09: Checking File Info ───────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "log"
+    "os"
+)
+
+func main() {
+    // os.Stat returns an fs.FileInfo interface
+    info, err := os.Stat("notes.txt")
+    if err != nil {
+        if os.IsNotExist(err) {
+            fmt.Println("File does not exist")
+            return
+        }
+        log.Fatalf("Stat error: %v", err)
+    }
+
+    fmt.Println("Name:         ", info.Name())        // "notes.txt"
+    fmt.Println("Size (bytes): ", info.Size())        // e.g. 2048
+    fmt.Println("IsDirectory:  ", info.IsDir())       // false
+    fmt.Println("Mode:         ", info.Mode())        // e.g. -rw-r--r--
+    fmt.Println("Last Modified:", info.ModTime())     // time.Time
+}
+
+// NOTE: os.Stat follows symlinks. Use os.Lstat to stat the symlink itself.
+//
+// Checking existence pattern:
+//   _, err := os.Stat(path)
+//   exists := !os.IsNotExist(err)
+
+── EXAMPLE 10: Rename and Delete Files ──────────────────────────────────────────────
+
+package main
+
+import (
+    "log"
+    "os"
+)
+
+func main() {
+    // Rename (also works as Move)
+    err := os.Rename("old_name.txt", "new_name.txt")
+    if err != nil {
+        log.Fatalf("Rename error: %v", err)
+    }
+
+    // Delete a file
+    err = os.Remove("temp.txt")
+    if err != nil {
+        log.Fatalf("Remove error: %v", err)
+    }
+
+    // Delete a directory and all its contents recursively
+    err = os.RemoveAll("temp_dir")
+    if err != nil {
+        log.Fatalf("RemoveAll error: %v", err)
+    }
+}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [05] DIRECTORY OPERATIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+── EXAMPLE 11: Create Directory ─────────────────────────────────────────────────────
+
+package main
+
+import (
+    "log"
+    "os"
+)
+
+func main() {
+    // Create a single directory
+    err := os.Mkdir("logs", 0755)
+    if err != nil {
+        log.Fatalf("Mkdir error: %v", err)
+    }
+
+    // Create nested directories (like mkdir -p in shell)
+    err = os.MkdirAll("data/reports/2024", 0755)
+    if err != nil {
+        log.Fatalf("MkdirAll error: %v", err)
+    }
+}
+
+// Permission 0755:
+//   Owner:  read + write + execute (7)
+//   Group:  read + execute (5)
+//   Others: read + execute (5)
+
+── EXAMPLE 12: List Directory Contents ──────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "log"
+    "os"
+)
+
+func main() {
+    // os.ReadDir returns []os.DirEntry sorted by name
+    entries, err := os.ReadDir(".")
+    if err != nil {
+        log.Fatalf("ReadDir error: %v", err)
+    }
+
+    for _, entry := range entries {
+        if entry.IsDir() {
+            fmt.Printf("[DIR]  %s\n", entry.Name())
+        } else {
+            info, _ := entry.Info()
+            fmt.Printf("[FILE] %-30s  %d bytes\n", entry.Name(), info.Size())
+        }
+    }
+}
+
+// NOTE: os.ReadDir is newer and more efficient than ioutil.ReadDir (deprecated)
+// Java equivalent: Files.list(Path) or File.listFiles()
+
+── EXAMPLE 13: Walk a Directory Tree ────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "io/fs"
+    "log"
+    "os"
+    "path/filepath"
+)
+
+func main() {
+    // filepath.WalkDir recursively walks the directory tree
+    err := filepath.WalkDir(".", func(path string, d fs.DirEntry, err error) error {
+        if err != nil {
+            return err // Propagate errors
+        }
+
+        if d.IsDir() {
+            fmt.Printf("DIR:  %s\n", path)
+        } else {
+            fmt.Printf("FILE: %s\n", path)
+        }
+
+        return nil // Return nil to continue walking
+    })
+
+    if err != nil {
+        log.Fatalf("WalkDir error: %v", err)
+    }
+}
+
+// To skip a directory, return fs.SkipDir from the callback:
+//   if d.IsDir() && d.Name() == "node_modules" {
+//       return fs.SkipDir
+//   }
+
+// NOTE: filepath.WalkDir is Go 1.16+. It replaces filepath.Walk (still valid).
+// Java equivalent: Files.walk(Path) or FileVisitor pattern
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [06] bufio — BUFFERED I/O
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  bufio wraps any io.Reader or io.Writer to add an in-memory buffer.
+  Reduces syscall overhead for many small reads/writes.
+
+── EXAMPLE 14: bufio.Scanner with Custom Split Functions ────────────────────────────
+
+package main
+
+import (
+    "bufio"
+    "fmt"
+    "strings"
+)
+
+func main() {
+    input := "one two three four five"
+    reader := strings.NewReader(input)
+
+    scanner := bufio.NewScanner(reader)
+
+    // Split by words instead of lines
+    scanner.Split(bufio.ScanWords)
+
+    for scanner.Scan() {
+        fmt.Printf("Word: %q\n", scanner.Text())
+    }
+}
+
+// Built-in split functions:
+//   bufio.ScanLines  — default, splits on \n
+//   bufio.ScanWords  — splits on whitespace
+//   bufio.ScanRunes  — splits on UTF-8 rune boundaries
+//   bufio.ScanBytes  — splits byte by byte
+
+── EXAMPLE 15: bufio.Reader for Flexible Reading ────────────────────────────────────
+
+package main
+
+import (
+    "bufio"
+    "fmt"
+    "io"
+    "strings"
+)
+
+func main() {
+    input := "Line A\nLine B\nLine C\n"
+    reader := bufio.NewReader(strings.NewReader(input))
+
+    for {
+        // ReadString reads until delimiter (inclusive)
+        line, err := reader.ReadString('\n')
+        if len(line) > 0 {
+            fmt.Printf("Got: %q\n", line)
+        }
+        if err == io.EOF {
+            break
+        }
+        if err != nil {
+            fmt.Printf("Error: %v\n", err)
+            break
+        }
+    }
+}
+
+// bufio.Reader methods:
+//   ReadString(delim byte) — reads until delimiter
+//   ReadBytes(delim byte)  — same but returns []byte
+//   ReadLine()             — returns raw line bytes (advanced use)
+//   ReadRune()             — reads a single UTF-8 rune
+//   Peek(n int)            — look ahead without consuming
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [07] io PACKAGE — READERS, WRITERS, PIPES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+── EXAMPLE 16: io.Copy — Efficient Stream Copying ───────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "io"
+    "log"
+    "os"
+)
+
+func main() {
+    src, err := os.Open("source.txt")
+    if err != nil {
+        log.Fatalf("Cannot open source: %v", err)
+    }
+    defer src.Close()
+
+    dst, err := os.Create("destination.txt")
+    if err != nil {
+        log.Fatalf("Cannot create destination: %v", err)
+    }
+    defer dst.Close()
+
+    // io.Copy streams from Reader to Writer without loading all data into memory
+    bytesCopied, err := io.Copy(dst, src)
+    if err != nil {
+        log.Fatalf("Copy error: %v", err)
+    }
+
+    fmt.Printf("Copied %d bytes\n", bytesCopied)
+}
+
+// io.Copy uses a 32KB internal buffer
+// io.CopyN(dst, src, n) — copies exactly n bytes
+// io.CopyBuffer(dst, src, buf) — uses your own buffer
+
+── EXAMPLE 17: io.Pipe — In-Memory Pipe ─────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "io"
+)
+
+func main() {
+    // io.Pipe creates a synchronous in-memory pipe
+    // pr (PipeReader) and pw (PipeWriter) are connected
+    pr, pw := io.Pipe()
+
+    // Writer goroutine
+    go func() {
+        defer pw.Close()
+        fmt.Fprintln(pw, "data from goroutine")
+    }()
+
+    // Reader blocks until writer writes
+    data, err := io.ReadAll(pr)
+    if err != nil {
+        fmt.Printf("Error: %v\n", err)
+        return
+    }
+
+    fmt.Printf("Received: %s", data)
+}
+
+// Use case: connect a producer goroutine to a consumer
+// e.g., generate gzip data in a goroutine and pipe it to an HTTP response
+
+── EXAMPLE 18: io.TeeReader — Read and Capture Simultaneously ───────────────────────
+
+package main
+
+import (
+    "fmt"
+    "io"
+    "os"
+    "strings"
+)
+
+func main() {
+    input := strings.NewReader("important data that must be logged")
+
+    // TeeReader taps a stream: data is read from r AND written to w simultaneously
+    logFile, _ := os.Create("debug.log")
+    defer logFile.Close()
+
+    tee := io.TeeReader(input, logFile)
+
+    // Reading from tee also writes to logFile
+    data, _ := io.ReadAll(tee)
+    fmt.Printf("Processed: %s\n", data)
+}
+
+// Use case: reading HTTP request body while also logging it
+
+── EXAMPLE 19: io.MultiWriter & io.MultiReader ──────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "io"
+    "os"
+    "strings"
+)
+
+func main() {
+    // MultiWriter: write to multiple destinations simultaneously
+    logFile, _ := os.Create("log.txt")
+    defer logFile.Close()
+
+    // Writes to both stdout and log file at the same time
+    multi := io.MultiWriter(os.Stdout, logFile)
+    fmt.Fprintln(multi, "This goes to console AND file simultaneously")
+
+    // MultiReader: concatenate multiple readers into one
+    r1 := strings.NewReader("Hello, ")
+    r2 := strings.NewReader("World!\n")
+    combined := io.MultiReader(r1, r2)
+
+    data, _ := io.ReadAll(combined)
+    fmt.Printf("Combined: %s", data)
+}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [08] fmt PACKAGE — FORMATTED I/O
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  fmt functions split into three families:
+    Print*   — write to stdout
+    Fprint*  — write to any io.Writer
+    Sprint*  — return a string
+
+── EXAMPLE 20: fmt Output Functions ─────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "os"
+    "strings"
+)
+
+func main() {
+    name := "Alice"
+    salary := 95000
+
+    // ── Print family (to stdout) ──────────────────────────────────────────
+    fmt.Print("No newline")
+    fmt.Println("With newline")
+    fmt.Printf("Name: %s, Salary: %d\n", name, salary)
+
+    // ── Fprint family (to any io.Writer) ─────────────────────────────────
+    fmt.Fprint(os.Stdout, "To stdout explicitly\n")
+    fmt.Fprintln(os.Stderr, "Error message to stderr")
+    fmt.Fprintf(os.Stdout, "Formatted to writer: %s earns %d\n", name, salary)
+
+    // ── Sprint family (to string) ─────────────────────────────────────────
+    msg := fmt.Sprintf("Employee: %s | Salary: $%d", name, salary)
+    fmt.Println(msg)
+
+    str := fmt.Sprint("Joined parts ", "without format")
+    fmt.Println(str)
+
+    // ── Scan family (input reading) ───────────────────────────────────────
+    reader := strings.NewReader("42 hello\n")
+    var num int
+    var word string
+    fmt.Fscan(reader, &num, &word)     // reads from io.Reader
+    fmt.Printf("Scanned: %d, %s\n", num, word)
+}
+
+// COMMON FORMAT VERBS:
+//   %v  — default format
+//   %+v — struct with field names
+//   %#v — Go syntax representation
+//   %T  — type name
+//   %d  — integer (decimal)
+//   %f  — float (%0.2f for 2 decimal places)
+//   %s  — string
+//   %q  — quoted string ("hello")
+//   %b  — binary
+//   %x  — hexadecimal
+//   %p  — pointer address
+//   %t  — boolean
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [09] os.Stdin / os.Stdout / os.Stderr
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+── EXAMPLE 21: Reading from Stdin ───────────────────────────────────────────────────
+
+package main
+
+import (
+    "bufio"
+    "fmt"
+    "os"
+    "strings"
+)
+
+func main() {
+    fmt.Print("Enter your name: ")
+
+    scanner := bufio.NewScanner(os.Stdin)
+    if scanner.Scan() {
+        name := strings.TrimSpace(scanner.Text())
+        fmt.Printf("Hello, %s!\n", name)
+    }
+
+    if err := scanner.Err(); err != nil {
+        fmt.Fprintln(os.Stderr, "Error reading stdin:", err)
+    }
+}
+
+── EXAMPLE 22: Detecting Piped Input (Non-Interactive Stdin) ────────────────────────
+
+package main
+
+import (
+    "bufio"
+    "fmt"
+    "os"
+)
+
+func main() {
+    // os.Stdin.Stat() to check if stdin is a terminal or a pipe
+    stat, _ := os.Stdin.Stat()
+    isPiped := (stat.Mode() & os.ModeCharDevice) == 0
+
+    if isPiped {
+        // Data is being piped: cat file.txt | ./myprogram
+        scanner := bufio.NewScanner(os.Stdin)
+        for scanner.Scan() {
+            fmt.Println("Piped line:", scanner.Text())
+        }
+    } else {
+        // Interactive terminal
+        fmt.Println("Running interactively — type input:")
+    }
+}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [10] WORKING WITH PATHS — path/filepath
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+── EXAMPLE 23: Path Manipulation ────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "path/filepath"
+)
+
+func main() {
+    p := "/home/user/documents/report.txt"
+
+    fmt.Println(filepath.Dir(p))      // "/home/user/documents"
+    fmt.Println(filepath.Base(p))     // "report.txt"
+    fmt.Println(filepath.Ext(p))      // ".txt"
+
+    // Join builds a path from parts (uses OS-specific separator)
+    joined := filepath.Join("data", "reports", "2024", "q1.csv")
+    fmt.Println(joined)               // "data/reports/2024/q1.csv"
+
+    // Abs returns the absolute path
+    abs, _ := filepath.Abs("./config.yaml")
+    fmt.Println(abs)
+
+    // Clean removes redundant slashes and dots
+    messy := "/home/user//docs/../documents/./file.txt"
+    fmt.Println(filepath.Clean(messy)) // "/home/user/documents/file.txt"
+
+    // Rel returns relative path from base to target
+    rel, _ := filepath.Rel("/home/user", "/home/user/docs/file.txt")
+    fmt.Println(rel) // "docs/file.txt"
+}
+
+// CRITICAL: Always use filepath.Join() instead of manual string concatenation
+// filepath.Join handles OS differences (/ on Linux/Mac, \ on Windows)
+
+── EXAMPLE 24: Glob Pattern Matching ────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "path/filepath"
+)
+
+func main() {
+    // Find all .txt files in current directory
+    matches, err := filepath.Glob("*.txt")
+    if err != nil {
+        fmt.Printf("Glob error: %v\n", err)
+        return
+    }
+
+    for _, match := range matches {
+        fmt.Println(match)
+    }
+
+    // Glob patterns:
+    //   *     matches any sequence in one directory level
+    //   ?     matches any single character
+    //   [abc] matches a, b, or c
+}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [11] TEMPORARY FILES & DIRECTORIES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+── EXAMPLE 25: Create and Use Temp Files ────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "log"
+    "os"
+)
+
+func main() {
+    // os.CreateTemp creates a temp file in the OS temp directory
+    // First arg: directory ("" = OS default temp dir)
+    // Second arg: prefix for filename; Go adds random suffix
+    tmpFile, err := os.CreateTemp("", "myapp-*.tmp")
+    if err != nil {
+        log.Fatalf("Cannot create temp file: %v", err)
+    }
+    // IMPORTANT: Clean up after use
+    defer os.Remove(tmpFile.Name())
+    defer tmpFile.Close()
+
+    fmt.Printf("Temp file: %s\n", tmpFile.Name())
+
+    _, err = tmpFile.WriteString("temporary data here")
+    if err != nil {
+        log.Fatalf("Write error: %v", err)
+    }
+}
+
+── EXAMPLE 26: Create Temp Directory ────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "log"
+    "os"
+)
+
+func main() {
+    tmpDir, err := os.MkdirTemp("", "myapp-workspace-*")
+    if err != nil {
+        log.Fatalf("Cannot create temp dir: %v", err)
+    }
+    defer os.RemoveAll(tmpDir) // Remove entire directory tree on exit
+
+    fmt.Printf("Working in temp dir: %s\n", tmpDir)
+
+    // Use tmpDir for intermediate files...
+}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [12] FILE PERMISSIONS & MODES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Permission Bits (Unix-style):
+  ┌────────┬────────┬────────┐
+  │ Owner  │ Group  │ Others │
+  │  rwx   │  rwx   │  rwx   │
+  │  421   │  421   │  421   │
+  └────────┴────────┴────────┘
+
+  Common permissions:
+    0644 = -rw-r--r--   (owner: rw, group: r, others: r)  — regular files
+    0755 = -rwxr-xr-x   (owner: rwx, group: rx, others: rx) — directories, executables
+    0600 = -rw-------   (owner: rw only)  — secret files, keys
+    0400 = -r--------   (owner: read only) — read-only config
+
+── EXAMPLE 27: Change File Permissions ──────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "log"
+    "os"
+)
+
+func main() {
+    // os.Chmod changes the permission bits of a file
+    err := os.Chmod("script.sh", 0755)
+    if err != nil {
+        log.Fatalf("Chmod error: %v", err)
+    }
+
+    // Read back and display
+    info, _ := os.Stat("script.sh")
+    fmt.Printf("Mode: %s\n", info.Mode())
+
+    // Check specific permission bit
+    mode := info.Mode()
+    if mode&0111 != 0 {
+        fmt.Println("File is executable")
+    }
+}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [13] io/fs — FILESYSTEM ABSTRACTION (Go 1.16+)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  io/fs defines the fs.FS interface: a read-only virtual filesystem.
+  Implementations: os.DirFS, embed.FS, testing/fstest.MapFS
+
+── EXAMPLE 28: embed.FS — Embed Files into Binary ───────────────────────────────────
+
+package main
+
+import (
+    _ "embed"
+    "fmt"
+)
+
+// go:embed directive embeds a file's content at compile time
+//go:embed config.json
+var configData []byte
+
+//go:embed templates/
+var templateFS embed.FS  // embed an entire directory
+
+func main() {
+    // configData is available as a []byte — no file I/O at runtime
+    fmt.Printf("Config: %s\n", configData)
+
+    // Read from embedded FS
+    data, err := templateFS.ReadFile("templates/index.html")
+    if err != nil {
+        fmt.Printf("Error: %v\n", err)
+        return
+    }
+    fmt.Printf("Template: %s\n", data)
+}
+
+// IMPORTANT: The //go:embed comment must directly precede the variable declaration
+// No blank lines between comment and var
+
+── EXAMPLE 29: Working with fs.FS Interface ─────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "io/fs"
+    "os"
+    "testing/fstest"
+)
+
+// This function works with any fs.FS — os.DirFS, embed.FS, or MapFS
+func listFiles(fsys fs.FS) {
+    fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
+        if err != nil {
+            return err
+        }
+        if !d.IsDir() {
+            fmt.Printf("File: %s\n", path)
+        }
+        return nil
+    })
+}
+
+func main() {
+    // Real filesystem
+    realFS := os.DirFS(".")
+    listFiles(realFS)
+
+    // In-memory filesystem for testing
+    memFS := fstest.MapFS{
+        "a.txt": {Data: []byte("content a")},
+        "b.txt": {Data: []byte("content b")},
+    }
+    listFiles(memFS)
+}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [14] READING/WRITING STRUCTURED DATA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+── EXAMPLE 30: JSON Read/Write with Files ───────────────────────────────────────────
+
+package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "log"
+    "os"
+)
+
+type Employee struct {
+    ID     int    `json:"id"`
+    Name   string `json:"name"`
+    Salary int    `json:"salary"`
+}
+
+func writeJSON(path string, employees []Employee) error {
+    file, err := os.Create(path)
+    if err != nil {
+        return fmt.Errorf("create: %w", err)
+    }
+    defer file.Close()
+
+    encoder := json.NewEncoder(file)
+    encoder.SetIndent("", "  ") // Pretty print with 2-space indent
+    return encoder.Encode(employees)
+}
+
+func readJSON(path string) ([]Employee, error) {
+    file, err := os.Open(path)
+    if err != nil {
+        return nil, fmt.Errorf("open: %w", err)
+    }
+    defer file.Close()
+
+    var employees []Employee
+    decoder := json.NewDecoder(file)
+    if err := decoder.Decode(&employees); err != nil {
+        return nil, fmt.Errorf("decode: %w", err)
+    }
+    return employees, nil
+}
+
+func main() {
+    employees := []Employee{
+        {ID: 1, Name: "Alice", Salary: 95000},
+        {ID: 2, Name: "Bob", Salary: 88000},
+    }
+
+    if err := writeJSON("employees.json", employees); err != nil {
+        log.Fatal(err)
+    }
+
+    loaded, err := readJSON("employees.json")
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    for _, e := range loaded {
+        fmt.Printf("Employee: %+v\n", e)
+    }
+}
+
+── EXAMPLE 31: CSV Read/Write with encoding/csv ─────────────────────────────────────
+
+package main
+
+import (
+    "encoding/csv"
+    "fmt"
+    "log"
+    "os"
+    "strconv"
+)
+
+type Employee struct {
+    ID     int
+    Name   string
+    Salary int
+}
+
+func writeCSV(path string, employees []Employee) error {
+    file, err := os.Create(path)
+    if err != nil {
+        return err
+    }
+    defer file.Close()
+
+    writer := csv.NewWriter(file)
+    defer writer.Flush()
+
+    // Write header row
+    writer.Write([]string{"id", "name", "salary"})
+
+    // Write data rows
+    for _, e := range employees {
+        record := []string{
+            strconv.Itoa(e.ID),
+            e.Name,
+            strconv.Itoa(e.Salary),
+        }
+        writer.Write(record)
+    }
+    return writer.Error()
+}
+
+func readCSV(path string) ([]Employee, error) {
+    file, err := os.Open(path)
+    if err != nil {
+        return nil, err
+    }
+    defer file.Close()
+
+    reader := csv.NewReader(file)
+
+    // Skip header
+    _, err = reader.Read()
+    if err != nil {
+        return nil, err
+    }
+
+    records, err := reader.ReadAll()
+    if err != nil {
+        return nil, err
+    }
+
+    var employees []Employee
+    for _, r := range records {
+        id, _ := strconv.Atoi(r[0])
+        salary, _ := strconv.Atoi(r[2])
+        employees = append(employees, Employee{ID: id, Name: r[1], Salary: salary})
+    }
+    return employees, nil
+}
+
+func main() {
+    employees := []Employee{
+        {1, "Alice", 95000},
+        {2, "Bob", 88000},
+    }
+
+    if err := writeCSV("employees.csv", employees); err != nil {
+        log.Fatal(err)
+    }
+
+    loaded, err := readCSV("employees.csv")
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    for _, e := range loaded {
+        fmt.Printf("%+v\n", e)
+    }
+}
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [15] JAVA vs GO I/O COMPARISON TABLE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌────────────────────────────────┬────────────────────────────────────────────────┐
+  │ Java                           │ Go                                             │
+  ├────────────────────────────────┼────────────────────────────────────────────────┤
+  │ Files.readAllBytes(path)       │ os.ReadFile(path)                              │
+  │ Files.write(path, bytes)       │ os.WriteFile(path, data, 0644)                 │
+  │ new FileReader(path)           │ os.Open(path)                                  │
+  │ new FileWriter(path)           │ os.Create(path)                                │
+  │ new FileWriter(path, true)     │ os.OpenFile(path, O_APPEND|O_WRONLY|O_CREATE)  │
+  │ new BufferedReader(r)          │ bufio.NewReader(r)                             │
+  │ new BufferedWriter(w)          │ bufio.NewWriter(w)                             │
+  │ reader.readLine()              │ scanner.Scan(); scanner.Text()                 │
+  │ writer.flush()                 │ writer.Flush()                                 │
+  │ try-with-resources             │ defer file.Close()                             │
+  │ Paths.get("a", "b", "c")      │ filepath.Join("a", "b", "c")                  │
+  │ Files.createTempFile(dir, pfx) │ os.CreateTemp(dir, prefix)                    │
+  │ Files.createTempDirectory(...)  │ os.MkdirTemp(dir, prefix)                     │
+  │ Files.walk(path)               │ filepath.WalkDir(path, fn)                    │
+  │ Files.list(path)               │ os.ReadDir(path)                               │
+  │ file.exists()                  │ _, err := os.Stat(p); !os.IsNotExist(err)     │
+  │ file.delete()                  │ os.Remove(path)                                │
+  │ file.renameTo(dest)            │ os.Rename(old, new)                            │
+  │ StreamUtils.copy(in, out)      │ io.Copy(dst, src)                              │
+  │ System.in / Scanner            │ os.Stdin / bufio.NewScanner(os.Stdin)          │
+  │ System.out.println()           │ fmt.Println() / fmt.Fprintln(os.Stdout)        │
+  │ System.err.println()           │ fmt.Fprintln(os.Stderr)                        │
+  │ InputStream interface          │ io.Reader interface                            │
+  │ OutputStream interface         │ io.Writer interface                            │
+  │ Closeable interface            │ io.Closer interface                            │
+  └────────────────────────────────┴────────────────────────────────────────────────┘
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [16] INTERVIEW Q&A — MEDIOR LEVEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════════════════════════╗
+║  Q1: What is the difference between os.Open and os.OpenFile?                        ║
+╚══════════════════════════════════════════════════════════════════════════════════════╝
+
+  os.Open is a convenience wrapper that opens a file for reading only (O_RDONLY, no
+  creation, no writing). It's equivalent to:
+      os.OpenFile(name, os.O_RDONLY, 0)
+
+  os.OpenFile gives full control over flags and permissions:
+      os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+
+  Use os.Open for read-only access. Use os.OpenFile when you need to write, append,
+  create, or combine multiple behaviors.
+
+╔══════════════════════════════════════════════════════════════════════════════════════╗
+║  Q2: Why must bufio.Writer.Flush() be called explicitly?                            ║
+╚══════════════════════════════════════════════════════════════════════════════════════╝
+
+  bufio.Writer holds data in an internal buffer (default 4096 bytes) to minimize
+  syscalls. Write() calls only flush to the underlying Writer when the buffer is full.
+
+  If you don't call Flush() before the program exits or the writer is garbage collected,
+  the buffered data that hasn't been written yet is SILENTLY LOST.
+
+  Best pattern:
+      writer := bufio.NewWriter(file)
+      defer writer.Flush()  // Always flush at end of function scope
+
+  Note: file.Close() does NOT implicitly flush a bufio.Writer wrapping it.
+
+╔══════════════════════════════════════════════════════════════════════════════════════╗
+║  Q3: How do you check if a file exists in Go?                                       ║
+╚══════════════════════════════════════════════════════════════════════════════════════╝
+
+  _, err := os.Stat(path)
+  if os.IsNotExist(err) {
+      // File does not exist
+  } else if err != nil {
+      // Some other error (permissions, etc.)
+  } else {
+      // File exists
+  }
+
+  There is no dedicated "file.exists()" method in Go. You always go through os.Stat.
+  Do not use os.IsExist(err) — that checks for a different error (already-exists
+  on create), which is commonly confused.
+
+╔══════════════════════════════════════════════════════════════════════════════════════╗
+║  Q4: What does defer file.Close() do, and are there any risks?                     ║
+╚══════════════════════════════════════════════════════════════════════════════════════╝
+
+  defer file.Close() schedules the Close() call to run when the surrounding function
+  returns, ensuring the file descriptor is always released even if an error or panic
+  occurs. It's Go's equivalent of Java's try-with-resources.
+
+  Risk: The error returned by Close() is silently swallowed with defer. For write
+  operations, the OS may only commit buffered data on Close(), so an error there
+  means data loss.
+
+  For write-critical scenarios:
+
+      func writeFile(path string, data []byte) error {
+          file, err := os.Create(path)
+          if err != nil {
+              return err
+          }
+          defer file.Close() // Handles cleanup in error paths
+
+          if _, err := file.Write(data); err != nil {
+              return err
+          }
+
+          // Explicitly check Close error on the write path
+          return file.Close()
+      }
+
+╔══════════════════════════════════════════════════════════════════════════════════════╗
+║  Q5: What is the difference between os.ReadFile and io.ReadAll?                    ║
+╚══════════════════════════════════════════════════════════════════════════════════════╝
+
+  os.ReadFile(path string) — takes a file path, opens the file, reads it, closes it,
+  and returns the bytes. It does everything in one call.
+
+  io.ReadAll(r io.Reader) — takes any io.Reader and reads until EOF. It does NOT
+  open or close anything; it just consumes an already-open stream.
+
+  Use os.ReadFile when you have a path.
+  Use io.ReadAll when you already have an io.Reader (e.g., HTTP response body,
+  os.Stdin, a network connection).
+
+╔══════════════════════════════════════════════════════════════════════════════════════╗
+║  Q6: How does bufio.Scanner handle long lines?                                      ║
+╚══════════════════════════════════════════════════════════════════════════════════════╝
+
+  By default, bufio.Scanner has a max token size of 64KB. If a line exceeds this,
+  Scan() returns false and scanner.Err() returns bufio.ErrTooLong.
+
+  Fix using a custom buffer:
+
+      scanner := bufio.NewScanner(file)
+      buf := make([]byte, 1024*1024)         // 1MB buffer
+      scanner.Buffer(buf, 1024*1024)         // Set max token to 1MB
+      for scanner.Scan() {
+          // handles lines up to 1MB
+      }
+
+╔══════════════════════════════════════════════════════════════════════════════════════╗
+║  Q7: What does io.Copy return, and when would you use io.CopyN?                    ║
+╚══════════════════════════════════════════════════════════════════════════════════════╝
+
+  io.Copy(dst, src) returns (written int64, err error). It copies from src to dst
+  until EOF or error, using an internal 32KB buffer.
+
+  io.CopyN(dst, src, n) copies exactly n bytes. Use it when you want to read a
+  fixed-size segment from a stream (e.g., reading a binary file header of known size,
+  or limiting upload size).
+
+  Example: copy only the first 1024 bytes of a stream:
+      io.CopyN(dst, src, 1024)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [17] INTERVIEW Q&A — EXPERIENCED LEVEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════════════════════════════╗
+║  Q8: How does io.Pipe work, and when is it useful?                                 ║
+╚══════════════════════════════════════════════════════════════════════════════════════╝
+
+  io.Pipe() returns a connected (*PipeReader, *PipeWriter) pair. Writes to the
+  PipeWriter block until the PipeReader consumes the data (or vice versa). There is
+  NO internal buffer — it's synchronous.
+
+  This makes it ideal for connecting a producer goroutine to a consumer:
+  - Generate gzip-compressed data in a goroutine and stream it to an HTTP response
+    without materializing the full compressed output in memory.
+  - Compress a database dump while simultaneously uploading it to S3.
+
+  func streamGzipped(w http.ResponseWriter, data []byte) {
+      pr, pw := io.Pipe()
+      go func() {
+          gz := gzip.NewWriter(pw)
+          gz.Write(data)
+          gz.Close()
+          pw.Close()
+      }()
+      io.Copy(w, pr)
+  }
+
+╔══════════════════════════════════════════════════════════════════════════════════════╗
+║  Q9: What is the fs.FS interface and why was it introduced?                        ║
+╚══════════════════════════════════════════════════════════════════════════════════════╝
+
+  fs.FS (introduced Go 1.16) is a minimal read-only filesystem interface:
+
+      type FS interface {
+          Open(name string) (File, error)
+      }
+
+  It was introduced to unify how Go code accesses files regardless of the underlying
+  storage:
+    - os.DirFS("./static") — real OS filesystem
+    - embed.FS             — files embedded in the binary at compile time
+    - testing/fstest.MapFS — in-memory FS for unit tests
+    - zip files, S3 buckets (with adapters)
+
+  This means an http.FileServer, template loader, or config reader can accept an
+  fs.FS and work with any backend without code changes. Testing becomes trivial
+  because you can inject a MapFS with known test data.
+
+╔══════════════════════════════════════════════════════════════════════════════════════╗
+║  Q10: Explain atomic file writes and why they matter in production.                ║
+╚══════════════════════════════════════════════════════════════════════════════════════╝
+
+  If a program writes to a file and crashes mid-write, the file is left in a corrupt
+  or partial state. This is especially bad for config files and databases.
+
+  Atomic write pattern: write to a temp file in the same directory, then
+  rename to the final destination. rename() on Linux/Unix is guaranteed atomic by
+  the OS kernel (a single syscall that either succeeds fully or not at all).
+
+  func writeAtomic(path string, data []byte) error {
+      dir := filepath.Dir(path)
+      tmp, err := os.CreateTemp(dir, ".tmp-*")
+      if err != nil {
+          return err
+      }
+      tmpName := tmp.Name()
+
+      // Ensure temp file is cleaned up on failure
+      defer func() {
+          tmp.Close()
+          os.Remove(tmpName) // No-op if rename succeeded
+      }()
+
+      if _, err := tmp.Write(data); err != nil {
+          return err
+      }
+      if err := tmp.Sync(); err != nil { // fsync flushes OS page cache to disk
+          return err
+      }
+      if err := tmp.Close(); err != nil {
+          return err
+      }
+      return os.Rename(tmpName, path) // Atomic on same filesystem
+  }
+
+  Key points:
+    - Temp file must be on the SAME filesystem as the target (same directory is safe)
+    - tmp.Sync() (fsync) ensures data survives a power failure
+    - Rename is atomic at the OS level
+
+╔══════════════════════════════════════════════════════════════════════════════════════╗
+║  Q11: How does Go handle large file processing without running out of memory?      ║
+╚══════════════════════════════════════════════════════════════════════════════════════╝
+
+  Three approaches for memory-efficient large file processing:
+
+  1. Streaming with fixed buffer:
+       buf := make([]byte, 32*1024) // 32KB buffer
+       for {
+           n, err := src.Read(buf)
+           if n > 0 { process(buf[:n]) }
+           if err == io.EOF { break }
+       }
+
+  2. io.Copy for passthrough (uses 32KB internal buffer, no allocation per call):
+       io.Copy(dst, src)
+
+  3. bufio.Scanner for line-by-line with configurable buffer:
+       scanner := bufio.NewScanner(file)
+       scanner.Buffer(make([]byte, 64*1024), 64*1024)
+       for scanner.Scan() { processLine(scanner.Text()) }
+
+  What NOT to do for large files:
+    - os.ReadFile() / io.ReadAll() — loads entire file into RAM
+    - json.Unmarshal(entireFile, &data) — use json.Decoder with stream instead
+
+╔══════════════════════════════════════════════════════════════════════════════════════╗
+║  Q12: How would you implement a concurrent file processor with bounded parallelism? ║
+╚══════════════════════════════════════════════════════════════════════════════════════╝
+
+  Pattern: walk files, send to a worker pool via channel, collect results.
+
+  func processFiles(dir string, concurrency int) error {
+      paths := make(chan string, concurrency*2)
+      results := make(chan error, concurrency*2)
+
+      // Start worker pool
+      var wg sync.WaitGroup
+      for i := 0; i < concurrency; i++ {
+          wg.Add(1)
+          go func() {
+              defer wg.Done()
+              for path := range paths {
+                  results <- processOneFile(path)
+              }
+          }()
+      }
+
+      // Close results when all workers are done
+      go func() {
+          wg.Wait()
+          close(results)
+      }()
+
+      // Walk and send paths (in separate goroutine to avoid blocking)
+      go func() {
+          defer close(paths)
+          filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+              if err != nil { return err }
+              if !d.IsDir() {
+                  paths <- path
+              }
+              return nil
+          })
+      }()
+
+      // Collect errors
+      var errs []error
+      for err := range results {
+          if err != nil {
+              errs = append(errs, err)
+          }
+      }
+
+      if len(errs) > 0 {
+          return fmt.Errorf("encountered %d errors: %v", len(errs), errs[0])
+      }
+      return nil
+  }
+
+╔══════════════════════════════════════════════════════════════════════════════════════╗
+║  Q13: What is the difference between Sync(), Flush(), and Close() for file writes? ║
+╚══════════════════════════════════════════════════════════════════════════════════════╝
+
+  All three write-related operations serve different purposes at different layers:
+
+  bufio.Writer.Flush():
+    - Layer: Application buffer → Kernel page cache
+    - Moves bytes from bufio's in-memory buffer to the OS file cache
+    - Fast (no disk I/O guaranteed)
+    - Required before Close() if using bufio.Writer
+
+  os.File.Sync():
+    - Layer: Kernel page cache → Physical disk
+    - Calls fsync() — forces OS to flush page cache to storage hardware
+    - Slow (actual disk write)
+    - Use for durability: config files, databases, atomic writes
+
+  os.File.Close():
+    - Releases the file descriptor
+    - Implies a flush of kernel buffers on most OS implementations but does
+      NOT guarantee fsync behavior
+    - After Close(), the fd is invalid
+
+  Order for safe write: Flush() → Sync() → Close()
+
+╔══════════════════════════════════════════════════════════════════════════════════════╗
+║  Q14: How do you implement a log rotation mechanism in Go?                         ║
+╚══════════════════════════════════════════════════════════════════════════════════════╝
+
+  A simple size-based log rotator:
+
+  type RotatingLogger struct {
+      mu       sync.Mutex
+      file     *os.File
+      path     string
+      maxBytes int64
+      written  int64
+  }
+
+  func (l *RotatingLogger) Write(p []byte) (int, error) {
+      l.mu.Lock()
+      defer l.mu.Unlock()
+
+      if l.written+int64(len(p)) > l.maxBytes {
+          l.file.Close()
+          os.Rename(l.path, l.path+".1") // rotate
+
+          var err error
+          l.file, err = os.Create(l.path)
+          if err != nil {
+              return 0, err
+          }
+          l.written = 0
+      }
+
+      n, err := l.file.Write(p)
+      l.written += int64(n)
+      return n, err
+  }
+
+  // RotatingLogger implements io.Writer, so it works with log.SetOutput()
+  // In production, consider: github.com/natefinish/lumberjack
+
+╔══════════════════════════════════════════════════════════════════════════════════════╗
+║  Q15: What are common mistakes with file I/O in Go?                                ║
+╚══════════════════════════════════════════════════════════════════════════════════════╝
+
+  1. FORGETTING TO CHECK Read() return BEFORE error:
+     // WRONG:
+     n, err := file.Read(buf)
+     if err != nil { ... }
+     process(buf[:n])  // Skipped if err == io.EOF even when n > 0
+
+     // CORRECT:
+     n, err := file.Read(buf)
+     if n > 0 { process(buf[:n]) }
+     if err == io.EOF { break }
+
+  2. NOT FLUSHING bufio.Writer:
+     writer := bufio.NewWriter(file)
+     writer.WriteString("data")
+     file.Close() // bufio data still in buffer — LOST
+
+  3. LEAKING FILE DESCRIPTORS in loops:
+     for _, path := range paths {
+         f, _ := os.Open(path)
+         defer f.Close() // defers don't run until function returns!
+         // All files accumulate open descriptors
+     }
+     // Fix: close inside the loop or use a helper function per file
+
+  4. CROSS-DEVICE RENAME:
+     os.Rename(tmpFile, "/mnt/nas/file.txt") // FAILS if on different mount point
+     // Fix: use the same directory for temp files
+
+  5. IGNORING CLOSE ERRORS ON WRITES:
+     defer file.Close() // silently discards any Close error
+     // For write-critical code, check Close() explicitly
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  QUICK REFERENCE — MOST USED FUNCTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  READ                            WRITE
+  ─────────────────────────────   ─────────────────────────────────────────
+  os.ReadFile(path)               os.WriteFile(path, data, 0644)
+  os.Open(path)                   os.Create(path)
+  bufio.NewScanner(r)             bufio.NewWriter(w) + Flush()
+  io.ReadAll(r)                   fmt.Fprintf(w, ...)
+  io.Copy(dst, src)               io.Copy(dst, src)
+
+  DIRECTORY                       PATH
+  ─────────────────────────────   ─────────────────────────────────────────
+  os.ReadDir(path)                filepath.Join(parts...)
+  os.MkdirAll(path, 0755)         filepath.Dir(path)
+  filepath.WalkDir(path, fn)      filepath.Base(path)
+  os.Remove(path)                 filepath.Ext(path)
+  os.RemoveAll(path)              filepath.Abs(path)
+
+  METADATA                        TEMP
+  ─────────────────────────────   ─────────────────────────────────────────
+  os.Stat(path)                   os.CreateTemp(dir, pattern)
+  os.IsNotExist(err)              os.MkdirTemp(dir, pattern)
+  info.Size() / info.IsDir()      defer os.Remove(tmp.Name())
+  os.Rename(old, new)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Packages used in this guide:
+    os           — file operations, stdin/stdout/stderr, env
+    io           — core interfaces, Copy, Pipe, TeeReader, MultiWriter
+    bufio        — buffered reading and writing
+    fmt          — formatted I/O (Printf, Fprintf, Fscan)
+    path/filepath — path manipulation, WalkDir, Glob
+    io/fs        — filesystem abstraction interface
+    embed        — compile-time file embedding
+    encoding/json — JSON encode/decode
+    encoding/csv  — CSV encode/decode
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

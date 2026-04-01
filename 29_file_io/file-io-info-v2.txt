@@ -1,0 +1,343 @@
+# ========================================================
+#  🚀 GoLang I/O & File Handling - Complete Guide
+# ========================================================
+Core Packages:
+   • os          → File creation, opening, permissions, directories
+   • io          → Reader, Writer interfaces and utilities (io.Copy)
+   • bufio       → Buffered I/O for high performance
+   • fmt         → Formatted input/output
+   • path/filepath → Cross-platform path manipulation
+   • encoding/json, encoding/csv → Structured data handling
+
+💡 Golden Rules:
+   • Always check errors
+   • Use defer to close files immediately after opening
+   • Prefer os.ReadFile/os.WriteFile for small files
+   • Use bufio for large files or many operations
+   • Never ignore errors in production code
+
+════════════════════════════════════════════════════════
+📝 2. Basic Examples
+════════════════════════════════════════════════════════
+⭐ 2.1 Create and Write File (Simple & Clean)
+══════════════════════════════════════════════════════════════════
+```go
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	data := []byte("Hello, Go File Handling!\nWelcome to powerful I/O in Go.\n")
+
+	err := os.WriteFile("example.txt", data, 0644)
+	if err != nil {
+		fmt.Printf("Error writing file: %v\n", err)
+		return
+	}
+	fmt.Println("✅ File 'example.txt' created and written successfully!")
+}
+
+══════════════════════════════════════════════════════════════════
+⭐ 2.2 Read Entire File at Once
+══════════════════════════════════════════════════════════════════
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	content, err := os.ReadFile("example.txt")
+	if err != nil {
+		fmt.Printf("Error reading file: %v\n", err)
+		return
+	}
+	fmt.Printf("📄 File content:\n%s\n", string(content))
+}
+
+══════════════════════════════════════════════════════════════════
+⭐ 2.3 Open File with Flags (Most Flexible - Append Mode)
+══════════════════════════════════════════════════════════════════
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	file, err := os.OpenFile("log.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Printf("Error opening file: %v\n", err)
+		return
+	}
+	defer file.Close()
+
+	_, err = file.WriteString("📝 Log entry at 2026-04-01 13:27\n")
+	if err != nil {
+		fmt.Printf("Error writing: %v\n", err)
+		return
+	}
+	fmt.Println("✅ Data appended to log.txt successfully!")
+}
+
+══════════════════════════════════════════════════════════════════
+⭐ 2.4 Read File Line by Line (Best for Large Files)
+══════════════════════════════════════════════════════════════════
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+)
+
+func main() {
+	file, err := os.Open("example.txt")
+	if err != nil {
+		fmt.Printf("Error opening file: %v\n", err)
+		return
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		fmt.Println("➤", scanner.Text())
+	}
+
+	if err := scanner.Err(); err != nil {
+		fmt.Printf("Scanner error: %v\n", err)
+	}
+}
+
+══════════════════════════════════════════════════════════════════
+⭐ 2.5 Write Line by Line with Buffered Writer (High Performance)
+══════════════════════════════════════════════════════════════════
+
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+)
+
+func main() {
+	file, err := os.Create("output.txt")
+	if err != nil {
+		fmt.Printf("Error creating file: %v\n", err)
+		return
+	}
+	defer file.Close()
+
+	writer := bufio.NewWriter(file)
+	defer writer.Flush()   // Always flush buffered data!
+
+	for i := 1; i <= 5; i++ {
+		writer.WriteString(fmt.Sprintf("📌 Line %d: Hello from Go File Handling!\n", i))
+	}
+	fmt.Println("✅ 5 lines written using buffered writer")
+}
+
+══════════════════════════════════════════════════════════════════
+⭐ 2.6 Copy File Efficiently using io.Copy
+══════════════════════════════════════════════════════════════════
+
+package main
+
+import (
+	"fmt"
+	"io"
+	"os"
+)
+
+func main() {
+	src, err := os.Open("example.txt")
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+	defer src.Close()
+
+	dst, err := os.Create("copy.txt")
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+	defer dst.Close()
+
+	n, err := io.Copy(dst, src)
+	if err != nil {
+		fmt.Printf("Copy error: %v\n", err)
+		return
+	}
+	fmt.Printf("✅ Successfully copied %d bytes from example.txt to copy.txt\n", n)
+}
+
+══════════════════════════════════════════════════════════════════
+⭐ 2.7 JSON File Read & Write
+══════════════════════════════════════════════════════════════════
+
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+)
+
+type User struct {
+	Name string `json:"name"`
+	Age  int    `json:"age"`
+}
+
+func main() {
+	// Write JSON
+	user := User{Name: "Alice", Age: 30}
+	data, _ := json.MarshalIndent(user, "", "  ")
+
+	err := os.WriteFile("user.json", data, 0644)
+	if err != nil {
+		fmt.Println("❌", err)
+		return
+	}
+
+	// Read JSON
+	var u User
+	content, _ := os.ReadFile("user.json")
+	json.Unmarshal(content, &u)
+	fmt.Printf("✅ Read user from JSON: %+v\n", u)
+}
+
+══════════════════════════════════════════════════════════════════
+⭐ 2.8 CSV File Handling
+══════════════════════════════════════════════════════════════════
+
+package main
+
+import (
+	"encoding/csv"
+	"fmt"
+	"os"
+)
+
+func main() {
+	// Write CSV
+	file, _ := os.Create("data.csv")
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	writer.Write([]string{"Name", "Age", "City"})
+	writer.Write([]string{"Bob", "25", "New York"})
+	writer.Flush()
+
+	// Read CSV
+	file2, _ := os.Open("data.csv")
+	defer file2.Close()
+
+	reader := csv.NewReader(file2)
+	records, _ := reader.ReadAll()
+	for _, record := range records {
+		fmt.Println("📋", record)
+	}
+}
+
+══════════════════════════════════════════════════════════════════
+⭐ 2.9 File Info and Directory Operations
+══════════════════════════════════════════════════════════════════
+
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+)
+
+func main() {
+	info, err := os.Stat("example.txt")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Printf("📊 File: %s | Size: %d bytes | IsDir: %t\n", info.Name(), info.Size(), info.IsDir())
+
+	// Create nested directory
+	os.MkdirAll("myfolder/subfolder", 0755)
+
+	// Walk through directory
+	fmt.Println("\n📁 Directory walk:")
+	filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		fmt.Println("   ", path)
+		return nil
+	})
+}
+════════════════════════════════════════════════════════
+🏆 3. Best Practices
+════════════════════════════════════════════════════════
+• Always write defer file.Close() right after successful open
+• Use os.ReadFile / os.WriteFile for files smaller than a few MB
+• Use bufio.Scanner and bufio.Writer for large files
+• Call writer.Flush() before program ends when using buffered writers
+• Use os.IsNotExist(err) to check file existence
+• Prefer streaming (io.Reader/io.Writer) over loading everything in memory
+• Handle paths with filepath.Join for cross-platform compatibility
+════════════════════════════════════════════════════════
+❓ 4. Interview Questions & Answers
+════════════════════════════════════════════════════════
+Q1: What is the difference between os.ReadFile and bufio.Scanner?
+Ans: os.ReadFile loads the entire file into memory at once (simple for small files). 
+bufio.Scanner reads line-by-line and is memory-efficient for very large files.
+
+Q2: How do you append data to an existing file?
+Ans: Use os.OpenFile with flags: os.O_APPEND | os.O_CREATE | os.O_WRONLY
+
+Q3: Explain io.Reader and io.Writer interfaces. Why are they important?
+Ans: They are the foundation of Go I/O. 
+Any type implementing these interfaces can be used with io.Copy, bufio, http, etc. 
+This enables clean composition.
+
+Q4: How would you read a several-GB file without crashing due to memory?
+Ans: Use bufio.NewScanner(file) or read data in chunks using io.Reader.
+
+Q5: What happens if you forget to call Flush() on bufio.Writer?
+Ans: Buffered data may never be written to disk. Always flush or use defer writer.Flush().
+
+Q6: How to check if a file exists in Go?
+Ans:
+Goif _, err := os.Stat("file.txt"); os.IsNotExist(err) {
+    fmt.Println("File does not exist")
+}
+
+Q7: Difference between os.Create() and os.OpenFile()?
+Ans: os.Create() is shorthand for OpenFile with O_RDWR | O_CREATE | O_TRUNC (it overwrites existing file).
+
+Q8: How do you delete a file or an entire directory?
+Ans:
+Goos.Remove("file.txt")        // single file
+os.RemoveAll("myfolder")     // directory + all contents
+
+Q9: Why do we use defer file.Close()?
+Ans: It guarantees the file is closed even if the function panics or returns early. Prevents file descriptor leaks.
+
+Q10: How to create a file only if it does not already exist?
+Ans:
+Gofile, err := os.OpenFile("unique.txt", os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0644)
+if os.IsExist(err) {
+    fmt.Println("File already exists")
+}
+
+Q11: Best practice for writing logs from multiple goroutines?
+Ans: Open file with O_APPEND flag and protect writes with a mutex, or use a dedicated logging library.
+
+Q12: How to get the current working directory?
+Ans:
+Godir, err := os.Getwd()
+fmt.Println("Current directory:", dir)
