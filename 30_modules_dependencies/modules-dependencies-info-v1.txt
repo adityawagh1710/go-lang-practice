@@ -1,0 +1,337 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang Modules & Dependency Management
+════════════════════════════════════════════════════════════════════════════════════
+
+## 🧭 1. What are Go Modules?
+
+Go Modules are the **official dependency management system** in Go.
+
+They help you:
+
+* Manage project dependencies
+* Track versions
+* Ensure reproducible builds
+
+═════════════════════════════════════════════════════════════════════════
+
+## 🟢 2. Initialize a Module
+
+```bash
+go mod init github.com/username/project-name
+```
+
+### Example:
+
+```bash
+go mod init myapp
+```
+
+This creates:
+
+### 📄 go.mod
+
+```go
+module myapp
+
+go 1.22
+```
+
+═════════════════════════════════════════════════════════════════════════
+
+## 📄 3. go.mod Explained
+
+```go
+module github.com/aditya/myapp
+
+go 1.22
+
+require (
+    github.com/gin-gonic/gin v1.9.0
+)
+```
+
+### 🔍 Key Sections:
+
+* `module` → project name
+* `go` → Go version
+* `require` → dependencies
+
+═════════════════════════════════════════════════════════════════════════
+
+## 📄 4. go.sum Explained
+
+* Stores **checksums (hashes)** of dependencies
+* Ensures:
+
+  * Integrity
+  * Security
+  * No tampering
+
+👉 Auto-generated → NEVER edit manually
+
+═════════════════════════════════════════════════════════════════════════
+
+## 📦 5. Adding Dependencies
+
+### Method 1: Using `go get`
+
+```bash
+go get github.com/gin-gonic/gin
+```
+
+═════════════════════════════════════════════════════════════════════════
+
+### Method 2: Import in code
+
+```go
+package main
+
+import "github.com/gin-gonic/gin"
+
+func main() {
+    r := gin.Default()
+    r.GET("/", func(c *gin.Context) {
+        c.JSON(200, gin.H{"message": "Hello World"})
+    })
+    r.Run()
+}
+```
+
+Then run:
+
+```bash
+go mod tidy
+```
+
+═════════════════════════════════════════════════════════════════════════
+
+## 🧹 6. go mod tidy
+
+```bash
+go mod tidy
+```
+
+* Adds missing dependencies
+* Removes unused ones
+* Updates `go.sum`
+
+═════════════════════════════════════════════════════════════════════════
+
+## 📥 7. Download Dependencies
+
+```bash
+go mod download
+```
+
+═════════════════════════════════════════════════════════════════════════
+
+## 📊 8. List Dependencies
+
+```bash
+go list -m all
+```
+
+═════════════════════════════════════════════════════════════════════════
+
+## 🔄 9. Updating Dependencies
+
+```bash
+go get -u
+```
+
+Update specific:
+
+```bash
+go get github.com/gin-gonic/gin@latest
+```
+
+═════════════════════════════════════════════════════════════════════════
+
+## 🧪 10. Versioning (SemVer)
+
+Format:
+
+```
+vMAJOR.MINOR.PATCH
+```
+
+Example:
+
+```
+v1.2.3
+```
+
+* MAJOR → breaking changes
+* MINOR → new features
+* PATCH → bug fixes
+
+═════════════════════════════════════════════════════════════════════════
+
+## 🔁 11. Replace Directive
+
+Used for:
+
+* Local development
+* Forked libraries
+
+```go
+replace github.com/original/module => ../local/module
+```
+
+═════════════════════════════════════════════════════════════════════════
+
+## 🔒 12. Private Modules
+
+Set environment variable:
+
+```bash
+export GOPRIVATE=github.com/yourcompany/*
+```
+
+═════════════════════════════════════════════════════════════════════════
+
+## 🧱 13. Project Structure Example
+
+```
+myapp/
+│
+├── go.mod
+├── go.sum
+├── main.go
+└── internal/
+```
+
+═════════════════════════════════════════════════════════════════════════
+
+## ⚙️ 14. Build Project
+
+```bash
+go build
+```
+
+═════════════════════════════════════════════════════════════════════════
+
+## 🚀 15. Full Workflow Example
+
+```bash
+# Step 1: Create project
+mkdir myapp
+cd myapp
+
+# Step 2: Initialize module
+go mod init myapp
+
+# Step 3: Add dependency
+go get github.com/gin-gonic/gin
+
+# Step 4: Clean dependencies
+go mod tidy
+
+# Step 5: Run app
+go run main.go
+```
+
+═════════════════════════════════════════════════════════════════════════
+
+# 💡 INTERVIEW QUESTIONS & ANSWERS
+
+═════════════════════════════════════════════════════════════════════════
+
+## ❓ Q1: What is go.mod?
+
+**Answer:**
+`go.mod` defines the module name, Go version, and project dependencies.
+
+═════════════════════════════════════════════════════════════════════════
+
+## ❓ Q2: What is go.sum?
+
+**Answer:**
+`go.sum` stores cryptographic checksums to ensure dependency integrity and security.
+
+═════════════════════════════════════════════════════════════════════════
+
+## ❓ Q3: Difference between go get and go mod tidy?
+
+**Answer:**
+
+* `go get` → adds/updates dependencies
+* `go mod tidy` → cleans and syncs dependencies
+
+═════════════════════════════════════════════════════════════════════════
+
+## ❓ Q4: What problem do Go Modules solve?
+
+**Answer:**
+They solve dependency management issues like:
+
+* Version conflicts
+* Reproducible builds
+* Dependency tracking
+
+═════════════════════════════════════════════════════════════════════════
+
+## ❓ Q5: Can we edit go.sum manually?
+
+**Answer:**
+No. It is auto-generated and should not be modified manually.
+
+═════════════════════════════════════════════════════════════════════════
+
+## ❓ Q6: What is Semantic Versioning?
+
+**Answer:**
+A versioning system using:
+
+* MAJOR.MINOR.PATCH
+
+═════════════════════════════════════════════════════════════════════════
+
+## ❓ Q7: What is replace directive?
+
+**Answer:**
+It allows replacing a module with another source (local or fork).
+
+═════════════════════════════════════════════════════════════════════════
+
+## ❓ Q8: What is GOPRIVATE?
+
+**Answer:**
+It tells Go which modules are private and should bypass proxy/cache.
+
+═════════════════════════════════════════════════════════════════════════
+
+## ❓ Q9: What happens if go.sum is deleted?
+
+**Answer:**
+It will be regenerated when you run:
+
+```bash
+go mod tidy
+```
+
+═════════════════════════════════════════════════════════════════════════
+
+## ❓ Q10: How does Go ensure dependency security?
+
+**Answer:**
+Using checksums stored in `go.sum` to verify downloaded packages.
+
+═════════════════════════════════════════════════════════════════════════
+
+# 🧠 PRO TIPS
+
+* Always run `go mod tidy` before commit
+* Never manually edit `go.sum`
+* Use version pinning for stability
+* Prefer minimal dependencies
+
+═════════════════════════════════════════════════════════════════════════
+
+# 🎯 SUMMARY
+
+* `go.mod` → dependency definition
+* `go.sum` → dependency verification
+* Go Modules → core of modern Go development
+
+═════════════════════════════════════════════════════════════════════════
