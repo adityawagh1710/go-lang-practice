@@ -1,7 +1,6 @@
-GOLANG (Go) BASIC NOTES
-========================
-Created: 2026
-
+════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang Basics
+════════════════════════════════════════════════════════════════════════════════
 1. Introduction to Go
 ---------------------
 - Go is an open-source programming language developed by Google (2009).
@@ -253,6 +252,7 @@ Bonus / Tricky
 Common Answers (Quick Reference)
 --------------------------------
 - Goroutine: Lightweight, user-space thread managed by Go runtime. Thousands can run efficiently.
-- Channel: Typed conduit for sending/receiving values between goroutines. Prevents race conditions by communicating instead of sharing memory.
+- Channel: Typed conduit for sending/receiving values between goroutines. 
+    Prevents race conditions by communicating instead of sharing memory.
 - Error handling: Functions return `(value, error)`. Always check the error.
 - Slices: Dynamic view into an array. `append` may reallocate if capacity is exceeded.

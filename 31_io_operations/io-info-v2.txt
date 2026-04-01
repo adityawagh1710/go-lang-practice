@@ -1,0 +1,1395 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang I/O & FILE HANDLING
+════════════════════════════════════════════════════════════════════════════════════
+  TABLE OF CONTENTS
+  ─────────────────
+  [1]  flag     — CLI Argument Parsing
+  [2]  time     — Time, Duration, Formatting
+  [3]  encoding/json — Marshal / Unmarshal / Streaming
+  [4]  os       — Files, Env, Process
+  [5]  bufio    — Buffered Reader/Writer/Scanner
+  [6]  slog     — Structured Logging (Go 1.21+)
+  [7]  regexp   — Regular Expressions
+  [8]  go:embed — Static File Embedding
+  [9]  Java Comparison Table
+  [10] Interview Q&A — Medior Level
+  [11] Interview Q&A — Experienced Level
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [1]  PACKAGE: flag  —  CLI Argument Parsing
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  The flag package parses command-line arguments.
+  Usage: go run main.go -port=8080 -debug -name="Alice"
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 1: Basic Flag Definitions
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "flag"
+    "fmt"
+)
+
+func main() {
+    // Define flags: flag.Type("name", defaultValue, "description")
+    port    := flag.Int("port", 8080, "HTTP server port")
+    debug   := flag.Bool("debug", false, "Enable debug mode")
+    name    := flag.String("name", "World", "Name to greet")
+    timeout := flag.Duration("timeout", 30*time.Second, "Request timeout")
+
+    flag.Parse() // Must call Parse() before reading values
+
+    fmt.Printf("Port: %d\n", *port)         // dereference pointer
+    fmt.Printf("Debug: %v\n", *debug)
+    fmt.Printf("Hello, %s!\n", *name)
+    fmt.Printf("Timeout: %v\n", *timeout)
+
+    // Remaining non-flag args (e.g. filenames after flags)
+    args := flag.Args()
+    fmt.Println("Extra args:", args)
+}
+
+// Run: go run main.go -port=9090 -debug -name=Aditya file1.txt file2.txt
+// Output:
+//   Port: 9090
+//   Debug: true
+//   Hello, Aditya!
+//   Extra args: [file1.txt file2.txt]
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 2: Binding to Existing Variables (Var style)
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "flag"
+    "fmt"
+)
+
+var (
+    host string
+    port int
+)
+
+func init() {
+    // flag.TypeVar(&variable, "name", default, "description")
+    flag.StringVar(&host, "host", "localhost", "Server hostname")
+    flag.IntVar(&port, "port", 8080, "Server port")
+}
+
+func main() {
+    flag.Parse()
+    fmt.Printf("Connecting to %s:%d\n", host, port)
+}
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 3: Custom FlagSet (useful for subcommands)
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "flag"
+    "fmt"
+    "os"
+)
+
+func main() {
+    if len(os.Args) < 2 {
+        fmt.Println("Usage: app <serve|migrate> [flags]")
+        os.Exit(1)
+    }
+
+    switch os.Args[1] {
+    case "serve":
+        serveCmd := flag.NewFlagSet("serve", flag.ExitOnError)
+        port := serveCmd.Int("port", 8080, "Port to listen on")
+        serveCmd.Parse(os.Args[2:])
+        fmt.Printf("Serving on port %d\n", *port)
+
+    case "migrate":
+        migrateCmd := flag.NewFlagSet("migrate", flag.ExitOnError)
+        dry := migrateCmd.Bool("dry-run", false, "Simulate migration")
+        migrateCmd.Parse(os.Args[2:])
+        fmt.Printf("Migration dry-run: %v\n", *dry)
+
+    default:
+        fmt.Println("Unknown command:", os.Args[1])
+        os.Exit(1)
+    }
+}
+
+  KEY NOTES:
+  • flag.Parse()  must be called after defining flags and before using them
+  • Flag values are pointers; dereference with *flagVar
+  • flag.Args() returns non-flag command-line arguments (after --)
+  • Use FlagSet for subcommands (similar to cobra's Command pattern)
+  • flag.Usage can be reassigned to customize help output
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [2]  PACKAGE: time  —  Time, Duration, Formatting
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Go uses a reference time for formatting: Mon Jan 2 15:04:05 MST 2006
+  (The reference values are: 01/02 03:04:05PM '06 -0700)
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 1: Basic time.Now(), Formatting, Parsing
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "time"
+)
+
+func main() {
+    now := time.Now()
+    fmt.Println(now)                              // 2026-04-01 20:33:09.123 +0530 IST
+
+    // Format using the reference time (Go's unique approach)
+    fmt.Println(now.Format("2006-01-02"))                // 2026-04-01
+    fmt.Println(now.Format("02-Jan-2006"))               // 01-Apr-2026
+    fmt.Println(now.Format("15:04:05"))                  // 20:33:09
+    fmt.Println(now.Format("Monday, January 2, 2006"))   // Wednesday, April 1, 2026
+    fmt.Println(now.Format(time.RFC3339))                // 2026-04-01T20:33:09+05:30
+
+    // Parsing a string to time.Time
+    t, err := time.Parse("2006-01-02", "2026-04-01")
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(t)
+}
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 2: Duration, Arithmetic, Comparison
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "time"
+)
+
+func main() {
+    now := time.Now()
+
+    // Duration literals
+    d := 2*time.Hour + 30*time.Minute + 15*time.Second
+    fmt.Println(d)                  // 2h30m15s
+    fmt.Println(d.Minutes())        // 150.25
+
+    // Arithmetic
+    future := now.Add(24 * time.Hour)    // +1 day
+    past   := now.Add(-7 * 24 * time.Hour) // -7 days
+    diff   := future.Sub(past)           // Duration between two times
+
+    fmt.Println(future.Format("2006-01-02"))
+    fmt.Printf("Diff: %.0f hours\n", diff.Hours()) // 192
+
+    // Comparison
+    fmt.Println(future.After(now))   // true
+    fmt.Println(past.Before(now))    // true
+    fmt.Println(now.Equal(now))      // true
+}
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 3: Timers, Tickers, Sleep
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "time"
+)
+
+func main() {
+    // Sleep
+    fmt.Println("Sleeping 100ms...")
+    time.Sleep(100 * time.Millisecond)
+
+    // One-shot Timer
+    timer := time.NewTimer(200 * time.Millisecond)
+    <-timer.C
+    fmt.Println("Timer fired!")
+
+    // Ticker — fires repeatedly
+    ticker := time.NewTicker(100 * time.Millisecond)
+    defer ticker.Stop()
+
+    count := 0
+    for t := range ticker.C {
+        fmt.Println("Tick at", t.Format("15:04:05.000"))
+        count++
+        if count == 3 {
+            break
+        }
+    }
+
+    // time.After — convenience for channel-based timeout
+    select {
+    case <-time.After(1 * time.Second):
+        fmt.Println("Timed out!")
+    }
+}
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 4: Timezones, Unix Timestamps
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "time"
+)
+
+func main() {
+    ist, _ := time.LoadLocation("Asia/Kolkata")
+    utc     := time.UTC
+
+    now := time.Now().In(ist)
+    fmt.Println("IST:", now.Format("15:04:05 MST"))
+    fmt.Println("UTC:", now.UTC().Format("15:04:05 MST"))
+    fmt.Println("In UTC obj:", now.In(utc).Format("15:04:05"))
+
+    // Unix timestamps
+    unix := time.Now().Unix()            // seconds since epoch
+    unixMs := time.Now().UnixMilli()     // milliseconds
+    fmt.Println("Unix:", unix)
+    fmt.Println("UnixMilli:", unixMs)
+
+    // From Unix
+    t := time.Unix(unix, 0)
+    fmt.Println("Reconstructed:", t.Format(time.RFC3339))
+}
+
+  KEY NOTES:
+  • Go's reference time is:  Mon Jan 2 15:04:05 MST 2006  (01/02 03:04:05PM '06)
+  • time.Duration is int64 nanoseconds; use constants like time.Second
+  • time.NewTicker fires every interval; always Stop() when done
+  • time.After creates a channel that receives after duration (leaks if not drained!)
+  • Use time.NewTimer + defer timer.Stop() for safe one-shot timers
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [3]  PACKAGE: encoding/json  —  Marshal / Unmarshal / Streaming
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 1: Marshal (Go struct → JSON bytes)
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "encoding/json"
+    "fmt"
+)
+
+type Employee struct {
+    ID         int      `json:"id"`
+    Name       string   `json:"name"`
+    Department string   `json:"department"`
+    Skills     []string `json:"skills"`
+    Salary     float64  `json:"salary,omitempty"` // omit if zero
+    internal   string   // unexported: never included in JSON
+}
+
+func main() {
+    emp := Employee{
+        ID:         1,
+        Name:       "Aditya",
+        Department: "Engineering",
+        Skills:     []string{"Go", "Java", "SQL"},
+        Salary:     0, // omitted because omitempty + zero value
+    }
+
+    // Marshal to bytes
+    data, err := json.Marshal(emp)
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(string(data))
+    // Output: {"id":1,"name":"Aditya","department":"Engineering","skills":["Go","Java","SQL"]}
+
+    // Pretty print
+    pretty, _ := json.MarshalIndent(emp, "", "  ")
+    fmt.Println(string(pretty))
+}
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 2: Unmarshal (JSON bytes → Go struct)
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "encoding/json"
+    "fmt"
+)
+
+type Department struct {
+    Name      string     `json:"name"`
+    Employees []Employee `json:"employees"`
+}
+
+type Employee struct {
+    ID   int    `json:"id"`
+    Name string `json:"name"`
+}
+
+func main() {
+    raw := `{
+        "name": "Engineering",
+        "employees": [
+            {"id": 1, "name": "Aditya"},
+            {"id": 2, "name": "Riya"}
+        ]
+    }`
+
+    var dept Department
+    err := json.Unmarshal([]byte(raw), &dept) // pass pointer!
+    if err != nil {
+        panic(err)
+    }
+
+    fmt.Println("Dept:", dept.Name)
+    for _, e := range dept.Employees {
+        fmt.Printf("  Employee %d: %s\n", e.ID, e.Name)
+    }
+}
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 3: Dynamic JSON with map[string]any
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "encoding/json"
+    "fmt"
+)
+
+func main() {
+    raw := `{"event":"login","user":"aditya","timestamp":1743512389}`
+
+    var m map[string]any
+    json.Unmarshal([]byte(raw), &m)
+
+    fmt.Println(m["event"])     // login
+    fmt.Println(m["user"])      // aditya
+    // Numbers are float64 by default in map[string]any
+    ts := m["timestamp"].(float64)
+    fmt.Printf("Timestamp: %.0f\n", ts)
+}
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 4: Streaming with json.Decoder / json.Encoder
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "encoding/json"
+    "io"
+    "os"
+    "strings"
+)
+
+type LogEntry struct {
+    Level   string `json:"level"`
+    Message string `json:"message"`
+}
+
+func main() {
+    // Streaming decode — good for large files / NDJSON
+    input := strings.NewReader(`
+        {"level":"INFO","message":"Server started"}
+        {"level":"ERROR","message":"Connection refused"}
+    `)
+
+    decoder := json.NewDecoder(input)
+    for {
+        var entry LogEntry
+        err := decoder.Decode(&entry)
+        if err == io.EOF {
+            break
+        }
+        if err != nil {
+            panic(err)
+        }
+        fmt.Printf("[%s] %s\n", entry.Level, entry.Message)
+    }
+
+    // Streaming encode — write directly to output
+    encoder := json.NewEncoder(os.Stdout)
+    encoder.SetIndent("", "  ")
+    encoder.Encode(LogEntry{Level: "INFO", Message: "Done"})
+}
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 5: Custom Marshaler / Unmarshaler
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "encoding/json"
+    "fmt"
+    "strings"
+)
+
+type Role int
+
+const (
+    RoleUser  Role = iota
+    RoleAdmin
+)
+
+func (r Role) MarshalJSON() ([]byte, error) {
+    switch r {
+    case RoleUser:
+        return json.Marshal("user")
+    case RoleAdmin:
+        return json.Marshal("admin")
+    }
+    return nil, fmt.Errorf("unknown role %d", r)
+}
+
+func (r *Role) UnmarshalJSON(data []byte) error {
+    var s string
+    json.Unmarshal(data, &s)
+    switch strings.ToLower(s) {
+    case "user":
+        *r = RoleUser
+    case "admin":
+        *r = RoleAdmin
+    default:
+        return fmt.Errorf("unknown role: %s", s)
+    }
+    return nil
+}
+
+  KEY NOTES:
+  • json tags: `json:"name"`, `json:"name,omitempty"`, `json:"-"` (skip field)
+  • Only exported (uppercase) fields are marshaled
+  • Numbers in map[string]any decode as float64 by default
+  • json.Decoder is preferred for streaming / multiple JSON objects
+  • Implement json.Marshaler / json.Unmarshaler for custom encoding
+  • Use json.Number type or UseNumber() on Decoder to avoid float64 precision loss
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [4]  PACKAGE: os  —  Files, Environment, Process
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 1: Reading & Writing Files
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "os"
+)
+
+func main() {
+    // ── Write entire file at once ──
+    content := []byte("Hello, Go!\nLine 2\n")
+    err := os.WriteFile("output.txt", content, 0644)
+    if err != nil {
+        panic(err)
+    }
+
+    // ── Read entire file at once ──
+    data, err := os.ReadFile("output.txt")
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(string(data))
+
+    // ── Open for fine-grained control ──
+    f, err := os.Open("output.txt")      // read-only
+    if err != nil {
+        panic(err)
+    }
+    defer f.Close()                        // always close!
+
+    buf := make([]byte, 64)
+    n, _ := f.Read(buf)
+    fmt.Printf("Read %d bytes: %s\n", n, buf[:n])
+}
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 2: Create, Append, Truncate
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "os"
+)
+
+func main() {
+    // Create / truncate
+    f, _ := os.Create("data.txt")       // creates or truncates
+    fmt.Fprintln(f, "Line 1")
+    f.Close()
+
+    // Append mode using OpenFile with flags
+    f2, _ := os.OpenFile("data.txt",
+        os.O_APPEND|os.O_WRONLY, 0644)
+    fmt.Fprintln(f2, "Line 2 (appended)")
+    f2.Close()
+
+    // os.OpenFile with full control
+    // Flags: O_RDONLY, O_WRONLY, O_RDWR, O_CREATE, O_TRUNC, O_APPEND
+    f3, _ := os.OpenFile("log.txt",
+        os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+    defer f3.Close()
+    f3.WriteString("new log entry\n")
+}
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 3: File Info, Existence Check, Rename, Remove
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "errors"
+    "fmt"
+    "os"
+)
+
+func main() {
+    // Check file existence
+    _, err := os.Stat("data.txt")
+    if errors.Is(err, os.ErrNotExist) {
+        fmt.Println("File does not exist")
+    } else if err != nil {
+        panic(err)
+    } else {
+        fmt.Println("File exists!")
+    }
+
+    // File info (size, mode, modtime)
+    info, _ := os.Stat("data.txt")
+    fmt.Println("Name:", info.Name())
+    fmt.Println("Size:", info.Size(), "bytes")
+    fmt.Println("ModTime:", info.ModTime())
+    fmt.Println("IsDir:", info.IsDir())
+
+    // Rename / Move
+    os.Rename("data.txt", "renamed.txt")
+
+    // Remove
+    os.Remove("renamed.txt")
+
+    // Remove directory tree
+    os.MkdirAll("tmp/sub/dir", 0755)
+    os.RemoveAll("tmp")
+}
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 4: Environment Variables, Args, Exit
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "os"
+)
+
+func main() {
+    // Environment variables
+    home := os.Getenv("HOME")
+    fmt.Println("HOME:", home)
+
+    os.Setenv("APP_ENV", "production")
+    env := os.Getenv("APP_ENV")
+    fmt.Println("APP_ENV:", env)
+
+    // All env vars
+    for _, e := range os.Environ() {
+        // fmt.Println(e) // KEY=VALUE format
+        _ = e
+    }
+
+    // Command-line arguments (raw, before flag.Parse)
+    fmt.Println("Args:", os.Args)   // ["/path/to/binary", "arg1", "arg2"]
+
+    // Working directory
+    wd, _ := os.Getwd()
+    fmt.Println("CWD:", wd)
+
+    // Exit — does NOT run deferred functions!
+    // os.Exit(1)  // non-zero = error
+}
+
+  KEY NOTES:
+  • os.ReadFile / os.WriteFile — convenience for small files (Go 1.16+)
+  • os.Open = read-only; os.Create = create/truncate; os.OpenFile = full control
+  • Always defer f.Close() immediately after checking the Open error
+  • os.Stat returns error: use errors.Is(err, os.ErrNotExist) to check absence
+  • os.Exit(n) bypasses defer! Use log.Fatal or return from main for clean exit
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [5]  PACKAGE: bufio  —  Buffered I/O, Scanner
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  bufio wraps io.Reader/io.Writer with an in-memory buffer, reducing system calls.
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 1: bufio.Scanner — Reading Line by Line
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "bufio"
+    "fmt"
+    "os"
+    "strings"
+)
+
+func main() {
+    // ── Scan from string reader ──
+    input := "apple\nbanana\ncherry"
+    scanner := bufio.NewScanner(strings.NewReader(input))
+
+    for scanner.Scan() {                  // returns false at EOF or error
+        line := scanner.Text()            // current line (without \n)
+        fmt.Println("Line:", line)
+    }
+    if err := scanner.Err(); err != nil { // always check after loop
+        fmt.Println("Scan error:", err)
+    }
+
+    // ── Scan from file ──
+    f, _ := os.Open("data.txt")
+    defer f.Close()
+    fileScanner := bufio.NewScanner(f)
+    for fileScanner.Scan() {
+        fmt.Println(fileScanner.Text())
+    }
+
+    // ── Scan words instead of lines ──
+    wordInput := "hello world foo bar"
+    ws := bufio.NewScanner(strings.NewReader(wordInput))
+    ws.Split(bufio.ScanWords)  // default is ScanLines
+    for ws.Scan() {
+        fmt.Println("Word:", ws.Text())
+    }
+}
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 2: bufio.Reader — Granular Reading
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "bufio"
+    "fmt"
+    "strings"
+)
+
+func main() {
+    reader := bufio.NewReader(strings.NewReader("hello\nworld\n"))
+
+    // ReadString reads until delimiter (inclusive)
+    line1, _ := reader.ReadString('\n')
+    fmt.Printf("Line1: %q\n", line1)  // "hello\n"
+
+    // ReadLine — low level, doesn't include \n
+    line2, isPrefix, err := reader.ReadLine()
+    fmt.Printf("Line2: %q, isPrefix: %v, err: %v\n",
+        string(line2), isPrefix, err)
+
+    // Peek — read ahead without consuming
+    reader2 := bufio.NewReader(strings.NewReader("abc"))
+    peeked, _ := reader2.Peek(2)
+    fmt.Printf("Peek: %q\n", string(peeked)) // "ab"
+    b, _ := reader2.ReadByte()
+    fmt.Printf("ReadByte: %c\n", b)           // 'a' — Peek didn't consume
+}
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 3: bufio.Writer — Buffered Writing
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "bufio"
+    "os"
+)
+
+func main() {
+    f, _ := os.Create("output.txt")
+    defer f.Close()
+
+    // Wrap with bufio.Writer for efficient batched writes
+    w := bufio.NewWriter(f)
+
+    for i := 0; i < 1000; i++ {
+        w.WriteString("line\n")         // writes to buffer, not disk
+    }
+
+    // CRITICAL: must Flush() to write buffered data to the underlying writer
+    if err := w.Flush(); err != nil {
+        panic(err)
+    }
+    // Use defer w.Flush() with caution — won't handle error from defer
+}
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 4: Reading stdin interactively
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "bufio"
+    "fmt"
+    "os"
+    "strings"
+)
+
+func main() {
+    scanner := bufio.NewScanner(os.Stdin)
+    fmt.Print("Enter your name: ")
+    scanner.Scan()
+    name := strings.TrimSpace(scanner.Text())
+    fmt.Printf("Hello, %s!\n", name)
+}
+
+  KEY NOTES:
+  • bufio.Scanner is the idiomatic way to read files line by line
+  • Split functions: ScanLines (default), ScanWords, ScanBytes, ScanRunes
+  • bufio.Writer MUST be Flush()ed; unbuffered writes go through directly
+  • bufio.NewReaderSize / bufio.NewWriterSize to set custom buffer size
+  • Default buffer size: 4096 bytes; use scanner.Buffer() for large lines
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [6]  PACKAGE: slog  —  Structured Logging (Go 1.21+)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  slog is the official structured logging package introduced in Go 1.21.
+  It replaces ad-hoc structured logging (logrus, zap) with a stdlib solution.
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 1: Default Logger
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "log/slog"
+)
+
+func main() {
+    // Default logger writes text to stderr
+    slog.Info("Server started", "port", 8080, "env", "production")
+    slog.Warn("High memory usage", "used_mb", 450, "limit_mb", 512)
+    slog.Error("DB connection failed", "host", "localhost", "err", "timeout")
+    slog.Debug("This won't show by default — level is INFO")
+
+    // Key-value pairs as alternating args: key, value, key, value
+}
+// Output (text format):
+// 2026/04/01 20:33:09 INFO Server started port=8080 env=production
+// 2026/04/01 20:33:09 WARN High memory usage used_mb=450 limit_mb=512
+// 2026/04/01 20:33:09 ERROR DB connection failed host=localhost err=timeout
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 2: JSON Handler + Custom Level
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "log/slog"
+    "os"
+)
+
+func main() {
+    // JSON structured output — ideal for log aggregators (ELK, Loki, etc.)
+    logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+        Level: slog.LevelDebug, // show all levels
+    }))
+
+    logger.Debug("Starting debug mode")
+    logger.Info("Request received", "method", "GET", "path", "/api/employees")
+    logger.Error("Request failed",
+        "status", 500,
+        "path",   "/api/employees",
+        "err",    "internal server error",
+    )
+}
+
+// Output (JSON per line):
+// {"time":"2026-04-01T20:33:09Z","level":"DEBUG","msg":"Starting debug mode"}
+// {"time":"...","level":"INFO","msg":"Request received","method":"GET","path":"/api/employees"}
+// {"time":"...","level":"ERROR","msg":"Request failed","status":500,...}
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 3: Logger with Attributes (slog.With)
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "log/slog"
+    "os"
+)
+
+func main() {
+    base := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
+    // Add persistent context fields with With()
+    requestLogger := base.With(
+        "request_id", "req-abc-123",
+        "user_id",    42,
+    )
+
+    requestLogger.Info("Processing request")
+    requestLogger.Info("Validation passed")
+    requestLogger.Error("Handler failed", "err", "nil pointer")
+    // All 3 lines include request_id and user_id automatically
+}
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 4: slog.Attr and slog.Group
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "log/slog"
+    "os"
+)
+
+func main() {
+    logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
+    // slog.Attr for typed key-value
+    logger.Info("employee hired",
+        slog.String("name", "Aditya"),
+        slog.Int("id", 101),
+        slog.Bool("remote", true),
+    )
+
+    // slog.Group — nested object in JSON output
+    logger.Info("request completed",
+        slog.Group("http",
+            slog.String("method", "POST"),
+            slog.Int("status", 201),
+            slog.String("path", "/employees"),
+        ),
+    )
+    // JSON: {..., "http":{"method":"POST","status":201,"path":"/employees"}}
+}
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 5: Set Default Logger
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "log/slog"
+    "os"
+)
+
+func main() {
+    jsonLogger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+        Level: slog.LevelInfo,
+    }))
+    slog.SetDefault(jsonLogger)
+
+    // Now slog.Info, slog.Error etc. use the JSON logger
+    slog.Info("Application ready", "version", "1.2.0")
+}
+
+  KEY NOTES:
+  • slog levels: Debug(-4) < Info(0) < Warn(4) < Error(8)
+  • Two handlers: slog.NewTextHandler (human), slog.NewJSONHandler (machine)
+  • Use slog.With() to create child loggers with permanent context fields
+  • slog.Attr types: String, Int, Float64, Bool, Duration, Time, Any, Group
+  • slog.SetDefault() replaces the package-level slog.Info/Warn/Error functions
+  • Implements slog.Handler interface — easy to create custom handlers
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [7]  PACKAGE: regexp  —  Regular Expressions
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Go uses RE2 syntax (no lookaheads/lookbehinds). Compile patterns once, reuse.
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 1: Compile, Match, Find
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "regexp"
+)
+
+func main() {
+    // Compile — panics on bad pattern (use MustCompile for package-level vars)
+    re := regexp.MustCompile(`\d{4}-\d{2}-\d{2}`)   // matches 2026-04-01
+
+    // MatchString
+    fmt.Println(re.MatchString("Today is 2026-04-01"))  // true
+    fmt.Println(re.MatchString("no date here"))          // false
+
+    // FindString — first match
+    fmt.Println(re.FindString("Events: 2026-04-01 and 2026-12-25"))
+    // Output: 2026-04-01
+
+    // FindAllString — all matches
+    all := re.FindAllString("Events: 2026-04-01 and 2026-12-25", -1) // -1 = all
+    fmt.Println(all) // [2026-04-01 2026-12-25]
+}
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 2: Capture Groups and Named Groups
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "regexp"
+)
+
+func main() {
+    // Capturing groups with ()
+    re := regexp.MustCompile(`(\w+)@(\w+)\.(\w+)`)
+    match := re.FindStringSubmatch("aditya@gmail.com")
+    // match[0] = full match, match[1] = first group, etc.
+    fmt.Println("Full:", match[0])    // aditya@gmail.com
+    fmt.Println("User:", match[1])    // aditya
+    fmt.Println("Domain:", match[2])  // gmail
+    fmt.Println("TLD:", match[3])     // com
+
+    // Named groups with (?P<name>...)
+    reNamed := regexp.MustCompile(`(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})`)
+    m := reNamed.FindStringSubmatch("Date: 2026-04-01")
+    names := reNamed.SubexpNames()
+    for i, name := range names {
+        if i > 0 && name != "" {
+            fmt.Printf("%s = %s\n", name, m[i])
+        }
+    }
+    // year = 2026  month = 04  day = 01
+}
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 3: Replace, Split
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "fmt"
+    "regexp"
+)
+
+func main() {
+    re := regexp.MustCompile(`\s+`)
+
+    // ReplaceAllString
+    result := re.ReplaceAllString("too   many   spaces", " ")
+    fmt.Println(result)  // "too many spaces"
+
+    // ReplaceAllStringFunc — use a function for dynamic replacement
+    reWord := regexp.MustCompile(`\b\w+\b`)
+    upper := reWord.ReplaceAllStringFunc("hello world", func(s string) string {
+        return "[" + s + "]"
+    })
+    fmt.Println(upper)  // [hello] [world]
+
+    // Split
+    csv := regexp.MustCompile(`,\s*`)
+    parts := csv.Split("a, b,c ,  d", -1)
+    fmt.Println(parts)  // [a b c d]
+}
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 4: Compile Once at Package Level (best practice)
+─────────────────────────────────────────────────────────────────────────────────
+
+package validator
+
+import "regexp"
+
+// Compile at package init — panics early on bad patterns, avoids recompiling
+var (
+    emailRe = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
+    phoneRe = regexp.MustCompile(`^\+?[1-9]\d{9,14}$`)
+)
+
+func IsValidEmail(email string) bool {
+    return emailRe.MatchString(email)
+}
+
+func IsValidPhone(phone string) bool {
+    return phoneRe.MatchString(phone)
+}
+
+  KEY NOTES:
+  • regexp.MustCompile — use at package level; panics on bad pattern (intentional)
+  • regexp.Compile — returns error; use inside functions for user-provided patterns
+  • Go uses RE2 — NO lookaheads (?=), lookbehinds (?<!), backreferences
+  • FindString vs FindStringSubmatch: former returns match, latter includes groups
+  • -1 as count = all matches; n = at most n matches
+  • Compiled *Regexp is safe for concurrent use
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [8]  go:embed  —  Static File Embedding
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  go:embed bakes static files into the binary at compile time.
+  No runtime file I/O needed — great for web templates, configs, SQL migrations.
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 1: Embed a Single File as []byte or string
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    _ "embed"  // blank import required to enable go:embed
+    "fmt"
+)
+
+//go:embed hello.txt
+var helloBytes []byte   // file content as raw bytes
+
+//go:embed version.txt
+var version string      // file content as string (trimming is manual)
+
+func main() {
+    fmt.Println(string(helloBytes))
+    fmt.Println("Version:", version)
+}
+
+// File: hello.txt
+// Hello, embedded world!
+
+// File: version.txt
+// 1.2.0
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 2: Embed Directory as embed.FS
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "embed"
+    "fmt"
+    "io/fs"
+)
+
+//go:embed templates/*
+var templateFS embed.FS
+
+//go:embed static
+var staticFS embed.FS   // embeds entire "static" directory
+
+func main() {
+    // Read a specific file from the embedded FS
+    data, err := templateFS.ReadFile("templates/index.html")
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(string(data))
+
+    // Walk all embedded files
+    fs.WalkDir(staticFS, ".", func(path string, d fs.DirEntry, err error) error {
+        if !d.IsDir() {
+            fmt.Println("Embedded file:", path)
+        }
+        return nil
+    })
+}
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 3: Serving Embedded Static Files with net/http
+─────────────────────────────────────────────────────────────────────────────────
+
+package main
+
+import (
+    "embed"
+    "io/fs"
+    "net/http"
+)
+
+//go:embed web/static
+var staticFiles embed.FS
+
+func main() {
+    // Create a sub-FS rooted at "web/static"
+    sub, _ := fs.Sub(staticFiles, "web/static")
+    http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(sub))))
+    http.ListenAndServe(":8080", nil)
+}
+
+─────────────────────────────────────────────────────────────────────────────────
+  Example 4: Embed SQL Migrations
+─────────────────────────────────────────────────────────────────────────────────
+
+package db
+
+import (
+    "embed"
+)
+
+//go:embed migrations/*.sql
+var MigrationsFS embed.FS
+
+// Usage in main:
+// entries, _ := db.MigrationsFS.ReadDir("migrations")
+// for _, e := range entries {
+//     sql, _ := db.MigrationsFS.ReadFile("migrations/" + e.Name())
+//     // execute sql
+// }
+
+  KEY NOTES:
+  • import _ "embed" is required even if you only use string/[]byte forms
+  • Paths in //go:embed are relative to the Go source file
+  • Cannot embed files outside the module directory (no ../secrets)
+  • Hidden files (dot files) and hidden directories are NOT embedded by default
+  • Use all: prefix to include them: //go:embed all:configs
+  • embed.FS implements io/fs.FS — works with http.FileServer, html/template, etc.
+  • Embed happens at compile time — the binary grows but has zero runtime I/O
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [9]  JAVA ↔ GO COMPARISON TABLE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Concept               Java                           Go
+  ──────────────────────────────────────────────────────────────────────────────
+  CLI parsing           Apache Commons CLI / args[]    flag package (stdlib)
+  Subcommands           Picocli / manual switch        flag.NewFlagSet()
+  Date/Time             java.time.LocalDate/Instant    time.Time / time.Duration
+  Time formatting       DateTimeFormatter.ofPattern    time.Format with ref time
+  Reference time        yyyy-MM-dd (arbitrary)         "2006-01-02" (fixed magic)
+  JSON serialize        Jackson ObjectMapper           json.Marshal / json.Encoder
+  JSON tags             @JsonProperty("name")          `json:"name"`
+  JSON skip field       @JsonIgnore                    `json:"-"`
+  JSON optional         @JsonInclude(NON_NULL)         `json:"name,omitempty"`
+  JSON streaming        JsonParser / JsonGenerator     json.Decoder / json.Encoder
+  File read all         Files.readAllBytes(path)       os.ReadFile(path)
+  File write all        Files.writeString(path, s)     os.WriteFile(path, data, 0644)
+  File open flags       StandardOpenOption.APPEND      os.O_APPEND | os.O_WRONLY
+  Buffered reader       BufferedReader                 bufio.NewReader / Scanner
+  Buffered writer       BufferedWriter                 bufio.NewWriter (+ Flush!)
+  Line-by-line          scanner.nextLine()             bufio.Scanner.Scan() + Text()
+  Structured logging    Logback / SLF4J + MDC          log/slog (stdlib, Go 1.21+)
+  Log JSON format       LogstashEncoder                slog.NewJSONHandler
+  Logger with context   MDC.put("requestId", id)       logger.With("request_id", id)
+  Regex compile         Pattern.compile(regex)         regexp.MustCompile(pattern)
+  Regex match           pattern.matcher(s).matches()  re.MatchString(s)
+  Regex groups          matcher.group(1)               re.FindStringSubmatch(s)[1]
+  Static resources      classpath resources            //go:embed directive
+  Static FS             ClassLoader.getResourceAsStream embed.FS.ReadFile()
+  HTTP static serve     StaticResourceHandler          http.FileServer(http.FS(sub))
+  ──────────────────────────────────────────────────────────────────────────────
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [10] INTERVIEW Q&A — MEDIOR LEVEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q1. How do you parse CLI flags in Go? What is the difference between        │
+│     flag.String() and flag.StringVar()?                                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+  A: Both define string flags but differ in where the value is stored.
+     flag.String("name", "default", "desc") returns *string — you must
+     dereference with *name to read it.
+     flag.StringVar(&existingVar, "name", "default", "desc") stores directly
+     into an existing variable, avoiding the pointer.
+     Both require flag.Parse() to be called before reading any values.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q2. What makes Go's time formatting unusual compared to Java's?             │
+└─────────────────────────────────────────────────────────────────────────────┘
+  A: Go uses a fixed reference time — Mon Jan 2 15:04:05 MST 2006 — as the
+     layout string. Instead of pattern letters (yyyy, MM, dd), you write the
+     reference values in the desired format:
+       - "2006"   → year       "01" → month     "02" → day
+       - "15"     → 24h hour   "04" → minutes   "05" → seconds
+     Java uses symbolic letters like yyyy-MM-dd. Go's approach is more explicit
+     but requires memorizing the reference date (01/02 03:04:05PM '06 -0700).
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q3. Why should you use bufio.Scanner instead of os.File.Read() to read a   │
+│     file line by line?                                                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+  A: os.File.Read() reads raw bytes — you'd have to manually find newlines and
+     handle partial reads. bufio.Scanner buffers the reads and provides a clean
+     line-at-a-time API via Scan() + Text(). It reduces syscalls, handles
+     different line endings, and simplifies error handling. It's the idiomatic
+     Go approach, similar to Java's BufferedReader.readLine().
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q4. What is the purpose of struct tags like `json:"name,omitempty"`?        │
+└─────────────────────────────────────────────────────────────────────────────┘
+  A: Struct tags are metadata strings attached to fields, read at runtime via
+     reflection. The encoding/json package uses them to:
+       - "name"      — override the JSON key (default is the field name)
+       - "omitempty" — skip the field in output if its value is the zero value
+                       (0, "", false, nil, empty slice/map)
+       - "-"         — always exclude this field from JSON output
+     Tags enable clean separation between Go field names (PascalCase) and JSON
+     keys (snake_case or camelCase) without renaming the struct field.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q5. What is the difference between os.Open and os.OpenFile?                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+  A: os.Open is a convenience wrapper for read-only access — it calls
+     os.OpenFile(name, os.O_RDONLY, 0).
+     os.OpenFile takes explicit flags and permission bits, giving full control:
+       - os.O_RDONLY, O_WRONLY, O_RDWR  — access mode
+       - os.O_CREATE, O_TRUNC, O_APPEND — creation / modification behavior
+     Use os.Open for reading, os.Create for write/truncate, and os.OpenFile
+     when you need combinations like create+append.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q6. Why can't Go's regexp package use lookaheads?                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+  A: Go's regexp uses the RE2 engine, which guarantees linear time complexity
+     (O(n) in input length) for all patterns. Lookaheads and backreferences can
+     lead to exponential backtracking (ReDoS attacks) in PCRE-style engines.
+     RE2 sacrifices those features for safety and predictable performance —
+     important for server-side code processing untrusted input.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q7. What does go:embed do and when would you use it?                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+  A: go:embed compiles static files directly into the Go binary at build time.
+     Use cases:
+       - HTML/CSS/JS templates for web servers
+       - SQL migration scripts
+       - Config files or CA certificates
+       - i18n translation files
+     Benefit: the deployed binary is self-contained — no runtime file I/O,
+     no missing files in production. The embedded data is read-only and accessed
+     via embed.FS (which implements io/fs.FS).
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [11] INTERVIEW Q&A — EXPERIENCED LEVEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q1. What are the performance implications of time.After() in hot loops?     │
+└─────────────────────────────────────────────────────────────────────────────┘
+  A: time.After(d) creates a new timer and returns its channel, but crucially,
+     the timer is NOT garbage collected until it fires. In a tight loop (e.g.,
+     select with time.After), each iteration leaks a timer until it expires.
+     This causes memory pressure under high load.
+     Fix: use time.NewTimer outside the loop, then reset with timer.Reset(d)
+     inside — but only after draining the channel if it fired. Or use
+     context.WithTimeout / context.WithDeadline, which is the idiomatic pattern
+     for most timeout use cases.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q2. How would you implement a custom slog.Handler for sending logs to an    │
+│     external system (e.g., a remote log aggregator)?                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+  A: Implement the slog.Handler interface with three methods:
+       Enabled(ctx, Level) bool  — filter check before creating a record
+       Handle(ctx, Record) error — process / send the log record
+       WithAttrs([]Attr) Handler — return new handler with persistent attrs
+       WithGroup(name) Handler   — return new handler with group prefix
+     In Handle(), serialize slog.Record (Time, Level, Message, Attrs) to your
+     target format (e.g., JSON) and POST to the aggregator or write to a
+     channel consumed by a background goroutine.
+     The handler must be goroutine-safe — use a mutex or channel for shared state.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q3. When using json.Decoder in a long-running service, what memory          │
+│     considerations apply?                                                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+  A: json.Decoder buffers internally. When decoding into interface{} or
+     map[string]any, the entire object graph is allocated in heap — for large
+     JSON payloads this can cause GC pressure. Mitigation strategies:
+       1. Decode into typed structs (smaller allocations, known layout)
+       2. Use json.Decoder.Token() for streaming / event-driven parsing of very
+          large arrays — avoids materializing the whole object
+       3. Set UseNumber() to avoid float64 allocation for large integers
+       4. Use sync.Pool to reuse Decoder buffers in high-throughput handlers
+       5. Consider third-party libs (sonic, jsoniter) for CPU-critical paths,
+          but profile first — stdlib is often sufficient
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q4. What is the contract for bufio.Writer.Flush() and what can go wrong     │
+│     if you rely on defer for it?                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+  A: bufio.Writer.Flush() writes any buffered data to the underlying writer
+     and returns an error if the write fails. Using defer w.Flush() is a common
+     antipattern because:
+       1. defer does not propagate the error — it's silently dropped
+       2. If the function returns early due to an error, the partial buffer
+          might flush corrupted/incomplete data
+     Best practice:
+       - Call Flush() explicitly before returning, and handle the error
+       - For files, a common pattern is to check Flush AND Close errors:
+           if err := w.Flush(); err != nil { return err }
+           if err := f.Close(); err != nil { return err }
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q5. How does go:embed interact with the build cache and module system?      │
+└─────────────────────────────────────────────────────────────────────────────┘
+  A: The Go build system tracks embedded files as dependencies of the package.
+     If any embedded file changes, the package is recompiled (cache invalidated).
+     Rules and edge cases:
+       - Patterns are relative to the .go file — no absolute paths or ../
+       - By default hidden files (dotfiles) and directories are excluded; use
+         all: prefix to include them: //go:embed all:configs
+       - embed.FS is immutable (read-only) — no Write/Delete methods
+       - File paths inside embed.FS use forward slashes on all platforms
+       - The embedded data is stored in the .rodata section of the binary,
+         so it counts toward binary size but is memory-mapped, not heap-allocated
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q6. Describe a ReDoS (Regular Expression Denial of Service) attack and      │
+│     why Go is less vulnerable than Java (PCRE)?                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+  A: ReDoS exploits patterns with catastrophic backtracking. A pattern like
+     (a+)+ matched against "aaaaaaaaaaab" can cause exponential time in PCRE
+     because the engine backtracks through all combinations.
+     Java's java.util.regex uses a backtracking NFA — vulnerable to ReDoS on
+     user-provided input unless patterns are carefully validated.
+     Go's regexp uses the RE2 algorithm (Thompson NFA / DFA simulation), which
+     converts the regex to a DFA at compile time and matches in O(n) — the
+     input length. The trade-off is that RE2 disallows features requiring
+     backtracking (lookaheads, backreferences). For Go servers handling untrusted
+     regexes, this is a critical security property.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

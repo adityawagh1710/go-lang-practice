@@ -1,0 +1,335 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang I/O & FILE HANDLING
+════════════════════════════════════════════════════════════════════════════════════
+
+Go provides powerful tools for file operations and I/O using standard library packages.
+
+Core Concepts:
+- File creation, reading, writing
+- Buffered I/O
+- Working with OS
+- Encoding/Decoding (JSON)
+- Logging
+- Regex processing
+- Embedding files
+
+----------------------------------------
+1. os PACKAGE
+----------------------------------------
+
+Used for file and OS-level operations.
+
+Common Functions:
+- os.Create()
+- os.Open()
+- os.OpenFile()
+- os.Remove()
+- os.Rename()
+
+Example:
+----------------------------------------
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+func main() {
+	file, err := os.Create("example.txt")
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	file.WriteString("Hello Go File Handling!")
+
+	fmt.Println("File created successfully")
+}
+----------------------------------------
+
+----------------------------------------
+2. io PACKAGE
+----------------------------------------
+
+Provides basic interfaces:
+- Reader
+- Writer
+- Closer
+
+Example (Copy file):
+----------------------------------------
+package main
+
+import (
+	"io"
+	"os"
+)
+
+func main() {
+	src, _ := os.Open("source.txt")
+	defer src.Close()
+
+	dst, _ := os.Create("dest.txt")
+	defer dst.Close()
+
+	io.Copy(dst, src)
+}
+----------------------------------------
+
+----------------------------------------
+3. bufio PACKAGE (Buffered I/O)
+----------------------------------------
+
+Improves performance by buffering reads/writes.
+
+Example:
+----------------------------------------
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+)
+
+func main() {
+	file, _ := os.Open("example.txt")
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		fmt.Println(scanner.Text())
+	}
+}
+----------------------------------------
+
+----------------------------------------
+4. encoding/json PACKAGE
+----------------------------------------
+
+Used for JSON encoding/decoding.
+
+Example:
+----------------------------------------
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+)
+
+type User struct {
+	Name string
+	Age  int
+}
+
+func main() {
+	user := User{"Aditya", 25}
+
+	data, _ := json.Marshal(user)
+	fmt.Println(string(data))
+
+	var u User
+	json.Unmarshal(data, &u)
+	fmt.Println(u.Name)
+}
+----------------------------------------
+
+----------------------------------------
+5. time PACKAGE
+----------------------------------------
+
+Used for timestamps, durations, etc.
+
+Example:
+----------------------------------------
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func main() {
+	now := time.Now()
+	fmt.Println("Current time:", now)
+
+	fmt.Println("After 2 hours:", now.Add(2*time.Hour))
+}
+----------------------------------------
+
+----------------------------------------
+6. flag PACKAGE (CLI args)
+----------------------------------------
+
+Used to parse command-line arguments.
+
+Example:
+----------------------------------------
+package main
+
+import (
+	"flag"
+	"fmt"
+)
+
+func main() {
+	name := flag.String("name", "Guest", "your name")
+	flag.Parse()
+
+	fmt.Println("Hello", *name)
+}
+----------------------------------------
+
+Run:
+go run main.go -name=Aditya
+
+----------------------------------------
+7. regexp PACKAGE
+----------------------------------------
+
+Used for pattern matching.
+
+Example:
+----------------------------------------
+package main
+
+import (
+	"fmt"
+	"regexp"
+)
+
+func main() {
+	re := regexp.MustCompile(`\d+`)
+	fmt.Println(re.FindString("Order123"))
+}
+----------------------------------------
+
+----------------------------------------
+8. log / slog PACKAGE
+----------------------------------------
+
+Logging utilities.
+
+Example (log):
+----------------------------------------
+package main
+
+import (
+	"log"
+)
+
+func main() {
+	log.Println("This is a log message")
+}
+----------------------------------------
+
+Example (slog - structured logging):
+----------------------------------------
+package main
+
+import (
+	"log/slog"
+)
+
+func main() {
+	slog.Info("User logged in", "user", "Aditya")
+}
+----------------------------------------
+
+----------------------------------------
+9. go:embed (Embedding Files)
+----------------------------------------
+
+Embed static files into binary.
+
+Example:
+----------------------------------------
+package main
+
+import (
+	_ "embed"
+	"fmt"
+)
+
+//go:embed hello.txt
+var content string
+
+func main() {
+	fmt.Println(content)
+}
+----------------------------------------
+
+----------------------------------------
+INTERVIEW QUESTIONS & ANSWERS
+----------------------------------------
+
+Q1: Difference between os.Open and os.Create?
+A:
+- os.Open → read-only
+- os.Create → creates or truncates file (write mode)
+
+----------------------------------------
+
+Q2: What is io.Reader and io.Writer?
+A:
+- Interfaces for reading and writing data streams
+- Core abstraction in Go I/O
+
+----------------------------------------
+
+Q3: Why use bufio?
+A:
+- Improves performance
+- Reduces system calls
+
+----------------------------------------
+
+Q4: What is defer file.Close()?
+A:
+- Ensures file closes automatically when function exits
+
+----------------------------------------
+
+Q5: What is go:embed used for?
+A:
+- Embeds static files into binary
+- Useful for configs, templates
+
+----------------------------------------
+
+Q6: Difference between json.Marshal and json.Unmarshal?
+A:
+- Marshal → struct → JSON
+- Unmarshal → JSON → struct
+
+----------------------------------------
+
+Q7: When to use slog instead of log?
+A:
+- slog → structured logging (key-value)
+- log → simple logging
+
+----------------------------------------
+
+Q8: How to handle large files?
+A:
+- Use bufio.Scanner or bufio.Reader
+- Avoid loading entire file into memory
+
+----------------------------------------
+
+Q9: What is flag.Parse()?
+A:
+- Parses CLI arguments into variables
+
+----------------------------------------
+
+Q10: Common mistake in file handling?
+A:
+- Not closing file
+- Ignoring errors
+
+----------------------------------------
