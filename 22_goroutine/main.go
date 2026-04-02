@@ -24,13 +24,13 @@ func worker(id int, wg *sync.WaitGroup) {
 
 func main() {
 	fmt.Println("Basic goroutine")
-	
+
 	time.Sleep(1000 * time.Millisecond)
 	go sayHello("Aditya")
-	
+
 	time.Sleep(1000 * time.Millisecond)
 	go sayHello("Go World")
-	
+
 	time.Sleep(1000 * time.Millisecond)
 	fmt.Println("Basic goroutine done")
 
@@ -54,12 +54,14 @@ func main() {
 
 	// Create a goroutine from the lowercase function.
 	go func() {
+		fmt.Println("Waiting anonymous function 1")
 		lowercase()
 		wg.Done()
 	}()
 
 	// Create a goroutine from the uppercase function.
 	go func() {
+		fmt.Println("Waiting anonymous function 2")
 		uppercase()
 		wg.Done()
 	}()
@@ -67,8 +69,8 @@ func main() {
 	// Wait for the goroutines to finish.
 	fmt.Println("Waiting To Finish")
 	wg.Wait()
-
-	fmt.Println("Basic WaitGroup example 3")
+	fmt.Println()
+	fmt.Println("DONE")
 }
 
 // lowercase displays the set of lowercase letters three times.

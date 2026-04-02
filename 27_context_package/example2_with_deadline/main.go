@@ -17,11 +17,15 @@ func fetchData(ctx context.Context) error {
 }
 
 func main() {
+
 	deadline := time.Now().Add(1 * time.Second) // deadline 1s from now
+
 	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+
 	defer cancel()
 
 	err := fetchData(ctx)
+
 	if err != nil {
 		fmt.Println("error:", err) // context deadline exceeded
 	}
