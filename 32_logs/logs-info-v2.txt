@@ -1,0 +1,182 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang LOGGING
+════════════════════════════════════════════════════════════════════════════════════
+⭐ 1. Standard Library Logging (log package)
+────────────────────────────────────────────
+Simple, zero-dependency, perfect for small CLI tools.
+
+```go
+package main
+
+import (
+	"log"
+	"os"
+)
+
+func main() {
+	// Basic logging (goes to stderr by default)
+	log.Println("✅ Application started")
+	log.Printf("Processing file: %s", "data.csv")
+
+	// Custom logger with file output
+	file, _ := os.OpenFile("app.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	defer file.Close()
+
+	logger := log.New(file, "📝 CLI-APP: ", log.Ldate|log.Ltime|log.Lshortfile)
+
+	logger.Println("Custom log message")
+	logger.Printf("User %s logged in", "alice")
+}
+⭐ 2. Zap (Uber) - High Performance Structured Logging
+──────────────────────────────────────────────────────
+Fast, structured, type-safe. Best for production services.
+Installation:
+go get -u go.uber.org/zap
+Gopackage main
+
+import (
+	"go.uber.org/zap"
+	"os"
+)
+
+func main() {
+	// Production logger (JSON)
+	logger, _ := zap.NewProduction()
+	defer logger.Sync()
+
+	logger.Info("🚀 Application started",
+		zap.String("version", "1.2.3"),
+		zap.Int("pid", os.Getpid()),
+		zap.String("env", "production"),
+	)
+
+	// Sugared Logger - easier to use
+	sugar := logger.Sugar()
+	sugar.Infow("✅ User action completed",
+		"user_id", 456,
+		"action", "upload",
+		"size_mb", 12.5,
+	)
+
+	sugar.Infof("Processed %d records in %s", 1500, "245ms")
+
+	// Development logger (human readable)
+	dev, _ := zap.NewDevelopment()
+	defer dev.Sync()
+	dev.Info("🔧 Development mode active")
+}
+⭐ 3. Logrus - Feature Rich Logging
+──────────────────────────────────
+Rich formatters, hooks, and easy levels.
+Installation:
+go get -u github.com/sirupsen/logrus
+Gopackage main
+
+import (
+	"os"
+
+	"github.com/sirupsen/logrus"
+)
+
+func main() {
+	log := logrus.New()
+
+	// CLI friendly setup
+	log.SetOutput(os.Stdout)
+	log.SetFormatter(&logrus.TextFormatter{
+		FullTimestamp: true,
+		ForceColors:   true,
+	})
+	log.SetLevel(logrus.DebugLevel)
+
+	log.WithFields(logrus.Fields{
+		"module":  "cli",
+		"version": "1.0",
+	}).Info("✅ CLI tool started successfully")
+
+	log.Debug("🐛 Debug message")
+	log.Info("ℹ️  Normal information")
+	log.Warn("⚠️  Warning: low memory")
+	log.Error("❌ Failed to connect to database")
+}
+⭐ 4. Zerolog - Fastest Zero-Allocation Logger
+──────────────────────────────────────────────
+Lightning fast, low memory, excellent for CLIs.
+Installation:
+go get -u github.com/rs/zerolog/log
+Gopackage main
+
+import (
+	"os"
+	"time"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+)
+
+func main() {
+	// Beautiful colored console output for CLI (development)
+	output := zerolog.ConsoleWriter{
+		Out:        os.Stdout,
+		NoColor:    false,
+		TimeFormat: time.RFC3339,
+	}
+
+	log.Logger = zerolog.New(output).
+		With().
+		Timestamp().
+		Logger()
+
+	// JSON output for production
+	// log.Logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
+
+	log.Info().Str("app", "my-cli").Msg("🚀 Starting CLI application")
+
+	log.Info().
+		Str("user", "bob").
+		Int("items", 42).
+		Str("status", "success").
+		Msg("✅ Processing completed")
+
+	// Error logging with stack trace support
+	err := someTask()
+	if err != nil {
+		log.Error().Err(err).Msg("❌ Operation failed")
+	}
+}
+
+func someTask() error {
+	return nil
+}
+
+⭐ 6. Best Practices for CLI Logging
+────────────────────────────────────
+• Use stdout for normal output, stderr for logs/errors
+• Support --debug / --verbose flags to control log level
+• Structured logging (JSON) in production
+• Pretty colored output in development
+• Never log sensitive information
+• Always call Sync() before program exit for buffered loggers
+• Use context fields (request_id, user_id, trace_id)
+⭐ 7. Interview Questions & Answers
+────────────────────────────────────
+Q1: Why prefer structured logging over plain text?
+A: Structured logs are machine-readable, easy to query, filter, and analyze in logging systems like ELK, Loki, or Datadog.
+Q2: Which is faster - Zap or Zerolog?
+A: Zerolog is generally the fastest with near zero allocations. Zap is very close and offers more features like sampling.
+Q3: When should you use the standard log package?
+A: For very small CLI tools where you want zero external dependencies and simple logging is enough.
+Q4: What is Zap SugaredLogger?
+A: A wrapper that provides fmt-like methods (Infow, Infof) for better developer experience while still supporting structured logging.
+Q5: How do you change log level dynamically in a CLI tool?
+A: Read from command-line flags (e.g., using flag or cobra) and set logger level accordingly (zerolog.SetGlobalLevel, logrus.SetLevel, etc.).
+Q6: Why is Logrus considered legacy now?
+A: It is in maintenance mode with no active development. Most teams now prefer Zap, Zerolog, or Go's built-in slog.
+Q7: How to make logs pretty locally but JSON in production?
+A: Check environment variable (ENV) and use ConsoleWriter in Zerolog or NewDevelopment() in Zap for local, and JSON for production.
+Q8: What does logger.Sync() do in Zap?
+A: Flushes any buffered log entries to the output. Important to call before exiting to avoid losing logs.
+Q9: How to add common context (like trace_id) to all logs?
+A: Create a child logger with .With() method in Zerolog or Zap.
+Q10: Which logger would you choose for a new high-performance CLI tool in 2026?
+A: Zerolog for maximum speed and low memory, or Zap if the team already uses Uber ecosystem.

@@ -1,0 +1,288 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang LOGGING
+════════════════════════════════════════════════════════════════════════════════════
+
+## 📌 1. WHAT IS CLI LOGGING?
+
+CLI logging means printing logs to terminal (stdout/stderr).
+
+Used for:
+
+* Debugging
+* Monitoring
+* Observability
+* Error tracking
+
+Log Levels:
+
+* DEBUG
+* INFO
+* WARN
+* ERROR
+* FATAL
+
+---
+
+## 📌 2. BASIC LOGGING USING STANDARD LIBRARY (log)
+
+package main
+
+import (
+"log"
+)
+
+func main() {
+log.Println("This is a normal log")
+log.Print("Another log")
+
+```
+log.SetPrefix("APP: ")
+log.Println("With prefix")
+
+log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+log.Println("Detailed log")
+```
+
+}
+
+## Key Functions:
+
+log.Print()     → simple log
+log.Println()   → adds newline
+log.Fatalf()    → logs + exit
+log.Panicf()    → logs + panic
+
+---
+
+## 📌 3. WRITING LOGS TO FILE
+
+package main
+
+import (
+"log"
+"os"
+)
+
+func main() {
+file, err := os.OpenFile(
+"app.log",
+os.O_CREATE|os.O_WRONLY|os.O_APPEND,
+0666,
+)
+if err != nil {
+log.Fatal(err)
+}
+defer file.Close()
+
+```
+log.SetOutput(file)
+log.Println("This goes to file")
+```
+
+}
+
+---
+
+## 📌 4. LOG TO BOTH CONSOLE + FILE
+
+package main
+
+import (
+"io"
+"log"
+"os"
+)
+
+func main() {
+file, err := os.OpenFile(
+"app.log",
+os.O_CREATE|os.O_WRONLY|os.O_APPEND,
+0666,
+)
+if err != nil {
+log.Fatal(err)
+}
+defer file.Close()
+
+```
+mw := io.MultiWriter(os.Stdout, file)
+log.SetOutput(mw)
+
+log.Println("Logs to both console and file")
+```
+
+}
+
+---
+
+## 📌 5. STRUCTURED LOGGING (WHY)
+
+Example:
+{
+"level": "error",
+"user": "aditya",
+"msg": "login failed"
+}
+
+Benefits:
+
+* Machine readable
+* Easy filtering
+* Works with ELK / Loki
+
+---
+
+## 📌 6. ZAP LOGGER
+
+Install:
+go get go.uber.org/zap
+
+package main
+
+import (
+"go.uber.org/zap"
+)
+
+func main() {
+logger, err := zap.NewProduction()
+if err != nil {
+panic(err)
+}
+defer logger.Sync()
+
+```
+logger.Info(
+	"User logged in",
+	zap.String("user", "aditya"),
+	zap.Int("id", 101),
+)
+
+logger.Error(
+	"Something failed",
+	zap.String("error", "db connection"),
+)
+```
+
+}
+
+---
+
+## 📌 7. LOGRUS
+
+Install:
+go get github.com/sirupsen/logrus
+
+package main
+
+import (
+log "github.com/sirupsen/logrus"
+)
+
+func main() {
+log.SetFormatter(&log.JSONFormatter{})
+
+```
+log.WithFields(log.Fields{
+	"user": "aditya",
+	"id":   101,
+}).Info("User logged in")
+
+log.Error("Something failed")
+```
+
+}
+
+---
+
+## 📌 8. ZEROLOG
+
+Install:
+go get github.com/rs/zerolog
+
+package main
+
+import (
+"os"
+
+```
+"github.com/rs/zerolog"
+```
+
+)
+
+func main() {
+logger := zerolog.
+New(os.Stdout).
+With().
+Timestamp().
+Logger()
+
+```
+logger.Info().
+	Str("user", "aditya").
+	Int("id", 101).
+	Msg("User logged in")
+
+logger.Error().
+	Msg("Something failed")
+```
+
+}
+
+---
+
+## 📌 9. BEST PRACTICES
+
+✔ Use structured logging in production
+✔ Avoid sensitive data
+✔ Use log levels properly
+✔ Add request IDs
+✔ Avoid noisy logs
+
+---
+
+## 📌 10. INTERVIEW QUESTIONS
+
+Q1: log.Print vs log.Fatal?
+A:
+
+* Print → logs only
+* Fatal → logs + exit
+
+Q2: Why structured logging?
+A:
+
+* Better debugging
+* Machine readable
+
+Q3: Zap vs Logrus?
+A:
+
+* Zap → faster
+* Logrus → simpler
+
+Q4: Why Zerolog fast?
+A:
+
+* Zero allocation
+* No reflection
+
+---
+
+## 📌 11. QUICK COMPARISON
+
+## Library   | Speed     | Structured | Ease
+
+log       | Medium    | No         | Easy
+zap       | Very Fast | Yes        | Medium
+logrus    | Medium    | Yes        | Easy
+zerolog   | Fastest   | Yes        | Medium
+
+---
+
+## ✅ SUMMARY
+
+* log → simple CLI apps
+* zap / zerolog → production
+* Prefer structured logs
+

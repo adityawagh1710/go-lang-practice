@@ -1,0 +1,1328 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang LOGGING
+════════════════════════════════════════════════════════════════════════════════════
+  TABLE OF CONTENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  [01]  WHY LOGGING MATTERS IN GO
+  [02]  LOG LEVELS OVERVIEW (All Libraries)
+  [03]  STANDARD LIBRARY — log / log/slog
+  [04]  ZAP (Uber) — High Performance
+  [05]  LOGRUS — Structured & Feature-Rich
+  [06]  ZEROLOG — Zero Allocation JSON
+  [07]  LIBRARY COMPARISON TABLE
+  [08]  LOGGING TO FILE
+  [09]  LOG ROTATION PATTERN
+  [10]  CONTEXTUAL LOGGING (request ID, user ID)
+  [11]  JAVA vs GO LOGGING COMPARISON
+  [12]  INTERVIEW QUESTIONS — MEDIOR LEVEL
+  [13]  INTERVIEW QUESTIONS — EXPERIENCED LEVEL
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [01]  WHY LOGGING MATTERS IN GO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  In Go, logging is critical for:
+    - Debugging production issues (no IDE debugger attached)
+    - Observability in microservices / cloud-native apps
+    - Audit trails (who did what, when)
+    - Performance tuning (latency tracing)
+
+  Go logging philosophy:
+    - Structured logging > plain text logs
+    - JSON output is preferred for log aggregators (ELK, Loki, Datadog)
+    - Zero/low allocation is important in high-throughput services
+    - Context propagation (trace ID, user ID) across goroutines
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [02]  LOG LEVELS OVERVIEW
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Standard      Zap             Logrus          Zerolog
+  ─────────     ────────────    ──────────────  ──────────────
+  (none)        Debug           Trace           Trace
+  log.Print*    zap.Debug       logrus.Debug    log.Debug()
+  log.Print*    zap.Info        logrus.Info     log.Info()
+  log.Print*    zap.Warn        logrus.Warn     log.Warn()
+  log.Print*    zap.Error       logrus.Error    log.Error()
+  log.Fatal*    zap.DPanic      logrus.Fatal    log.Fatal()
+  log.Panic*    zap.Panic       logrus.Panic    log.Panic()
+                zap.Fatal
+
+  Note: Standard library has no concept of levels — you simulate them manually.
+        slog (Go 1.21+) adds DEBUG, INFO, WARN, ERROR levels.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [03]  STANDARD LIBRARY — log and log/slog
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─ BASIC log PACKAGE ─────────────────────────────────────────┐
+
+  // FILE: basic_log.go
+  package main
+
+  import (
+      "log"
+      "os"
+  )
+
+  func main() {
+      // Default logger writes to stderr
+      log.Println("Application started")
+      log.Printf("User %s logged in at port %d", "aditya", 8080)
+
+      // Custom logger with prefix and flags
+      infoLogger  := log.New(os.Stdout, "INFO:  ", log.Ldate|log.Ltime|log.Lshortfile)
+      errorLogger := log.New(os.Stderr, "ERROR: ", log.Ldate|log.Ltime|log.Llongfile)
+
+      infoLogger.Println("Server is running")
+      errorLogger.Println("Database connection failed")
+
+      // Fatal calls os.Exit(1) after logging
+      // log.Fatal("unrecoverable error")
+
+      // Panic calls panic() after logging
+      // log.Panic("panic situation")
+  }
+
+  ┌─ log FLAGS REFERENCE ───────────────────────────────────────┐
+
+  // Flags control what metadata is prepended to each log line
+  // Combine with bitwise OR
+
+  log.Ldate         // 2009/11/10
+  log.Ltime         // 01:23:23
+  log.Lmicroseconds // 01:23:23.123123
+  log.Llongfile     // /full/path/to/file.go:23
+  log.Lshortfile    // file.go:23
+  log.LUTC          // use UTC instead of local time
+  log.Lmsgprefix    // move prefix from start to before message
+  log.LstdFlags     // Ldate | Ltime  (default)
+
+  ┌─ slog PACKAGE (Go 1.21+) ───────────────────────────────────┐
+
+  // FILE: slog_example.go
+  package main
+
+  import (
+      "context"
+      "log/slog"
+      "os"
+  )
+
+  func main() {
+      // --- Text Handler (human readable) ---
+      textHandler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+          Level: slog.LevelDebug,
+      })
+      textLogger := slog.New(textHandler)
+
+      textLogger.Info("user logged in", "user", "aditya", "role", "admin")
+      textLogger.Debug("query executed", "sql", "SELECT * FROM users", "rows", 42)
+      textLogger.Warn("high memory usage", "percent", 85.5)
+
+      // --- JSON Handler (for production / log shippers) ---
+      jsonHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+          Level: slog.LevelInfo,
+          // Add source file information
+          AddSource: true,
+      })
+      jsonLogger := slog.New(jsonHandler)
+
+      jsonLogger.Info("order placed", "orderID", 1001, "amount", 299.99)
+      jsonLogger.Error("payment failed", "orderID", 1001, "reason", "insufficient funds")
+
+      // --- Default global logger ---
+      slog.SetDefault(jsonLogger)
+      slog.Info("this uses the global logger", "env", "production")
+
+      // --- With context ---
+      ctx := context.WithValue(context.Background(), "requestID", "req-abc-123")
+      textLogger.InfoContext(ctx, "handling request", "path", "/api/orders")
+
+      // --- Grouped attributes ---
+      jsonLogger.Info("server config",
+          slog.Group("server",
+              slog.String("host", "localhost"),
+              slog.Int("port", 8080),
+          ),
+          slog.Group("db",
+              slog.String("host", "db.internal"),
+              slog.Int("maxConns", 50),
+          ),
+      )
+  }
+
+  // Output (JSON handler):
+  // {"time":"2024-01-15T10:30:00Z","level":"INFO","msg":"order placed","orderID":1001,"amount":299.99}
+  // {"time":"2024-01-15T10:30:00Z","level":"ERROR","msg":"payment failed","orderID":1001,"reason":"insufficient funds"}
+
+  ┌─ slog CUSTOM HANDLER ───────────────────────────────────────┐
+
+  // FILE: slog_custom_handler.go
+  package main
+
+  import (
+      "context"
+      "log/slog"
+      "os"
+  )
+
+  // CustomHandler wraps an existing handler to add default fields
+  type CustomHandler struct {
+      slog.Handler
+      defaultAttrs []slog.Attr
+  }
+
+  func (h *CustomHandler) Handle(ctx context.Context, r slog.Record) error {
+      for _, attr := range h.defaultAttrs {
+          r.AddAttrs(attr)
+      }
+      return h.Handler.Handle(ctx, r)
+  }
+
+  func main() {
+      base := slog.NewJSONHandler(os.Stdout, nil)
+      handler := &CustomHandler{
+          Handler: base,
+          defaultAttrs: []slog.Attr{
+              slog.String("service", "order-service"),
+              slog.String("version", "1.0.0"),
+          },
+      }
+
+      logger := slog.New(handler)
+      logger.Info("startup complete")
+      // Output includes: "service":"order-service","version":"1.0.0" on every line
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [04]  ZAP — Uber's High Performance Logger
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Install: go get go.uber.org/zap
+
+  Two logger types:
+    zap.Logger      — fully typed fields, zero allocation, production use
+    zap.SugaredLogger — printf-style, slightly slower, dev convenience
+
+  ┌─ ZAP BASIC SETUP ───────────────────────────────────────────┐
+
+  // FILE: zap_basic.go
+  package main
+
+  import (
+      "go.uber.org/zap"
+      "time"
+  )
+
+  func main() {
+      // --- Production Logger (JSON, Error level and above) ---
+      prodLogger, _ := zap.NewProduction()
+      defer prodLogger.Sync() // flushes buffer, important before exit
+
+      prodLogger.Info("production log",
+          zap.String("user", "aditya"),
+          zap.Int("orderID", 1042),
+          zap.Duration("latency", 23*time.Millisecond),
+      )
+
+      prodLogger.Error("payment failed",
+          zap.String("reason", "card declined"),
+          zap.Int("code", 402),
+      )
+
+      // --- Development Logger (colored console, Debug and above) ---
+      devLogger, _ := zap.NewDevelopment()
+      defer devLogger.Sync()
+
+      devLogger.Debug("debugging query", zap.String("sql", "SELECT * FROM orders"))
+      devLogger.Warn("deprecated endpoint called", zap.String("path", "/v1/orders"))
+
+      // --- Sugared Logger (convenience, slightly slower) ---
+      sugar := prodLogger.Sugar()
+      sugar.Infof("user %s logged in from %s", "aditya", "192.168.1.1")
+      sugar.Debugw("structured sugar log",
+          "key1", "value1",
+          "count", 42,
+      )
+  }
+
+  ┌─ ZAP CUSTOM CONFIG ─────────────────────────────────────────┐
+
+  // FILE: zap_custom.go
+  package main
+
+  import (
+      "go.uber.org/zap"
+      "go.uber.org/zap/zapcore"
+      "os"
+      "time"
+  )
+
+  func buildZapLogger() *zap.Logger {
+      // Encoder config — controls JSON field names and time format
+      encoderCfg := zapcore.EncoderConfig{
+          TimeKey:        "timestamp",
+          LevelKey:       "level",
+          NameKey:        "logger",
+          CallerKey:      "caller",
+          MessageKey:     "message",
+          StacktraceKey:  "stacktrace",
+          LineEnding:     zapcore.DefaultLineEnding,
+          EncodeLevel:    zapcore.LowercaseLevelEncoder,
+          EncodeTime:     zapcore.ISO8601TimeEncoder,
+          EncodeDuration: zapcore.MillisDurationEncoder,
+          EncodeCaller:   zapcore.ShortCallerEncoder,
+      }
+
+      // Output: stdout for info+, stderr for error+
+      infoWriter  := zapcore.AddSync(os.Stdout)
+      errorWriter := zapcore.AddSync(os.Stderr)
+
+      // Level enablers
+      infoLevel  := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+          return lvl >= zapcore.InfoLevel && lvl < zapcore.ErrorLevel
+      })
+      errorLevel := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+          return lvl >= zapcore.ErrorLevel
+      })
+
+      // Tee core — write to multiple outputs
+      core := zapcore.NewTee(
+          zapcore.NewCore(zapcore.NewJSONEncoder(encoderCfg), infoWriter, infoLevel),
+          zapcore.NewCore(zapcore.NewJSONEncoder(encoderCfg), errorWriter, errorLevel),
+      )
+
+      return zap.New(core,
+          zap.AddCaller(),           // adds file:line to every log
+          zap.AddStacktrace(zapcore.ErrorLevel), // stack trace on errors
+      )
+  }
+
+  func main() {
+      logger := buildZapLogger()
+      defer logger.Sync()
+
+      logger.Info("custom zap logger initialized",
+          zap.String("env", "production"),
+          zap.Int("pid", os.Getpid()),
+      )
+
+      logger.Error("database query failed",
+          zap.String("query", "INSERT INTO orders"),
+          zap.Error(fmt.Errorf("duplicate key violation")),
+          zap.Duration("elapsed", 5*time.Second),
+      )
+  }
+
+  ┌─ ZAP CHILD LOGGER (with fields) ───────────────────────────┐
+
+  // FILE: zap_child.go
+  package main
+
+  import "go.uber.org/zap"
+
+  func processOrder(logger *zap.Logger, orderID int) {
+      // Child logger inherits parent fields + adds its own
+      orderLog := logger.With(
+          zap.String("component", "order-processor"),
+          zap.Int("orderID", orderID),
+      )
+
+      orderLog.Info("processing started")
+      orderLog.Info("payment verified")
+      orderLog.Info("order dispatched")
+      // All 3 lines will include component + orderID automatically
+  }
+
+  func main() {
+      logger, _ := zap.NewProduction()
+      defer logger.Sync()
+
+      // Add service-level fields
+      serviceLogger := logger.With(
+          zap.String("service", "order-service"),
+          zap.String("version", "2.1.0"),
+      )
+
+      processOrder(serviceLogger, 9001)
+      processOrder(serviceLogger, 9002)
+  }
+
+  ┌─ ZAP NAMED LOGGER ──────────────────────────────────────────┐
+
+  // Named loggers help identify subsystems in logs
+  logger, _ := zap.NewProduction()
+  dbLogger      := logger.Named("database")
+  httpLogger    := logger.Named("http")
+  cacheLogger   := logger.Named("redis-cache")
+
+  dbLogger.Info("connection pool created", zap.Int("size", 10))
+  // Output: {..., "logger": "database", "msg": "connection pool created", "size": 10}
+
+  httpLogger.Info("server started", zap.String("addr", ":8080"))
+  // Output: {..., "logger": "http", "msg": "server started", "addr": ":8080"}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [05]  LOGRUS — Structured & Feature-Rich
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Install: go get github.com/sirupsen/logrus
+
+  Note: Logrus is in maintenance mode. For new projects prefer zap or zerolog.
+        Still very widely used — important to know.
+
+  ┌─ LOGRUS BASIC USAGE ────────────────────────────────────────┐
+
+  // FILE: logrus_basic.go
+  package main
+
+  import (
+      "os"
+      log "github.com/sirupsen/logrus"
+  )
+
+  func main() {
+      // --- Global logger config ---
+      log.SetOutput(os.Stdout)
+      log.SetLevel(log.DebugLevel)
+      log.SetFormatter(&log.JSONFormatter{
+          TimestampFormat: "2006-01-02T15:04:05Z07:00",
+          PrettyPrint:     false,
+      })
+
+      // Basic log calls
+      log.Debug("debug message")
+      log.Info("application started")
+      log.Warn("memory usage high")
+      log.Error("failed to connect to DB")
+
+      // Structured fields with WithFields
+      log.WithFields(log.Fields{
+          "user":    "aditya",
+          "action":  "login",
+          "ip":      "10.0.0.1",
+      }).Info("user authenticated")
+
+      // One-liner with single field
+      log.WithField("orderID", 1099).Info("order created")
+
+      // Error with field
+      log.WithError(fmt.Errorf("connection timeout")).
+          WithField("host", "db.internal").
+          Error("database unreachable")
+  }
+
+  ┌─ LOGRUS INSTANCE LOGGER ────────────────────────────────────┐
+
+  // FILE: logrus_instance.go
+  package main
+
+  import (
+      "os"
+      "github.com/sirupsen/logrus"
+  )
+
+  func newLogger(service string) *logrus.Logger {
+      logger := logrus.New()
+      logger.SetOutput(os.Stdout)
+      logger.SetLevel(logrus.InfoLevel)
+      logger.SetFormatter(&logrus.JSONFormatter{})
+
+      // Set a default field on all entries from this logger
+      // (uses SetReportCaller to add file/line info)
+      logger.SetReportCaller(true)
+
+      return logger
+  }
+
+  func main() {
+      logger := newLogger("payment-service")
+
+      entry := logger.WithFields(logrus.Fields{
+          "service": "payment-service",
+          "env":     "prod",
+      })
+
+      entry.Info("payment processor started")
+      entry.WithField("txnID", "txn-001").Info("transaction initiated")
+      entry.WithField("txnID", "txn-001").Error("transaction failed: timeout")
+  }
+
+  ┌─ LOGRUS TEXT FORMATTER ─────────────────────────────────────┐
+
+  // FILE: logrus_text.go
+  package main
+
+  import (
+      "os"
+      "github.com/sirupsen/logrus"
+  )
+
+  func main() {
+      log := logrus.New()
+      log.SetOutput(os.Stdout)
+      log.SetLevel(logrus.DebugLevel)
+
+      // Text formatter — good for development / CLI tools
+      log.SetFormatter(&logrus.TextFormatter{
+          FullTimestamp:   true,
+          TimestampFormat: "2006-01-02 15:04:05",
+          ForceColors:     true, // colored output in terminal
+      })
+
+      log.Debug("debug: checking values")
+      log.Info("server listening on :8080")
+      log.Warn("response time exceeded 500ms")
+      log.Error("unhandled exception in handler")
+  }
+
+  ┌─ LOGRUS HOOKS (write to file + stdout) ─────────────────────┐
+
+  // FILE: logrus_hook.go
+  package main
+
+  import (
+      "os"
+      "github.com/sirupsen/logrus"
+  )
+
+  // FileHook writes specific log levels to a file
+  type FileHook struct {
+      file      *os.File
+      formatter logrus.Formatter
+      levels    []logrus.Level
+  }
+
+  func NewFileHook(filename string, levels []logrus.Level) (*FileHook, error) {
+      file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+      if err != nil {
+          return nil, err
+      }
+      return &FileHook{
+          file:      file,
+          formatter: &logrus.JSONFormatter{},
+          levels:    levels,
+      }, nil
+  }
+
+  func (h *FileHook) Levels() []logrus.Level {
+      return h.levels
+  }
+
+  func (h *FileHook) Fire(entry *logrus.Entry) error {
+      line, err := h.formatter.Format(entry)
+      if err != nil {
+          return err
+      }
+      _, err = h.file.Write(line)
+      return err
+  }
+
+  func main() {
+      logger := logrus.New()
+      logger.SetLevel(logrus.DebugLevel)
+      logger.SetOutput(os.Stdout)
+      logger.SetFormatter(&logrus.TextFormatter{ForceColors: true})
+
+      // Write ERROR and above to error.log
+      hook, err := NewFileHook("error.log", []logrus.Level{
+          logrus.ErrorLevel,
+          logrus.FatalLevel,
+          logrus.PanicLevel,
+      })
+      if err == nil {
+          logger.AddHook(hook)
+      }
+
+      logger.Info("this goes to stdout only")
+      logger.Error("this goes to stdout AND error.log")
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [06]  ZEROLOG — Zero Allocation JSON Logger
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Install: go get github.com/rs/zerolog
+
+  Key feature: Uses method chaining to build log events.
+               Allocates NOTHING if log level is disabled.
+               Fastest JSON logger in Go benchmarks.
+
+  ┌─ ZEROLOG BASIC USAGE ───────────────────────────────────────┐
+
+  // FILE: zerolog_basic.go
+  package main
+
+  import (
+      "os"
+      "time"
+      "github.com/rs/zerolog"
+      "github.com/rs/zerolog/log"
+  )
+
+  func main() {
+      // Set global log level
+      zerolog.SetGlobalLevel(zerolog.DebugLevel)
+
+      // Default global logger (uses os.Stderr)
+      log.Debug().Str("component", "startup").Msg("initializing")
+      log.Info().Str("version", "1.0.0").Int("port", 8080).Msg("server started")
+      log.Warn().Str("endpoint", "/v1/old").Msg("deprecated endpoint hit")
+      log.Error().Err(fmt.Errorf("timeout")).Str("host", "db.prod").Msg("DB unreachable")
+
+      // Timestamp format
+      zerolog.TimeFieldFormat = time.RFC3339
+
+      // --- Custom logger writing to stdout ---
+      logger := zerolog.New(os.Stdout).
+          With().
+          Timestamp().
+          Str("service", "order-service").
+          Logger()
+
+      logger.Info().
+          Str("user", "aditya").
+          Int("orderID", 2001).
+          Float64("amount", 499.99).
+          Msg("order placed")
+
+      // No message — just fields
+      logger.Info().
+          Str("event", "heartbeat").
+          Dur("uptime", 3*time.Hour+14*time.Minute).
+          Send() // Send() instead of Msg()
+  }
+
+  ┌─ ZEROLOG PRETTY PRINT (development) ───────────────────────┐
+
+  // FILE: zerolog_pretty.go
+  package main
+
+  import (
+      "os"
+      "github.com/rs/zerolog"
+      "github.com/rs/zerolog/log"
+  )
+
+  func main() {
+      // Pretty console output for development
+      output := zerolog.ConsoleWriter{
+          Out:        os.Stdout,
+          TimeFormat: "15:04:05",
+          NoColor:    false,
+      }
+
+      log.Logger = zerolog.New(output).
+          With().
+          Timestamp().
+          Caller(). // adds file:line
+          Logger()
+
+      log.Info().Str("user", "aditya").Msg("logged in")
+      log.Warn().Int("goroutines", 512).Msg("high goroutine count")
+      log.Error().Err(fmt.Errorf("nil pointer")).Msg("panic recovered")
+  }
+
+  // Output looks like:
+  // 10:23:45 INF logged in user=aditya
+  // 10:23:45 WRN high goroutine count goroutines=512
+
+  ┌─ ZEROLOG CHILD LOGGER WITH CONTEXT ────────────────────────┐
+
+  // FILE: zerolog_child.go
+  package main
+
+  import (
+      "os"
+      "github.com/rs/zerolog"
+  )
+
+  func handleRequest(logger zerolog.Logger, requestID string, userID int) {
+      // Child logger — carries requestID + userID in every log
+      reqLogger := logger.With().
+          Str("requestID", requestID).
+          Int("userID", userID).
+          Logger()
+
+      reqLogger.Info().Msg("request received")
+      reqLogger.Info().Str("step", "auth").Msg("user verified")
+      reqLogger.Info().Str("step", "fetch").Int("rows", 25).Msg("data fetched")
+      reqLogger.Info().Msg("response sent")
+  }
+
+  func main() {
+      baseLogger := zerolog.New(os.Stdout).
+          With().
+          Timestamp().
+          Str("service", "api-gateway").
+          Logger()
+
+      handleRequest(baseLogger, "req-abc-001", 42)
+      handleRequest(baseLogger, "req-xyz-002", 99)
+  }
+
+  ┌─ ZEROLOG LEVEL SAMPLING ────────────────────────────────────┐
+
+  // FILE: zerolog_sampling.go
+  // Sampling: only log N out of every M debug events (reduce noise in prod)
+  package main
+
+  import (
+      "os"
+      "github.com/rs/zerolog"
+  )
+
+  func main() {
+      sampler := zerolog.LevelSampler{
+          DebugSampler: &zerolog.BurstSampler{
+              Burst:       5,   // first 5 debug logs per period
+              Period:      1e9, // 1 second (in nanoseconds)
+              NextSampler: &zerolog.BasicSampler{N: 100}, // then 1 in 100
+          },
+      }
+
+      logger := zerolog.New(os.Stdout).With().Timestamp().Logger().
+          Sample(sampler)
+
+      for i := 0; i < 1000; i++ {
+          logger.Debug().Int("iteration", i).Msg("loop tick")
+      }
+      // Only ~5 + (995/100) ≈ 15 debug lines logged instead of 1000
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [07]  LIBRARY COMPARISON TABLE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Feature            log (stdlib)    slog (1.21+)    Zap         Logrus      Zerolog
+  ─────────────────  ─────────────   ─────────────   ──────────  ──────────  ──────────
+  Structured fields  No              Yes             Yes         Yes         Yes
+  JSON output        No              Yes             Yes         Yes         Yes
+  Log levels         No              Yes             Yes         Yes         Yes
+  Performance        Medium          Good            Excellent   Fair        Excellent
+  Zero alloc         No              Partial         Yes         No          Yes
+  Method chaining    No              No              No          Partial     Yes
+  Hooks/plugins      No              Custom Handler  Core        Yes         Hooks
+  Caller info        Flags only      AddSource       AddCaller   SetReportCaller Caller()
+  Context support    No              Yes             No (manual) No (manual) With ctx
+  Maintenance        Active          Active          Active      Maintenance Active
+  Best for           Simple scripts  New projects    High perf   Legacy apps Ultra perf
+
+  PERFORMANCE ORDER (fastest → slowest):
+    Zerolog ≈ Zap >> slog > Logrus >> stdlib log
+
+  RECOMMENDATION:
+    New microservice?      → zerolog or zap
+    Needs stdlib compat?   → slog (Go 1.21+)
+    Existing codebase?     → logrus (if already using it)
+    Quick script/CLI?      → stdlib log
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [08]  LOGGING TO FILE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─ LOG TO FILE WITH STDLIB ───────────────────────────────────┐
+
+  // FILE: log_to_file.go
+  package main
+
+  import (
+      "log"
+      "os"
+  )
+
+  func main() {
+      // Open or create a log file (append mode)
+      file, err := os.OpenFile("app.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+      if err != nil {
+          log.Fatal("failed to open log file:", err)
+      }
+      defer file.Close()
+
+      logger := log.New(file, "APP: ", log.LstdFlags|log.Lshortfile)
+      logger.Println("application started")
+      logger.Printf("listening on port %d", 8080)
+  }
+
+  ┌─ LOG TO FILE AND CONSOLE (Multi-writer) ────────────────────┐
+
+  // FILE: log_multi_writer.go
+  package main
+
+  import (
+      "io"
+      "log"
+      "os"
+  )
+
+  func main() {
+      file, err := os.OpenFile("app.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+      if err != nil {
+          log.Fatal(err)
+      }
+      defer file.Close()
+
+      // Write to BOTH stdout and file simultaneously
+      multiWriter := io.MultiWriter(os.Stdout, file)
+      logger := log.New(multiWriter, "", log.LstdFlags|log.Lshortfile)
+
+      logger.Println("this appears in console AND app.log")
+      logger.Printf("user %s created order #%d", "aditya", 3001)
+  }
+
+  ┌─ ZAP LOG TO FILE ───────────────────────────────────────────┐
+
+  // FILE: zap_file_logger.go
+  package main
+
+  import (
+      "go.uber.org/zap"
+      "go.uber.org/zap/zapcore"
+      "os"
+  )
+
+  func newZapFileLogger(filename string) (*zap.Logger, error) {
+      file, err := os.OpenFile(filename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+      if err != nil {
+          return nil, err
+      }
+
+      encoderCfg := zap.NewProductionEncoderConfig()
+      encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
+
+      fileCore := zapcore.NewCore(
+          zapcore.NewJSONEncoder(encoderCfg),
+          zapcore.AddSync(file),
+          zapcore.InfoLevel,
+      )
+
+      consoleCore := zapcore.NewCore(
+          zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig()),
+          zapcore.AddSync(os.Stdout),
+          zapcore.DebugLevel,
+      )
+
+      // Tee: write to both file and console
+      core := zapcore.NewTee(fileCore, consoleCore)
+      return zap.New(core, zap.AddCaller()), nil
+  }
+
+  func main() {
+      logger, err := newZapFileLogger("service.log")
+      if err != nil {
+          panic(err)
+      }
+      defer logger.Sync()
+
+      logger.Info("zap writing to file + console")
+      logger.Error("error example", zap.String("component", "db"))
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [09]  LOG ROTATION PATTERN (with lumberjack)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Install: go get gopkg.in/natefinish/lumberjack.v2
+
+  ┌─ LOG ROTATION WITH ZAP + LUMBERJACK ───────────────────────┐
+
+  // FILE: log_rotation.go
+  package main
+
+  import (
+      "go.uber.org/zap"
+      "go.uber.org/zap/zapcore"
+      "gopkg.in/natefinish/lumberjack.v2"
+  )
+
+  func newRotatingLogger() *zap.Logger {
+      // lumberjack handles rotation automatically
+      rotatingFile := &lumberjack.Logger{
+          Filename:   "logs/service.log",
+          MaxSize:    100,   // MB before rotation
+          MaxBackups: 5,     // keep last 5 compressed backups
+          MaxAge:     30,    // days to retain old files
+          Compress:   true,  // gzip old logs
+      }
+
+      encoderCfg := zap.NewProductionEncoderConfig()
+      encoderCfg.EncodeTime = zapcore.ISO8601TimeEncoder
+
+      core := zapcore.NewCore(
+          zapcore.NewJSONEncoder(encoderCfg),
+          zapcore.AddSync(rotatingFile),
+          zapcore.InfoLevel,
+      )
+
+      return zap.New(core, zap.AddCaller(), zap.AddStacktrace(zapcore.ErrorLevel))
+  }
+
+  func main() {
+      logger := newRotatingLogger()
+      defer logger.Sync()
+
+      logger.Info("rotating log example",
+          zap.String("env", "production"),
+      )
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [10]  CONTEXTUAL LOGGING (request ID, trace ID, user ID)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  ┌─ CONTEXT LOGGING WITH ZAP ──────────────────────────────────┐
+
+  // FILE: context_logging_zap.go
+  package main
+
+  import (
+      "context"
+      "go.uber.org/zap"
+      "net/http"
+  )
+
+  type contextKey string
+
+  const (
+      requestIDKey contextKey = "requestID"
+      userIDKey    contextKey = "userID"
+  )
+
+  // fromContext extracts a logger enriched with context values
+  func fromContext(ctx context.Context, base *zap.Logger) *zap.Logger {
+      fields := []zap.Field{}
+
+      if reqID, ok := ctx.Value(requestIDKey).(string); ok {
+          fields = append(fields, zap.String("requestID", reqID))
+      }
+      if userID, ok := ctx.Value(userIDKey).(int); ok {
+          fields = append(fields, zap.Int("userID", userID))
+      }
+
+      return base.With(fields...)
+  }
+
+  func orderHandler(w http.ResponseWriter, r *http.Request, base *zap.Logger) {
+      ctx := context.WithValue(r.Context(), requestIDKey, "req-abc-999")
+      ctx  = context.WithValue(ctx, userIDKey, 42)
+
+      logger := fromContext(ctx, base)
+      logger.Info("order request received")
+
+      // Every log in this handler carries requestID + userID
+      logger.Info("validating order payload")
+      logger.Info("order saved to database", zap.Int("orderID", 5050))
+  }
+
+  func main() {
+      logger, _ := zap.NewProduction()
+      defer logger.Sync()
+
+      http.HandleFunc("/order", func(w http.ResponseWriter, r *http.Request) {
+          orderHandler(w, r, logger)
+      })
+      http.ListenAndServe(":8080", nil)
+  }
+
+  ┌─ CONTEXT LOGGING WITH ZEROLOG ──────────────────────────────┐
+
+  // FILE: context_logging_zerolog.go
+  package main
+
+  import (
+      "context"
+      "os"
+      "github.com/rs/zerolog"
+      "github.com/rs/zerolog/log"
+  )
+
+  func main() {
+      // zerolog has built-in context support
+      logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+
+      // Store logger in context
+      ctx := logger.WithContext(context.Background())
+
+      // Add fields to a context-bound logger
+      ctx = zerolog.Ctx(ctx).With().
+          Str("requestID", "req-xyz-001").
+          Int("userID", 77).
+          Logger().
+          WithContext(ctx)
+
+      // Retrieve and use from context
+      zerolog.Ctx(ctx).Info().Msg("processing payment")
+      zerolog.Ctx(ctx).Info().Str("step", "deduct").Float64("amount", 199.99).Msg("balance updated")
+
+      // Global log.Ctx shorthand
+      log.Ctx(ctx).Warn().Msg("rate limit approaching")
+  }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [11]  JAVA vs GO LOGGING COMPARISON
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Concept              Java                       Go Equivalent
+  ─────────────────    ──────────────────────     ─────────────────────────────
+  Basic logging        System.out.println         log.Println (stdlib)
+  Structured logging   SLF4J + Logback/Log4j2     zap / zerolog / slog
+  Log levels           Logger.info/warn/error      logger.Info/Warn/Error
+  MDC (context)        MDC.put("reqId", ...)      logger.With(fields...) or ctx
+  Log to file          FileAppender in config      os.OpenFile + logger setup
+  Log rotation         RollingFileAppender         lumberjack library
+  JSON format          LogstashEncoder             Built-in (zap/zerolog/slog)
+  Logger factory       LoggerFactory.getLogger()  zap.NewProduction() / New()
+  Child logger         logger.atInfo().log()       logger.With() / logger.Named()
+  Global logger        LoggerFactory               log.Logger (zerolog global)
+  Hooks / Appenders    Appenders in XML config     Logrus Hooks / Zap Cores
+  Caller info          %C %M in pattern           AddCaller() / Caller()
+  Lazy evaluation      logger.isDebugEnabled()     zerolog zero alloc (automatic)
+
+  KEY DIFFERENCE:
+    Java:  Configuration is often in XML/YAML files (logback.xml, log4j2.xml)
+    Go:    Configuration is in code — loggers are built programmatically.
+
+    Java:  MDC for per-thread context (thread-local storage)
+    Go:    context.Context passed explicitly through function calls.
+
+    Java:  Logger hierarchy (com.company.service inherits com.company)
+    Go:    No automatic hierarchy — use Named() loggers or pass instances.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [12]  INTERVIEW QUESTIONS — MEDIOR LEVEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════╗
+║  Q1: What is the difference between log.Fatal and           ║
+║      log.Panic in Go?                                        ║
+╠══════════════════════════════════════════════════════════════╣
+║  A:  log.Fatal  → logs the message, then calls os.Exit(1)   ║
+║                   Deferred functions DO NOT run.             ║
+║      log.Panic  → logs the message, then calls panic()      ║
+║                   Deferred functions DO run.                 ║
+║                   Can be recovered with recover().           ║
+║                                                              ║
+║  Use Fatal for unrecoverable startup errors.                 ║
+║  Use Panic when you want defers to clean up before exit.     ║
+╚══════════════════════════════════════════════════════════════╝
+
+╔══════════════════════════════════════════════════════════════╗
+║  Q2: What is structured logging and why is it preferred      ║
+║      over plain text logging?                                ║
+╠══════════════════════════════════════════════════════════════╣
+║  A:  Structured logging emits key-value pairs (usually JSON) ║
+║      instead of freeform text.                               ║
+║                                                              ║
+║  Plain text:  "User aditya logged in from 10.0.0.1"         ║
+║  Structured:  {"user":"aditya","ip":"10.0.0.1","event":"login"}
+║                                                              ║
+║  Benefits:                                                   ║
+║  - Machine-parseable by log aggregators (ELK, Grafana Loki)  ║
+║  - Easy to filter/query: WHERE user="aditya"                 ║
+║  - Consistent schema across services                         ║
+║  - No regex needed to extract values                         ║
+╚══════════════════════════════════════════════════════════════╝
+
+╔══════════════════════════════════════════════════════════════╗
+║  Q3: How do you write logs to both a file and console?       ║
+╠══════════════════════════════════════════════════════════════╣
+║  A:  Use io.MultiWriter (stdlib) or zapcore.NewTee (zap).    ║
+║                                                              ║
+║  // stdlib approach                                          ║
+║  file, _ := os.OpenFile("app.log", os.O_APPEND|..., 0666)   ║
+║  multi := io.MultiWriter(os.Stdout, file)                    ║
+║  logger := log.New(multi, "", log.LstdFlags)                 ║
+║                                                              ║
+║  // zap approach                                             ║
+║  core := zapcore.NewTee(fileCore, consoleCore)               ║
+║  logger := zap.New(core)                                     ║
+╚══════════════════════════════════════════════════════════════╝
+
+╔══════════════════════════════════════════════════════════════╗
+║  Q4: What is the difference between zap.Logger and          ║
+║      zap.SugaredLogger?                                      ║
+╠══════════════════════════════════════════════════════════════╣
+║  A:  zap.Logger:                                             ║
+║      - Strictly typed fields: zap.String(), zap.Int()        ║
+║      - Zero allocation — fastest possible                    ║
+║      - Best for hot paths and production                     ║
+║                                                              ║
+║  zap.SugaredLogger:                                          ║
+║      - Printf-style: Infof("user %s", name)                 ║
+║      - Loosely typed: Infow("msg", "key", value)            ║
+║      - ~10x slower than Logger (still fast)                  ║
+║      - Better ergonomics for dev convenience                 ║
+║                                                              ║
+║  Rule of thumb: Logger in libraries/hot paths, Sugar in app  ║
+╚══════════════════════════════════════════════════════════════╝
+
+╔══════════════════════════════════════════════════════════════╗
+║  Q5: How would you add fields to every log line without      ║
+║      repeating yourself?                                     ║
+╠══════════════════════════════════════════════════════════════╣
+║  A:  Use a child logger created with .With() or .Named().    ║
+║                                                              ║
+║  // zap                                                      ║
+║  child := logger.With(                                       ║
+║      zap.String("service", "payment"),                       ║
+║      zap.String("version", "2.0"),                           ║
+║  )                                                           ║
+║  child.Info("every log carries service+version now")         ║
+║                                                              ║
+║  // zerolog                                                  ║
+║  child := logger.With().                                     ║
+║      Str("service", "payment").                              ║
+║      Logger()                                                ║
+╚══════════════════════════════════════════════════════════════╝
+
+╔══════════════════════════════════════════════════════════════╗
+║  Q6: What does log.SetFlags() control?                       ║
+╠══════════════════════════════════════════════════════════════╣
+║  A:  It controls metadata prepended to each log message.     ║
+║                                                              ║
+║  log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)        ║
+║  // Output: 2024/01/15 10:30:00 main.go:42: message          ║
+║                                                              ║
+║  log.SetFlags(0) // no prefix at all                         ║
+║  // Output: message                                          ║
+║                                                              ║
+║  Available flags: Ldate, Ltime, Lmicroseconds,               ║
+║  Llongfile, Lshortfile, LUTC, Lmsgprefix, LstdFlags          ║
+╚══════════════════════════════════════════════════════════════╝
+
+╔══════════════════════════════════════════════════════════════╗
+║  Q7: When would you use slog over zap or zerolog?            ║
+╠══════════════════════════════════════════════════════════════╣
+║  A:  slog (Go 1.21+) is the standard library structured      ║
+║      logger. Use it when:                                     ║
+║      - You want no external dependencies                     ║
+║      - Writing a library (avoids forcing a dep on users)     ║
+║      - You need stdlib-compatible structured logging          ║
+║      - Your app isn't extremely high throughput              ║
+║                                                              ║
+║      Use zap/zerolog when:                                   ║
+║      - Maximum performance is critical                       ║
+║      - You need features like sampling, named loggers,       ║
+║        hooks, or Tee output out of the box                   ║
+╚══════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [13]  INTERVIEW QUESTIONS — EXPERIENCED LEVEL
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+╔══════════════════════════════════════════════════════════════╗
+║  Q1: How does zerolog achieve zero memory allocation?        ║
+╠══════════════════════════════════════════════════════════════╣
+║  A:  Zerolog uses method chaining to build a log event       ║
+║      directly into a reusable buffer. Key mechanisms:        ║
+║                                                              ║
+║  1. Event pooling: zerolog.Event objects are taken from a    ║
+║     sync.Pool, avoiding heap allocation per log call.        ║
+║                                                              ║
+║  2. Direct buffer writes: each .Str(), .Int() call writes    ║
+║     directly to a []byte buffer — no intermediate structs.  ║
+║                                                              ║
+║  3. Level-gating: if the log level is disabled,              ║
+║     .Debug() returns a no-op Event immediately —             ║
+║     .Str()/.Int() calls are never executed.                  ║
+║                                                              ║
+║  4. No reflection: unlike logrus, zerolog uses typed methods ║
+║     (Str, Int, Float64) — no interface{} boxing.            ║
+║                                                              ║
+║  Result: disabled levels cost 0 allocations, 0 bytes.        ║
+╚══════════════════════════════════════════════════════════════╝
+
+╔══════════════════════════════════════════════════════════════╗
+║  Q2: How would you propagate a request ID through all log    ║
+║      calls in a Go HTTP service?                             ║
+╠══════════════════════════════════════════════════════════════╣
+║  A:  There are two idiomatic approaches in Go:               ║
+║                                                              ║
+║  Approach 1 — Logger in context (zerolog pattern):           ║
+║  - In middleware, attach a child logger to the context:      ║
+║    ctx = logger.With().Str("reqID", id).Logger().            ║
+║            WithContext(r.Context())                          ║
+║  - Handlers call: zerolog.Ctx(ctx).Info().Msg("...")         ║
+║                                                              ║
+║  Approach 2 — Logger passed via context value (zap):         ║
+║  - Middleware puts enriched *zap.Logger in context:          ║
+║    ctx = context.WithValue(ctx, loggerKey, reqLogger)        ║
+║  - Helpers extract it: fromContext(ctx, base)                ║
+║                                                              ║
+║  Avoid global mutable state — it breaks in concurrent reqs.  ║
+╚══════════════════════════════════════════════════════════════╝
+
+╔══════════════════════════════════════════════════════════════╗
+║  Q3: What is zapcore.NewTee and when would you use it?       ║
+╠══════════════════════════════════════════════════════════════╣
+║  A:  zapcore.NewTee creates a composite Core that fans out   ║
+║      log entries to multiple Cores simultaneously.           ║
+║                                                              ║
+║  Use cases:                                                  ║
+║  - Write INFO+ to stdout AND ERROR+ to a separate file       ║
+║  - Write JSON to a file for log shippers (Fluentd)           ║
+║    AND human-readable text to stdout for local debugging     ║
+║  - Send WARN+ to an alerting system (Sentry, PagerDuty)      ║
+║                                                              ║
+║  core := zapcore.NewTee(                                     ║
+║      zapcore.NewCore(jsonEnc, fileWriter, InfoLevel),        ║
+║      zapcore.NewCore(consoleEnc, os.Stdout, DebugLevel),     ║
+║  )                                                           ║
+╚══════════════════════════════════════════════════════════════╝
+
+╔══════════════════════════════════════════════════════════════╗
+║  Q4: Why should you avoid using the global log in libraries? ║
+╠══════════════════════════════════════════════════════════════╣
+║  A:  Using a global logger (log.Println, logrus.Info, etc.)  ║
+║      in a library:                                           ║
+║                                                              ║
+║  1. Hijacks the application's logging config — the library   ║
+║     decides format, destination, and level.                  ║
+║                                                              ║
+║  2. Forces a dependency on a specific logging library        ║
+║     (e.g., logrus) on all consumers of your library.         ║
+║                                                              ║
+║  3. Makes testing harder — you can't easily capture log      ║
+║     output in unit tests.                                    ║
+║                                                              ║
+║  Best practice for libraries:                                ║
+║  - Accept a logger interface (e.g., slog.Logger) as a param  ║
+║  - Or use slog.Default() which apps can override             ║
+║  - Or provide a SetLogger() function, default to no-op       ║
+╚══════════════════════════════════════════════════════════════╝
+
+╔══════════════════════════════════════════════════════════════╗
+║  Q5: Explain log sampling. Why and when would you use it?    ║
+╠══════════════════════════════════════════════════════════════╣
+║  A:  Log sampling = only logging a fraction of events at a   ║
+║      given level to reduce volume and I/O pressure.          ║
+║                                                              ║
+║  Why:                                                        ║
+║  - High-traffic services log millions of DEBUG events/sec    ║
+║  - Writing them all is I/O-bound and expensive               ║
+║  - Most debug logs carry the same pattern — few are unique   ║
+║                                                              ║
+║  When:                                                       ║
+║  - DEBUG/INFO in hot loops (e.g., every HTTP request)        ║
+║  - Health check endpoints that log every hit                 ║
+║  - Background jobs that run thousands of times per minute    ║
+║                                                              ║
+║  Zerolog example:                                            ║
+║  sampler := &zerolog.BasicSampler{N: 100} // log 1 in 100   ║
+║  logger.Sample(sampler).Debug().Msg("loop tick")             ║
+║                                                              ║
+║  Zap has LevelEnablerFunc for similar level-based gating.    ║
+╚══════════════════════════════════════════════════════════════╝
+
+╔══════════════════════════════════════════════════════════════╗
+║  Q6: What is the role of zapcore.Core and how does zap's     ║
+║      architecture differ from logrus?                        ║
+╠══════════════════════════════════════════════════════════════╣
+║  A:  Zap's architecture is layered:                          ║
+║                                                              ║
+║  zap.Logger  →  zapcore.Core  →  Encoder + WriteSyncer       ║
+║                                                              ║
+║  zapcore.Core has 3 responsibilities:                        ║
+║  1. Check(entry) — is this level enabled?                    ║
+║  2. Write(entry, fields) — encode + output                   ║
+║  3. Sync() — flush                                           ║
+║                                                              ║
+║  Logrus uses a plugin/hook model:                            ║
+║  - Core logs, then fires registered Hooks                    ║
+║  - Hooks receive a fully constructed logrus.Entry            ║
+║  - Works but allocates more (Entry is a heap struct)         ║
+║                                                              ║
+║  Zap's Core composes at the encoder level —                  ║
+║  no heap Entry created when level is disabled.               ║
+║  Logrus always creates an Entry struct even for disabled lvl.║
+╚══════════════════════════════════════════════════════════════╝
+
+╔══════════════════════════════════════════════════════════════╗
+║  Q7: How would you implement a custom slog.Handler to add    ║
+║      a "service" field to every log entry?                   ║
+╠══════════════════════════════════════════════════════════════╣
+║  A:  Implement the slog.Handler interface:                   ║
+║      - Enabled(ctx, level) bool                              ║
+║      - Handle(ctx, record) error                             ║
+║      - WithAttrs(attrs) slog.Handler                         ║
+║      - WithGroup(name) slog.Handler                          ║
+║                                                              ║
+║  Embed an existing Handler and override Handle:              ║
+║                                                              ║
+║  type ServiceHandler struct {                                ║
+║      slog.Handler                                            ║
+║      service string                                          ║
+║  }                                                           ║
+║  func (h *ServiceHandler) Handle(ctx context.Context,        ║
+║      r slog.Record) error {                                  ║
+║      r.AddAttrs(slog.String("service", h.service))           ║
+║      return h.Handler.Handle(ctx, r)                         ║
+║  }                                                           ║
+║                                                              ║
+║  This pattern is idiomatic for middleware-style log wrapping.║
+╚══════════════════════════════════════════════════════════════╝
+
+╔══════════════════════════════════════════════════════════════╗
+║  Q8: Your service generates 50,000 logs/sec. What           ║
+║      strategies would you apply to make logging sustainable? ║
+╠══════════════════════════════════════════════════════════════╣
+║  A:  Multi-layered strategy:                                 ║
+║                                                              ║
+║  1. Choose zerolog or zap (zero/minimal alloc loggers)       ║
+║  2. Use log sampling on DEBUG/INFO hot paths                  ║
+║     (BurstSampler or BasicSampler)                           ║
+║  3. Async write: buffer logs to a channel, flush to disk     ║
+║     in a goroutine (zapcore.AddSync with buffered writer)    ║
+║  4. Use log levels strictly — WARN in prod, DEBUG in dev     ║
+║  5. Log rotation (lumberjack) to avoid disk exhaustion       ║
+║  6. Structured JSON → ship to log aggregator (Loki, Elastic) ║
+║     instead of writing full detail to disk                   ║
+║  7. Avoid logging inside tight loops — batch-log summaries   ║
+║  8. Profile with pprof to find unexpected allocations in     ║
+║     log calls                                                ║
+╚══════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  QUICK REFERENCE CHEATSHEET
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  INSTALL COMMANDS:
+  go get go.uber.org/zap
+  go get github.com/sirupsen/logrus
+  go get github.com/rs/zerolog
+  go get gopkg.in/natefinish/lumberjack.v2
+
+  ZAP QUICK START:
+  logger, _ := zap.NewProduction()
+  defer logger.Sync()
+  logger.Info("msg", zap.String("k", "v"), zap.Int("n", 42))
+  sugar := logger.Sugar()
+  sugar.Infof("user %s logged in", "aditya")
+
+  ZEROLOG QUICK START:
+  log.Info().Str("user", "aditya").Int("port", 8080).Msg("started")
+
+  LOGRUS QUICK START:
+  logrus.WithFields(logrus.Fields{"user": "aditya"}).Info("done")
+
+  SLOG QUICK START:
+  slog.Info("msg", "user", "aditya", "port", 8080)
+  slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+
+  LOGGER CHILD PATTERN:
+  // Zap
+  child := logger.With(zap.String("reqID", id))
+  // Zerolog
+  child := logger.With().Str("reqID", id).Logger()
+  // Logrus
+  child := logger.WithField("reqID", id)
+  // slog
+  child := logger.With("reqID", id)
+
+  LOG TO FILE PATTERN:
+  file, _ := os.OpenFile("app.log", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
+  multi := io.MultiWriter(os.Stdout, file)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
