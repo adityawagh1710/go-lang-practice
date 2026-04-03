@@ -34,59 +34,59 @@ type LogLevel int
 // Using iota to define the enum values.
 // Starting from 0 is common, but you can do iota + 1 if you prefer 1-based.
 const (
-    Debug LogLevel = iota // 0
-    Info                  // 1
-    Warning               // 2
-    Error                 // 3
-    Fatal                 // 4
+	Debug   LogLevel = iota // 0
+	Info                    // 1
+	Warning                 // 2
+	Error                   // 3
+	Fatal                   // 4
 )
 
 // String() implements the fmt.Stringer interface.
 // This is what makes fmt.Println(level) print "INFO" instead of "1".
 // Very important for logging, debugging, and JSON output.
 func (l LogLevel) String() string {
-    switch l {
-    case Debug:
-        return "DEBUG"
-    case Info:
-        return "INFO"
-    case Warning:
-        return "WARNING"
-    case Error:
-        return "ERROR"
-    case Fatal:
-        return "FATAL"
-    default:
-        return "UNKNOWN"
-    }
+	switch l {
+	case Debug:
+		return "DEBUG"
+	case Info:
+		return "INFO"
+	case Warning:
+		return "WARNING"
+	case Error:
+		return "ERROR"
+	case Fatal:
+		return "FATAL"
+	default:
+		return "UNKNOWN"
+	}
 }
 
 // Optional: Add a method for colored console output (common in real loggers).
 func (l LogLevel) Color() string {
-    switch l {
-    case Debug:
-        return "\033[36m" // Cyan
-    case Info:
-        return "\033[32m" // Green
-    case Warning:
-        return "\033[33m" // Yellow
-    case Error:
-        return "\033[31m" // Red
-    case Fatal:
-        return "\033[35m" // Magenta
-    default:
-        return "\033[0m"
-    }
+	switch l {
+	case Debug:
+		return "\033[36m" // Cyan
+	case Info:
+		return "\033[32m" // Green
+	case Warning:
+		return "\033[33m" // Yellow
+	case Error:
+		return "\033[31m" // Red
+	case Fatal:
+		return "\033[35m" // Magenta
+	default:
+		return "\033[0m"
+	}
 }
 
 // Example of a simple logger using our enum.
 type Logger struct {
-    Level LogLevel
+	Level LogLevel
 }
 
 func (l *Logger) Log(level LogLevel, msg string) {
-    if level < l.Level {
-        return // filter lower levels
-    }
-    fmt.Printf("%s[%s]\033[0m %s\n", level.Color(), level, msg)
+	if level < l.Level {
+		return // filter lower levels
+	}
+	fmt.Printf("%s[%s]\033[0m %s\n", level.Color(), level, msg)
 }

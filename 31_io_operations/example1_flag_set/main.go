@@ -22,6 +22,6 @@ func main() {
 
 	// Remaining non-flag args (e.g. filenames after flags)
 	args := flag.Args()
-	
+
 	fmt.Println("Extra args:", args)
 }

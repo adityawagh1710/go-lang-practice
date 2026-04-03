@@ -14,4 +14,3 @@ func myPrintln(a interface{}) {
 		fmt.Printf("Is unknown : type(%T) : value(%v)\n", v, v)
 	}
 }
-

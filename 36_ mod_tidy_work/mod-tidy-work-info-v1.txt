@@ -1,0 +1,325 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang QMODULES COMMANDS: go mod tidy, go get, go work (MULTI-MODULE)
+════════════════════════════════════════════════════════════════════════════════════
+--------------------------------------------------
+1. go mod tidy
+--------------------------------------------------
+
+PURPOSE:
+- Cleans up go.mod and go.sum
+- Adds missing dependencies
+- Removes unused dependencies
+
+HOW IT WORKS:
+- Scans all imports in your project
+- Ensures required modules exist in go.mod
+- Deletes unused modules
+
+USAGE:
+    go mod tidy
+
+EXAMPLE:
+
+    package main
+
+    import (
+        "fmt"
+        "github.com/google/uuid"
+    )
+
+    func main() {
+        fmt.Println(uuid.New())
+    }
+
+STEPS:
+    go mod init example.com/myapp
+    go mod tidy
+
+RESULT:
+- Automatically adds github.com/google/uuid
+- Removes unused dependencies if any
+
+WHEN TO USE:
+- After adding/removing imports
+- Before committing code
+- To fix dependency issues
+
+IMPORTANT NOTES:
+- Safe to run anytime
+- Does NOT install binaries
+- Only manages dependencies
+
+--------------------------------------------------
+2. go get
+--------------------------------------------------
+
+PURPOSE:
+- Adds or updates dependencies in go.mod
+
+USAGE:
+    go get <module>
+    go get <module>@version
+
+EXAMPLES:
+
+1. Add dependency:
+    go get github.com/google/uuid
+
+2. Get specific version:
+    go get github.com/google/uuid@v1.3.0
+
+3. Update dependency:
+    go get -u github.com/google/uuid
+
+4. Update all dependencies:
+    go get -u ./...
+
+WHAT IT DOES:
+- Downloads module
+- Updates go.mod
+- Updates go.sum
+
+COMMON CONFUSION:
+- go get is NOT for installing binaries anymore (use go install)
+
+--------------------------------------------------
+3. go work (MULTI-MODULE WORKSPACE)
+--------------------------------------------------
+
+PURPOSE:
+- Manage multiple Go modules together
+- Useful for monorepos or local development
+
+FILES CREATED:
+    go.work
+
+INIT WORKSPACE:
+    go work init
+
+ADD MODULES:
+    go work use ./module1
+    go work use ./module2
+
+OR:
+    go work init ./module1 ./module2
+
+EXAMPLE STRUCTURE:
+
+    myworkspace/
+        moduleA/
+            go.mod
+        moduleB/
+            go.mod
+        go.work
+
+go.work FILE:
+
+    go 1.22
+
+    use (
+        ./moduleA
+        ./moduleB
+    )
+
+WHY USE go work:
+- Avoid publishing modules just for testing
+- Local changes reflect instantly
+- No replace directives needed
+
+--------------------------------------------------
+4. MULTI-MODULE EXAMPLE
+--------------------------------------------------
+
+STEP 1: Create modules
+
+    mkdir moduleA moduleB
+
+    cd moduleA
+    go mod init example.com/moduleA
+
+    cd ../moduleB
+    go mod init example.com/moduleB
+
+STEP 2: Import moduleA in moduleB
+
+    import "example.com/moduleA"
+
+STEP 3: Create workspace
+
+    go work init ./moduleA ./moduleB
+
+NOW:
+- moduleB can use moduleA locally
+- No need to push to remote repo
+
+--------------------------------------------------
+5. go.work vs replace
+--------------------------------------------------
+
+replace (OLD WAY):
+
+    replace example.com/moduleA => ../moduleA
+
+go.work (NEW WAY):
+- Cleaner
+- Centralized
+- Better for multiple modules
+
+--------------------------------------------------
+6. INTERVIEW QUESTIONS & ANSWERS
+--------------------------------------------------
+
+Q1: What does go mod tidy do?
+A:
+- Adds missing dependencies
+- Removes unused dependencies
+- Syncs go.mod and go.sum
+
+Q2: Difference between go get and go mod tidy?
+A:
+- go get → explicitly adds/updates dependency
+- go mod tidy → cleans and fixes dependencies automatically
+
+Q3: Is go get used for installing binaries?
+A:
+- No (deprecated for that purpose)
+- Use: go install
+
+Q4: What is go.work?
+A:
+- Workspace file to manage multiple modules together
+
+Q5: Why use go.work instead of replace?
+A:
+- Cleaner setup
+- No manual replace directives
+- Better for multi-module development
+
+Q6: What happens if you don't run go mod tidy?
+A:
+- Unused dependencies remain
+- Missing dependencies may cause build issues
+
+Q7: Can go work be committed?
+A:
+- Usually NO (local development tool)
+- But can be shared in monorepos
+
+Q8: When should you use go work?
+A:
+- Working on multiple modules locally
+- Microservices / monorepo setup
+
+Q9: What is go.sum?
+A:
+- Stores checksums of dependencies for security
+
+Q10: How to update all dependencies?
+A:
+    go get -u ./...
+
+--------------------------------------------------
+7. BEST PRACTICES
+--------------------------------------------------
+
+- Always run:
+      go mod tidy
+
+- Pin versions in production:
+      go get module@version
+
+- Use go work for:
+      multi-module local dev
+
+- Avoid committing go.work in small projects
+
+- Keep go.mod clean and minimal
+
+--------------------------------------------------
+
+1. CORE COMMANDS
+----------------------------------------------------------------
+go mod tidy
+- Purpose: Synchronizes the go.mod and go.sum files with the source code.
+- Action: Adds missing module requirements and removes unused ones.
+- Note: Always run this before a commit to keep dependencies clean.
+
+go get [package]
+- Purpose: Adds, updates, or removes specific dependencies.
+- go get example.com/pkg@v1.2.3  -> Get specific version.
+- go get example.com/pkg@latest  -> Get latest version.
+- go get example.com/pkg@none    -> Remove dependency.
+- Note: As of Go 1.18+, this only manages dependencies; it does 
+  not install binaries (use 'go install' for binaries).
+
+2. MULTI-MODULE WORKSPACES (go work)
+----------------------------------------------------------------
+Introduced in Go 1.18 to handle development across multiple local 
+modules without editing go.mod files constantly.
+
+Commands:
+- go work init [mod1] [mod2] : Initializes workspace with modules.
+- go work use [path]         : Adds a new module to the workspace.
+- go work sync               : Pushes workspace dependencies back to modules.
+
+Example Project Structure:
+/project-root
+  ├── go.work          <-- Workspace file
+  ├── /util-lib        <-- Module A (example.com/util)
+  │     └── go.mod
+  └── /main-app        <-- Module B (example.com/app)
+        └── go.mod
+
+Sample go.work file content:
+----------------------------
+go 1.24
+
+use (
+    ./util-lib
+    ./main-app
+)
+----------------------------
+
+3. CODE EXAMPLES
+----------------------------------------------------------------
+# Initialize a new module
+$ mkdir my-app && cd my-app
+$ go mod init github.com/user/my-app
+
+# Add a dependency
+$ go get github.com/rs/zerolog
+
+# Cleanup
+$ go mod tidy
+
+# Setting up a workspace for local testing
+$ cd ..
+$ go work init ./my-app ./some-local-plugin
+
+4. INTERVIEW QUESTIONS & ANSWERS
+----------------------------------------------------------------
+Q1: What is the purpose of the go.sum file?
+A: It contains the expected cryptographic hashes of the dependencies. 
+   Go uses this to ensure that the dependencies downloaded are the 
+   exact same bits as the first time they were fetched, preventing 
+   Man-in-the-Middle or supply chain attacks.
+
+Q2: How do you force a project to use a local version of a dependency 
+    instead of the remote one?
+A: Two ways:
+   1. Use the 'replace' directive in go.mod: 
+      replace example.com/original => ../local-path
+   2. Use a 'go.work' file and include both modules in the 'use' block. 
+      (Preferred for local development).
+
+Q3: Difference between 'go get' and 'go install'?
+A: 'go get' modifies the go.mod file to update dependencies. 
+   'go install' compiles and installs the binary to $GOPATH/bin 
+   without affecting the go.mod file of the current project.
+
+Q4: What does the 'indirect' comment mean in go.mod?
+A: It indicates that the dependency is not imported directly by 
+   your code, but is required by one of your dependencies. It can 
+   also appear if a dependency's go.mod file is missing or incomplete.
+
+================================================================

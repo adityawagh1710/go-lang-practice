@@ -1,0 +1,230 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang BENCHMARK
+════════════════════════════════════════════════════════════════════════════════════
+
+1. WHAT IS BENCHMARKING?
+
+Benchmarking in Go is used to measure performance of code.
+It tells how fast a function runs and how much memory it uses.
+
+- Functions start with: BenchmarkXxx
+- Uses testing package
+- Runs automatically multiple times
+
+--------------------------------
+
+2. BASIC STRUCTURE
+
+func BenchmarkXxx(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		// code to benchmark
+	}
+}
+
+Key Points:
+- b.N is auto-managed by Go
+- Do NOT manually set iteration count
+
+--------------------------------
+
+3. SIMPLE EXAMPLE
+
+package main
+
+import "testing"
+
+func add(a, b int) int {
+	return a + b
+}
+
+func BenchmarkAdd(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		add(10, 20)
+	}
+}
+
+--------------------------------
+
+4. RUNNING BENCHMARKS
+
+Command:
+go test -bench=.
+
+Example Output:
+BenchmarkAdd-8    1000000000    0.30 ns/op
+
+Meaning:
+- Iterations: 1000000000
+- Time per op: 0.30 nanoseconds
+
+--------------------------------
+
+5. BENCHMARK WITH SETUP
+
+func BenchmarkWithSetup(b *testing.B) {
+	data := []int{1, 2, 3, 4, 5}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		process(data)
+	}
+}
+
+func process(nums []int) int {
+	sum := 0
+	for _, n := range nums {
+		sum += n
+	}
+	return sum
+}
+
+--------------------------------
+
+6. MEMORY BENCHMARK
+
+func BenchmarkAlloc(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		_ = make([]int, 1000)
+	}
+}
+
+Run:
+go test -bench=. -benchmem
+
+Output:
+8192 B/op
+1 allocs/op
+
+--------------------------------
+
+7. SUB-BENCHMARKS
+
+func BenchmarkVariants(b *testing.B) {
+	b.Run("Small", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			add(1, 2)
+		}
+	})
+
+	b.Run("Large", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			add(1000, 2000)
+		}
+	})
+}
+
+--------------------------------
+
+8. PARALLEL BENCHMARK
+
+func BenchmarkParallel(b *testing.B) {
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			add(1, 2)
+		}
+	})
+}
+
+--------------------------------
+
+9. TIMER CONTROL
+
+func BenchmarkTimerControl(b *testing.B) {
+	data := prepareData()
+
+	b.StopTimer()
+	// setup work
+	b.StartTimer()
+
+	for i := 0; i < b.N; i++ {
+		process(data)
+	}
+}
+
+--------------------------------
+
+10. PREVENT COMPILER OPTIMIZATION
+
+var result int
+
+func BenchmarkAvoidOptimization(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		result = add(1, 2)
+	}
+}
+
+--------------------------------
+
+11. BEST PRACTICES
+
+- Keep benchmark simple
+- Avoid unnecessary allocations
+- Use b.ResetTimer() for setup exclusion
+- Run multiple times
+- Use -benchmem for memory
+
+--------------------------------
+
+12. COMMON MISTAKES
+
+- Including setup in loop
+- Not using b.N
+- Benchmarking I/O
+- Ignoring compiler optimizations
+
+--------------------------------
+
+13. INTERVIEW QUESTIONS
+
+Q1. What is b.N?
+Answer:
+It is dynamically adjusted iteration count for accurate benchmarking.
+
+Q2. Why use b.ResetTimer()?
+Answer:
+To exclude setup time from measurement.
+
+Q3. Difference between Test and Benchmark?
+
+Test:
+- Checks correctness
+- Uses TestXxx
+
+Benchmark:
+- Measures performance
+- Uses BenchmarkXxx
+
+Q4. What is ns/op?
+Answer:
+Nanoseconds per operation.
+
+Q5. How to check memory usage?
+Answer:
+go test -bench=. -benchmem
+
+Q6. What is RunParallel?
+Answer:
+Runs benchmark in multiple goroutines.
+
+Q7. Why use global variable for result?
+Answer:
+To prevent compiler optimization removing code.
+
+Q8. How to compare benchmarks?
+
+go test -bench=. > old.txt
+go test -bench=. > new.txt
+benchstat old.txt new.txt
+
+--------------------------------
+
+SUMMARY
+
+- BenchmarkXxx → function name
+- b.N → auto loop count
+- go test -bench=. → run benchmark
+- -benchmem → memory stats
+- Use ResetTimer, RunParallel, sub-benchmarks
+
+===============================

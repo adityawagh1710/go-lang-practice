@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pborman/uuid"
 	"github.com/fatih/color"
+	"github.com/pborman/uuid"
 )
 
 func main() {

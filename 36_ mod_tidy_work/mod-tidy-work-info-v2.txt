@@ -1,0 +1,232 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang QMODULES COMMANDS: go mod tidy, go get, go work (MULTI-MODULE)
+════════════════════════════════════════════════════════════════════════════════════
+================================================================================
+
+1. CORE CONCEPTS
+
+- Go Module: Collection of Go packages defined by go.mod at root.
+- go.mod: Declares module path, Go version, and dependencies.
+- go.sum: Contains checksums for reproducible builds.
+- Since Go 1.13, modules are enabled by default (GOMODULES=on).
+- go.work: Workspace file for multi-module development (local only).
+
+Key Files:
+- go.mod      → Per module dependencies
+- go.work     → Workspace configuration (add to .gitignore)
+- go.work.sum → Auto-generated checksums for workspace
+
+================================================================================
+
+2. go get
+
+Purpose:
+- Add, update, or remove specific dependencies.
+- Downloads module and updates go.mod + go.sum.
+- Can upgrade versions with -u flag.
+
+Common Commands:
+go get github.com/google/uuid                    # Add latest
+go get github.com/google/uuid@v1.6.0             # Specific version
+go get -u github.com/google/uuid                 # Upgrade specific
+go get -u ./...                                  # Upgrade all direct deps
+go get github.com/google/uuid@none               # Remove dependency
+
+Behavior:
+- Updates require directive in go.mod
+- Follows Minimal Version Selection (MVS)
+- In workspace mode, behavior can be tricky — prefer per-module + go work sync
+
+Example:
+mkdir myapp && cd myapp
+go mod init example.com/myapp
+go get github.com/google/uuid
+
+# Result in go.mod:
+# module example.com/myapp
+# go 1.23
+#
+# require github.com/google/uuid v1.6.0
+
+================================================================================
+
+3. go mod tidy
+
+Purpose:
+- Cleans up go.mod and go.sum
+- Adds missing dependencies based on imports in code
+- Removes unused dependencies
+- Does NOT upgrade versions (use go get -u for upgrades)
+
+Common Commands:
+go mod tidy          # Standard
+go mod tidy -v       # Verbose
+go mod tidy -e       # Continue on errors
+
+Important Notes:
+- Runs only on current module
+- Ignores go.work by design (for reproducible builds)
+- Run before every commit/PR
+- After removing imports, always run tidy to clean up
+
+Example:
+# After deleting some code that used a package
+go mod tidy
+# Unused "require" lines disappear from go.mod
+
+================================================================================
+
+4. go work - Multi-Module Workspaces
+
+Purpose:
+- Develop multiple related modules together without "replace" directives
+- Perfect for monorepos, library + application development
+- Local development only (do not commit go.work)
+
+Main Commands:
+go work init                    # Create empty workspace
+go work init ./mod1 ./mod2      # Init with modules
+go work use ./shared            # Add module to workspace
+go work use -r .                # Recursively add all modules
+go work edit -dropuse=./oldmod  # Remove module
+go work sync                    # Sync dependencies across workspace
+go work edit -json              # View workspace as JSON
+
+go.work File Example:
+go 1.23
+
+use (
+	./hello
+	./example
+	./shared
+)
+
+# Optional replaces still supported
+
+How Workspace Works:
+- go command detects go.work automatically
+- Uses local module sources instead of remote versions
+- Changes in one module instantly visible in others
+- go build, go test, go run respect workspace
+
+Complete Multi-Module Example:
+
+# Step 1: Create workspace root
+mkdir workspace && cd workspace
+
+# Step 2: Create hello module
+mkdir hello && cd hello
+go mod init example.com/hello
+cat > hello.go <<EOF
+package hello
+import "fmt"
+func Hello() { fmt.Println("Hello from workspace!") }
+EOF
+cd ..
+
+# Step 3: Create example module
+mkdir example && cd example
+go mod init example.com/example
+cat > main.go <<EOF
+package main
+import (
+	"example.com/hello"
+	"fmt"
+)
+func main() {
+	hello.Hello()
+	fmt.Println("Main app running")
+}
+EOF
+cd ..
+
+# Step 4: Initialize workspace
+go work init ./hello ./example
+
+# Step 5: Run from anywhere in workspace
+go run ./example
+
+================================================================================
+
+5. COMMAND COMPARISON TABLE
+
+Command            | Modifies go.mod | Respects Workspace | Main Purpose                     | Upgrades?
+-------------------|-----------------|--------------------|----------------------------------|----------
+go get <pkg>       | Yes             | Partial            | Add/update specific dependency   | With -u
+go mod tidy        | Yes             | Ignores            | Add missing / remove unused      | No
+go work sync       | No              | Yes                | Sync deps across all modules     | No
+go install         | No              | Yes                | Install tools/binaries           | -
+
+================================================================================
+
+6. BEST PRACTICES
+
+- Always run `go mod tidy` before committing changes
+- Use `go work` for active development of multiple modules
+- Never commit go.work or go.work.sum to git
+- Test without workspace: GOWORK=off go test ./...
+- Use `go work sync` after changing dependencies
+- For production/CI: set GOWORK=off
+- Keep workspace acyclic (no circular dependencies)
+- Use `go mod why <module>` to debug why a dependency exists
+
+Common Pitfalls:
+- go mod tidy ignores workspace → use go work sync for consistency
+- Forgetting to add modules with `go work use`
+- Committing go.work file
+- Expecting go get to behave exactly same in workspace mode
+
+================================================================================
+
+7. INTERVIEW QUESTIONS & ANSWERS
+
+Q1: What is the difference between `go get` and `go mod tidy`?
+A: `go get` is used to explicitly add, update, or remove a specific dependency. It can upgrade versions with -u. 
+`go mod tidy` automatically adds any missing dependencies (based on imports) and removes unused ones. Tidy does not upgrade versions.
+
+Q2: What is a Go workspace (`go work`) and when should you use it?
+A: Introduced in Go 1.18, workspaces allow developing multiple modules simultaneously using a go.work file. 
+It eliminates the need for replace directives during local development. 
+Ideal for monorepos or when working on a library alongside applications that use it. 
+Do not commit go.work file.
+
+Q3: Why does `go mod tidy` ignore the go.work file?
+A: Because tidy ensures each individual module has a clean, reproducible go.mod that works outside the workspace (using published versions). 
+go work sync is used for workspace-wide consistency.
+
+Q4: How do you develop a shared internal library with an application?
+A: Recommended: Use `go work init` and `go work use ./shared`. 
+Alternative (older): Add replace directive in the application's go.mod pointing to local path.
+
+Q5: What happens when you run `go build` inside a workspace?
+A: The build uses the local source code from modules listed in go.work instead of downloading the versions specified in go.mod.
+
+Q6: How do you safely upgrade dependencies in a workspace?
+A: Run `go get -u ./...` in each module or relevant modules, then `go mod tidy`, followed by `go work sync`. Always review changes and run tests.
+
+Q7: Difference between `go work use` and `replace` directive?
+A: `replace` is written in go.mod and affects everyone who uses the module. 
+`go work use` is only in go.work and is local to your development environment.
+
+Q8: How to remove a module from a workspace?
+A: Use `go work edit -dropuse=./path/to/module` or manually edit the go.work file.
+
+Q9: How do you check Go version compatibility across modules?
+A: Look at the `go` directive in go.mod and go.work files. Use `go mod tidy` to ensure compatibility.
+
+================================================================================
+
+8. USEFUL COMMANDS SUMMARY
+
+go mod init example.com/myproject
+go mod tidy
+go get github.com/pkg/errors@v0.9.1
+go get -u ./...
+go work init
+go work use ./module1
+go work sync
+GOWORK=off go test ./...          # Test without workspace
+go mod why github.com/google/uuid # Why is this dependency needed?
+go list -m all                    # List all modules
+
+================================================================================

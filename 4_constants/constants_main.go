@@ -2,7 +2,7 @@ package main
 
 import "fmt"
 
-func main () {
+func main() {
 	const age = 30
 
 	const (
@@ -10,8 +10,7 @@ func main () {
 		host = "localhost"
 	)
 
-	fmt.Println(age, port, host);
-
+	fmt.Println(age, port, host)
 
 	// Constants live within the compiler.
 	// They have a parallel type system.

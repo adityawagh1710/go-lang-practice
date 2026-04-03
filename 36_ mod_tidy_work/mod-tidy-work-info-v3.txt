@@ -1,0 +1,821 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang QMODULES COMMANDS: go mod tidy, go get, go work (MULTI-MODULE)
+════════════════════════════════════════════════════════════════════════════════════
+
+INDEX
+-----
+  [1]  go.mod — The Module Manifest
+  [2]  go mod tidy — Cleanup & Sync
+  [3]  go get — Fetching & Updating Dependencies
+  [4]  go work — Multi-Module Workspaces
+  [5]  go.sum — Checksum File
+  [6]  go mod commands — Full Reference
+  [7]  Version Strings & Pseudo-versions
+  [8]  Replace Directives
+  [9]  Java vs Go Dependency Management (Comparison Table)
+  [10] Interview Q&A — Medior Level
+  [11] Interview Q&A — Experienced Level
+
+================================================================================
+[1] go.mod — THE MODULE MANIFEST
+================================================================================
+
+  Every Go module starts with a go.mod file. Created via:
+
+    go mod init <module-path>
+
+  Example:
+
+    go mod init github.com/aditya/myapp
+
+  A go.mod file looks like this:
+
+    module github.com/aditya/myapp
+
+    go 1.22
+
+    require (
+        github.com/gin-gonic/gin v1.9.1
+        github.com/stretchr/testify v1.8.4
+    )
+
+    require (
+        golang.org/x/net v0.17.0 // indirect
+    )
+
+  KEY DIRECTIVES:
+  ---------------
+    module   -> canonical module path (used as import prefix)
+    go       -> minimum Go version required
+    require  -> direct and indirect dependencies
+    replace  -> override a dependency's source
+    exclude  -> prevent a specific version from being used
+    retract  -> mark versions as unsafe/broken (for publishers)
+
+  DIRECT vs INDIRECT:
+  -------------------
+    Direct   -> your code imports it explicitly
+    Indirect -> pulled in by a dependency you use
+               (marked with // indirect comment)
+
+  go.mod is the source of truth for your module. Think of it as
+  pom.xml or build.gradle but much simpler.
+
+================================================================================
+[2] go mod tidy — CLEANUP & SYNC
+================================================================================
+
+  WHAT IT DOES:
+  -------------
+    go mod tidy ensures your go.mod and go.sum are consistent
+    with your actual source code.
+
+    It does TWO things:
+      1. ADDS any missing require entries (packages your code imports
+         but aren't listed in go.mod)
+      2. REMOVES any unused require entries (packages in go.mod that
+         nothing in your code actually imports)
+
+  WHEN TO RUN IT:
+  ---------------
+    - After adding a new import in your code
+    - After removing an import from your code
+    - After pulling changes from git that added/removed dependencies
+    - Before committing to version control
+    - In CI/CD pipelines (to verify go.mod is tidy)
+
+  COMMAND:
+
+    go mod tidy
+
+  WITH VERBOSE OUTPUT:
+
+    go mod tidy -v
+
+  CHECK ONLY (don't modify files, just fail if not tidy):
+
+    go mod tidy -diff     # Go 1.23+ (prints diff without modifying)
+
+  EXAMPLE WORKFLOW:
+
+    // main.go
+    package main
+
+    import (
+        "fmt"
+        "github.com/gin-gonic/gin"   // <- new import added
+    )
+
+    func main() {
+        r := gin.Default()
+        r.GET("/ping", func(c *gin.Context) {
+            c.JSON(200, gin.H{"message": "pong"})
+        })
+        r.Run()
+        fmt.Println("server started")
+    }
+
+    $ go mod tidy
+    // go.mod is updated to include gin
+    // go.sum is updated with checksums
+
+  WHAT GETS CLEANED UP:
+  ---------------------
+    Before tidy (stale go.mod):
+      require (
+          github.com/gin-gonic/gin v1.9.1
+          github.com/some/unused-pkg v1.0.0    // <- nothing imports this
+      )
+
+    After tidy:
+      require (
+          github.com/gin-gonic/gin v1.9.1      // <- kept, code uses it
+          // unused-pkg is removed
+      )
+
+  CI CHECK PATTERN (very common interview topic):
+
+    go mod tidy
+    git diff --exit-code go.mod go.sum
+    // Fails CI if go.mod or go.sum were not committed in tidy state
+
+================================================================================
+[3] go get — FETCHING & UPDATING DEPENDENCIES
+================================================================================
+
+  go get is the primary command for adding or changing dependencies.
+  Behavior changed significantly between Go 1.16 and 1.17+.
+
+  BASIC USAGE:
+  ------------
+
+    # Add or upgrade a dependency to latest version
+    go get github.com/some/package
+
+    # Add or upgrade to a specific version
+    go get github.com/some/package@v1.2.3
+
+    # Add or upgrade to a specific commit hash
+    go get github.com/some/package@abc1234
+
+    # Add or upgrade to a specific branch
+    go get github.com/some/package@main
+
+    # Downgrade a dependency
+    go get github.com/some/package@v1.1.0
+
+    # Remove a dependency (set to none)
+    go get github.com/some/package@none
+
+    # Upgrade all dependencies to latest minor/patch
+    go get -u ./...
+
+    # Upgrade only patch versions (safer)
+    go get -u=patch ./...
+
+  FULL EXAMPLE:
+
+    // Start: no dependencies
+    $ go mod init github.com/aditya/demo
+    $ cat go.mod
+    module github.com/aditya/demo
+    go 1.22
+
+    // Add testify
+    $ go get github.com/stretchr/testify@v1.8.4
+    go: added github.com/stretchr/testify v1.8.4
+
+    $ cat go.mod
+    module github.com/aditya/demo
+    go 1.22
+    require github.com/stretchr/testify v1.8.4
+
+    // Upgrade to latest
+    $ go get github.com/stretchr/testify@latest
+    go: upgraded github.com/stretchr/testify v1.8.4 => v1.9.0
+
+    // Remove
+    $ go get github.com/stretchr/testify@none
+    go: removed github.com/stretchr/testify v1.9.0
+
+  VERSION SELECTORS:
+  ------------------
+    @latest       -> highest non-prerelease version
+    @v1.2.3       -> exact version
+    @v1.2         -> latest patch for v1.2.x
+    @abc1234      -> specific commit
+    @main         -> tip of branch (creates pseudo-version)
+    @none         -> remove dependency
+
+  -u FLAG (update):
+  -----------------
+    go get -u           -> updates direct dependencies to latest minor
+    go get -u=patch     -> updates only patch versions
+    go get -u ./...     -> updates all dependencies recursively
+
+  IMPORTANT: go get only modifies go.mod and go.sum.
+  Run go mod tidy afterwards to clean up indirect dependencies.
+
+  go get vs go install:
+  ---------------------
+    go get    -> adds/changes dependencies in go.mod (for libraries)
+    go install -> installs a binary tool globally (does NOT touch go.mod)
+
+    # Install a CLI tool globally
+    go install github.com/air-verse/air@latest
+
+================================================================================
+[4] go work — MULTI-MODULE WORKSPACES
+================================================================================
+
+  WHAT IS IT?
+  -----------
+    Introduced in Go 1.18. go work lets you work on multiple related
+    modules simultaneously WITHOUT publishing them. It creates a
+    go.work file that tells Go to resolve imports from local disk
+    instead of the module proxy.
+
+  THE PROBLEM IT SOLVES:
+  ----------------------
+    Scenario: You have two modules:
+      - github.com/aditya/core    (a library)
+      - github.com/aditya/webapp  (uses the library)
+
+    Before go work, to test local changes to core in webapp, you had to:
+      1. Push core to GitHub
+      2. go get github.com/aditya/core@<commit>
+      ...or use messy replace directives in go.mod
+
+    With go work, you just add both modules to a workspace and local
+    changes are picked up automatically.
+
+  SETUP:
+  ------
+
+    Directory structure:
+      /projects/
+        core/
+          go.mod    (module github.com/aditya/core)
+          math.go
+        webapp/
+          go.mod    (module github.com/aditya/webapp)
+          main.go
+
+    # Initialize workspace from /projects/
+    $ go work init ./core ./webapp
+
+    # OR: init empty workspace then add modules
+    $ go work init
+    $ go work use ./core
+    $ go work use ./webapp
+
+  RESULTING go.work FILE:
+
+    go 1.22
+
+    use (
+        ./core
+        ./webapp
+    )
+
+  go.work DIRECTIVES:
+  -------------------
+    go      -> Go version
+    use     -> local module paths to include in workspace
+    replace -> override module sources (same as go.mod replace)
+
+  COMPLETE EXAMPLE:
+
+    -- /projects/core/go.mod --
+    module github.com/aditya/core
+    go 1.22
+
+    -- /projects/core/math.go --
+    package core
+
+    func Add(a, b int) int {
+        return a + b
+    }
+
+    -- /projects/webapp/go.mod --
+    module github.com/aditya/webapp
+    go 1.22
+
+    require github.com/aditya/core v0.0.0  // placeholder version
+
+    -- /projects/webapp/main.go --
+    package main
+
+    import (
+        "fmt"
+        "github.com/aditya/core"
+    )
+
+    func main() {
+        result := core.Add(3, 4)
+        fmt.Println("Result:", result) // Output: Result: 7
+    }
+
+    -- /projects/go.work --
+    go 1.22
+
+    use (
+        ./core
+        ./webapp
+    )
+
+    # Run from /projects/
+    $ go run ./webapp
+    Result: 7
+
+    # Go resolves github.com/aditya/core from ./core on disk,
+    # not from the internet!
+
+  go work COMMANDS:
+  -----------------
+
+    go work init [modules...]     -> create go.work file
+    go work use [-r] [dir...]     -> add module(s) to workspace
+    go work edit                  -> edit go.work (similar to go mod edit)
+    go work sync                  -> sync workspace build list back to go.mod files
+    go work vendor                -> vendor all workspace dependencies
+
+  go work use FLAGS:
+
+    go work use -r ./   -> recursively find and add all modules under current dir
+
+  DISABLING WORKSPACE (GOWORK):
+  -----------------------------
+    # Temporarily disable workspace mode
+    GOWORK=off go build ./...
+
+    # Or permanently for a command
+    go env -w GOWORK=off
+
+  WORKSPACE vs REPLACE:
+  ---------------------
+    replace in go.mod:
+      - Affects only that module
+      - Must be removed before publishing
+      - Checked into git by accident -> breaks other devs
+
+    go work (go.work):
+      - Affects all modules in workspace
+      - go.work is typically in .gitignore
+      - Clean separation: local dev vs published module
+
+  NOTE: go.work should NOT be committed to version control in most cases.
+  Add it to .gitignore. Each developer sets up their own workspace.
+
+  go work sync:
+  -------------
+    Updates all go.mod files in the workspace so their require
+    directives match what the workspace build list resolved.
+    Useful when preparing to publish and remove the workspace.
+
+    $ go work sync
+
+================================================================================
+[5] go.sum — CHECKSUM FILE
+================================================================================
+
+  go.sum records cryptographic checksums (SHA-256) for every
+  dependency version. It has two lines per module version:
+
+    github.com/gin-gonic/gin v1.9.1 h1:<hash>=
+    github.com/gin-gonic/gin v1.9.1/go.mod h1:<hash>=
+
+  Line 1: hash of the zip archive of the module source
+  Line 2: hash of the go.mod file of that version
+
+  RULES:
+  ------
+    - Always commit go.sum to version control
+    - Never manually edit go.sum
+    - go mod verify checks that cached modules match go.sum
+    - If go.sum is wrong, Go refuses to build (security feature)
+
+  VERIFY CHECKSUMS:
+
+    go mod verify
+
+================================================================================
+[6] go mod COMMANDS — FULL REFERENCE
+================================================================================
+
+  go mod init <path>       -> Initialize a new module
+  go mod tidy              -> Add missing / remove unused dependencies
+  go mod download          -> Download dependencies to module cache
+  go mod verify            -> Verify checksums in go.sum
+  go mod vendor            -> Copy dependencies into ./vendor/
+  go mod graph             -> Print module dependency graph
+  go mod why <pkg>         -> Explain why a package is needed
+  go mod edit              -> Edit go.mod from command line
+
+  USEFUL go mod edit EXAMPLES:
+
+    # Add a require
+    go mod edit -require github.com/foo/bar@v1.0.0
+
+    # Remove a require
+    go mod edit -droprequire github.com/foo/bar
+
+    # Add a replace
+    go mod edit -replace github.com/foo/bar=../bar
+
+    # Remove a replace
+    go mod edit -dropreplace github.com/foo/bar
+
+    # Set go version
+    go mod edit -go 1.22
+
+  INSPECT DEPENDENCY GRAPH:
+
+    go mod graph | grep gin          -> filter for a specific package
+    go mod why github.com/gin-gonic/gin
+
+  DOWNLOAD TO CACHE:
+
+    go mod download                  -> downloads all deps to $GOPATH/pkg/mod
+    go mod download -json            -> print JSON info per module
+
+  VENDOR MODE:
+
+    go mod vendor                    -> copies deps to ./vendor/
+    go build -mod=vendor ./...       -> build using vendor dir
+    go mod verify                    -> confirm checksums
+
+================================================================================
+[7] VERSION STRINGS & PSEUDO-VERSIONS
+================================================================================
+
+  SEMANTIC VERSIONING:
+  --------------------
+    Go modules follow semver: v<MAJOR>.<MINOR>.<PATCH>
+
+    v1.2.3
+    ^  ^  ^
+    |  |  patch (bug fixes)
+    |  minor (new features, backwards compatible)
+    major (breaking changes)
+
+  MAJOR VERSION > 1:
+  ------------------
+    Packages with v2+ MUST change their import path:
+
+    module github.com/aditya/mylib/v2    // go.mod
+    import "github.com/aditya/mylib/v2"  // in code
+
+    v0 and v1 don't need this. v2+ does. This is a common gotcha.
+
+  PSEUDO-VERSIONS:
+  ----------------
+    When you use @main or a commit hash, Go creates a pseudo-version:
+
+    v0.0.0-20240115143804-abc123def456
+         ^               ^   ^
+         base version    timestamp  commit hash
+
+    These appear in go.mod when you reference a pre-release or
+    untagged commit. They are valid semver.
+
+  PRE-RELEASE VERSIONS:
+
+    v1.0.0-alpha
+    v1.0.0-rc.1
+    v2.0.0-beta.3
+
+================================================================================
+[8] REPLACE DIRECTIVES
+================================================================================
+
+  Replace lets you swap out a module's source — useful for:
+    - Local development (before go work existed)
+    - Forking a dependency
+    - Testing a patched version
+
+  SYNTAX IN go.mod:
+
+    replace github.com/original/pkg => github.com/my/fork v1.2.3
+    replace github.com/original/pkg => ../local/path
+
+  EXAMPLE — local path replace:
+
+    replace github.com/aditya/core => ../core
+
+  EXAMPLE — fork replace:
+
+    replace github.com/gin-gonic/gin => github.com/aditya/gin-fork v1.0.0
+
+  USING go mod edit:
+
+    go mod edit -replace github.com/aditya/core=../core
+    go mod edit -dropreplace github.com/aditya/core
+
+  WARNING:
+  --------
+    replace directives apply only within their module. A library
+    author's replace directives are IGNORED by downstream consumers.
+    (Only root module's replace directives take effect.)
+
+  BEST PRACTICE:
+  --------------
+    Use go work for local multi-module development instead of replace.
+    Use replace only for forking a third-party dependency.
+
+================================================================================
+[9] JAVA vs GO DEPENDENCY MANAGEMENT
+================================================================================
+
+  +----------------------------+---------------------------+---------------------------+
+  | Concept                    | Java (Maven/Gradle)       | Go Modules                |
+  +----------------------------+---------------------------+---------------------------+
+  | Manifest file              | pom.xml / build.gradle    | go.mod                    |
+  | Lock file                  | (Maven: none by default)  | go.sum (checksum lock)    |
+  |                            | (Gradle: .lockfile)       |                           |
+  | Add dependency             | Edit pom.xml manually     | go get pkg@version        |
+  | Remove dependency          | Edit pom.xml manually     | go get pkg@none           |
+  | Sync/clean unused deps     | mvn dependency:analyze    | go mod tidy               |
+  | Module init                | mvn archetype:generate    | go mod init module/path   |
+  | Download deps              | mvn dependency:resolve    | go mod download           |
+  | Vendor deps locally        | (copy jars manually)      | go mod vendor             |
+  | Private registry           | Maven settings.xml        | GONOSUMCHECK, GOPRIVATE   |
+  | Dependency graph           | mvn dependency:tree       | go mod graph              |
+  | Multi-module project       | Maven multi-module        | go work (go.work)         |
+  | Version conflict           | Nearest-wins strategy     | Minimum Version Selection |
+  | Breaking version changes   | No enforced convention    | v2+ requires path change  |
+  | Checksums / security       | SHA hashes in .sha1 files | go.sum (SHA-256, enforced)|
+  +----------------------------+---------------------------+---------------------------+
+
+  KEY PHILOSOPHICAL DIFFERENCE — MVS vs Nearest-Wins:
+  ----------------------------------------------------
+    Maven: if A needs foo@1.0 and B needs foo@1.5, Maven picks
+           the nearest in the tree (can be unpredictable).
+
+    Go:    Minimum Version Selection (MVS) always picks the MINIMUM
+           version that satisfies ALL requirements. Deterministic.
+           No "dependency hell" — you get exactly what's specified.
+
+================================================================================
+[10] INTERVIEW Q&A — MEDIOR LEVEL
+================================================================================
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q1: What is the purpose of go mod tidy?                                 │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+    go mod tidy synchronizes go.mod and go.sum with your actual source code.
+    It adds any missing dependencies that your code imports but aren't in
+    go.mod, and removes any dependencies listed in go.mod that nothing in
+    your codebase actually imports. It also updates go.sum accordingly.
+
+    You typically run it after adding or removing imports, and always before
+    committing to version control.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q2: What is the difference between go get and go install?               │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+    go get modifies your module's go.mod file to add, update, or remove
+    a dependency. It's for managing library dependencies within a module.
+
+    go install downloads and installs an executable binary globally to
+    $GOPATH/bin. It does NOT touch go.mod. You use it for CLI tools like:
+      go install github.com/air-verse/air@latest
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q3: What does go get github.com/foo/bar@none do?                        │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+    It removes github.com/foo/bar from go.mod entirely — the @none version
+    selector signals removal. After this you should run go mod tidy to
+    also clean up any transitive dependencies that were only needed by that
+    package.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q4: Why must you commit go.sum to version control?                      │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+    go.sum contains SHA-256 checksums of every module version your project
+    depends on. Committing it ensures:
+      1. Security: Go refuses to build if a downloaded module doesn't match
+         the checksum. This prevents supply-chain attacks.
+      2. Reproducibility: Every developer and CI build uses the exact same
+         verified code.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q5: What is a pseudo-version in Go modules?                             │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+    A pseudo-version is an auto-generated semver string used when you
+    reference an untagged commit or branch tip. It looks like:
+
+      v0.0.0-20240115143804-abc123def456
+
+    It encodes: base version, UTC timestamp of commit, and short commit hash.
+    Go generates it when you run:
+      go get github.com/foo/bar@main
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q6: What is the // indirect comment in go.mod?                          │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+    The // indirect comment marks dependencies that your code does NOT
+    directly import but are required by one of your direct dependencies.
+    Go adds this automatically via go mod tidy. It helps distinguish what
+    you explicitly depend on from what is pulled in transitively.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q7: What is go work used for?                                           │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+    go work (introduced in Go 1.18) enables multi-module workspace mode.
+    When you're developing multiple related modules locally, go work lets
+    you point Go to local module directories on disk instead of fetching
+    them from a module proxy. You create a go.work file with 'use'
+    directives listing local module paths, and Go automatically resolves
+    imports from those local directories.
+
+================================================================================
+[11] INTERVIEW Q&A — EXPERIENCED LEVEL
+================================================================================
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q1: Explain Minimum Version Selection (MVS) in Go modules.              │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+    MVS is Go's algorithm for resolving dependency versions. Instead of
+    "latest wins" or "nearest wins" (like Maven), Go picks the MINIMUM
+    version that satisfies all requirements across the entire dependency
+    graph.
+
+    Example:
+      Your app requires foo >= v1.2
+      Your app's dependency bar requires foo >= v1.3
+      MVS picks: v1.3 (minimum satisfying all constraints)
+
+    Benefits:
+      - Deterministic: same go.mod always produces same build
+      - Safe: modules don't silently get upgraded
+      - No dependency hell: no conflicting resolution strategies
+      - Reproducible without a lock file (go.mod IS the lock file)
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q2: How do you handle a v2+ module in Go?                               │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+    Go treats v2+ modules as distinct modules from v1. The module path
+    MUST include the major version suffix:
+
+    In the library's go.mod:
+      module github.com/aditya/mylib/v2
+
+    In code that imports v2:
+      import "github.com/aditya/mylib/v2/somepackage"
+
+    To get it:
+      go get github.com/aditya/mylib/v2@latest
+
+    This is called "semantic import versioning". v0 and v1 are special
+    (no suffix needed). v2+ breaking changes are isolated by the path,
+    so you can use v1 and v2 of the same library simultaneously.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q3: What is the difference between go work and replace directives?      │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+    Both allow referencing local module paths, but they differ in scope
+    and intent:
+
+    replace (in go.mod):
+      - Scoped to ONE module's go.mod
+      - Must be manually added/removed
+      - Affects downstream consumers IF they copy your go.mod
+        (though replace in a library is ignored by consumers of that lib)
+      - Risk of accidentally committing it and breaking CI
+
+    go work (go.work):
+      - Applies across ALL modules in the workspace simultaneously
+      - Clean separation: workspace config is separate from go.mod
+      - go.work is typically gitignored — doesn't pollute go.mod
+      - Easy to enable/disable with GOWORK=off
+      - Designed specifically for multi-module local development
+
+    Recommendation: use go work for local dev, replace for forking
+    third-party dependencies.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q4: How do you check if go.mod is tidy in a CI pipeline?                │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+    The canonical approach:
+
+      go mod tidy
+      git diff --exit-code go.mod go.sum
+
+    If the developer forgot to run go mod tidy before pushing, the diff
+    will be non-empty and the CI step exits with code 1, failing the build.
+
+    In Go 1.23+, you can use:
+      go mod tidy -diff
+    which prints the diff and exits non-zero if tidy is needed, without
+    modifying the files.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q5: How does GONOSUMCHECK / GONOSUMDB / GOPRIVATE work?                 │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+    By default, Go validates all modules through the sum database at
+    sum.golang.org. For private modules, this would leak module paths
+    to Google's servers, which is unacceptable.
+
+    Environment variables to handle this:
+
+    GOPRIVATE=github.com/myorg/*
+      - Sets both GONOSUMCHECK and GONOPROXY
+      - Skips proxy and sum DB for matching patterns
+      - Most common setting for private repos
+
+    GONOSUMCHECK=github.com/myorg/*
+      - Skip checksum verification for matching patterns
+      - Still downloads via proxy if available
+
+    GONOPROXY=github.com/myorg/*
+      - Download directly (not via proxy) for matching patterns
+
+    GONOSUMDB=github.com/myorg/*
+      - Don't consult the sum database for these patterns
+
+    In practice: set GOPRIVATE=github.com/yourorg/* in CI environment
+    variables when working with private modules.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q6: Explain go work sync. When do you use it?                           │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+    go work sync updates each module's go.mod file within the workspace
+    so their require directives reflect the build list that the workspace
+    resolved.
+
+    Use case: You've finished developing a feature across multiple modules
+    using go work. Before publishing, you want to:
+      1. Update each module's go.mod with the proper versions
+      2. Remove the go.work dependency
+      3. Publish each module
+
+    go work sync is step 1: it writes the resolved versions back to each
+    individual go.mod so they'll work correctly without the workspace.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q7: What happens when two dependencies need incompatible versions of    │
+  │     the same package in Go? How does Go resolve it?                     │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+    Go uses MVS (Minimum Version Selection). It picks the highest minimum
+    version required by any module in the dependency graph. This is always
+    a specific, deterministic version.
+
+    Example:
+      dep-a requires lib@v1.3.0
+      dep-b requires lib@v1.5.0
+      Go selects lib@v1.5.0
+
+    This only works cleanly within the same major version. If dep-a needs
+    lib@v1.x and dep-b needs lib@v2.x, they are treated as DIFFERENT
+    modules (due to semantic import versioning), so both can coexist. Go
+    does NOT have the diamond dependency problem for different majors.
+
+    For same-major conflicts, Go always picks the highest minimum, which
+    is always backwards-compatible by semver definition.
+
+================================================================================
+  QUICK REFERENCE CHEATSHEET
+================================================================================
+
+  go mod init github.com/user/repo    -> init new module
+  go mod tidy                         -> sync go.mod with imports
+  go mod tidy -v                      -> verbose sync
+  go mod download                     -> download all deps to cache
+  go mod verify                       -> verify checksums
+  go mod vendor                       -> vendor all deps
+  go mod graph                        -> print dependency graph
+  go mod why github.com/foo/bar       -> why is this dep needed?
+
+  go get github.com/foo/bar           -> add/update to latest
+  go get github.com/foo/bar@v1.2.3    -> specific version
+  go get github.com/foo/bar@latest    -> latest release
+  go get github.com/foo/bar@main      -> branch tip (pseudo-version)
+  go get github.com/foo/bar@none      -> remove dependency
+  go get -u ./...                     -> upgrade all deps
+  go get -u=patch ./...               -> upgrade patch versions only
+
+  go install tool@latest              -> install binary tool globally
+
+  go work init ./mod1 ./mod2          -> init workspace
+  go work use ./mod3                  -> add module to workspace
+  go work use -r ./                   -> add all modules recursively
+  go work sync                        -> sync go.mod files from workspace
+  go work vendor                      -> vendor workspace deps
+  GOWORK=off go build ./...           -> disable workspace for a command
+
+================================================================================

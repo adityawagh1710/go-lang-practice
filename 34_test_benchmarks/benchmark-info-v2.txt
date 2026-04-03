@@ -1,0 +1,744 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang BENCHMARK
+════════════════════════════════════════════════════════════════════════════════════
+
+INDEX
+─────
+  1. What is a Benchmark in Go?
+  2. The testing.B Type
+  3. b.N — The Heart of Benchmarking
+  4. Writing Your First Benchmark
+  5. Running Benchmarks
+  6. Reading Benchmark Output
+  7. b.ResetTimer / b.StopTimer / b.StartTimer
+  8. Benchmarking with Sub-benchmarks (b.Run)
+  9. Parallel Benchmarks (b.RunParallel)
+ 10. Memory Allocation Benchmarking (b.ReportAllocs / -benchmem)
+ 11. Benchmarking Table-Driven Style
+ 12. Common Pitfalls
+ 13. Java Comparison
+ 14. Interview Q&A — Medior Level
+ 15. Interview Q&A — Experienced Level
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 1 — What is a Benchmark in Go?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+- Go has built-in benchmarking support via the `testing` package.
+- No external library needed (unlike JMH in Java).
+- Benchmark functions live in *_test.go files alongside unit tests.
+- They are NOT run with `go test` by default; you must pass -bench flag.
+- The Go testing framework automatically determines how many iterations (b.N)
+  to run so that the total elapsed time is statistically meaningful.
+
+Rules for a valid benchmark function:
+  • Must be in a *_test.go file
+  • Must be in package foo or package foo_test
+  • Function name must start with "Benchmark" (capital B)
+  • Must accept exactly one argument: b *testing.B
+  • Must loop from 0 to b.N
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 2 — The testing.B Type
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Key fields and methods on *testing.B:
+
+  b.N              int        — number of iterations to run (set by the framework)
+  b.ResetTimer()              — reset elapsed time (exclude setup cost)
+  b.StopTimer()               — pause the benchmark timer
+  b.StartTimer()              — resume the benchmark timer
+  b.ReportAllocs()            — report memory allocations in output
+  b.SetBytes(n int64)         — report throughput (bytes/op)
+  b.Run(name, func)           — run a sub-benchmark
+  b.RunParallel(func)         — run benchmark in parallel goroutines
+  b.Helper()                  — mark as helper (same as testing.T)
+  b.Log / b.Logf / b.Error    — same as testing.T equivalents
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 3 — b.N — The Heart of Benchmarking
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+- b.N starts at 1.
+- The Go benchmark runner calls your benchmark function multiple times,
+  each time increasing b.N (1 → 100 → 10000 → ...) until the total
+  runtime exceeds 1 second (default).
+- You do NOT set b.N yourself. The framework manages it.
+- Your job: run the code under test exactly b.N times in a loop.
+
+How the runner scales b.N:
+  Round 1:  b.N = 1
+  Round 2:  b.N = 100
+  Round 3:  b.N = 10,000
+  Round 4:  b.N = 1,000,000
+  ... until elapsed time >= benchtime (default 1s)
+
+Final result = (total_time / b.N) → reported as ns/op
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 4 — Writing Your First Benchmark
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+File: math_utils.go
+--------------------
+package mathutils
+
+func Fibonacci(n int) int {
+    if n <= 1 {
+        return n
+    }
+    return Fibonacci(n-1) + Fibonacci(n-2)
+}
+
+func FibonacciIterative(n int) int {
+    if n <= 1 {
+        return n
+    }
+    a, b := 0, 1
+    for i := 2; i <= n; i++ {
+        a, b = b, a+b
+    }
+    return b
+}
+
+
+File: math_utils_test.go
+------------------------
+package mathutils
+
+import "testing"
+
+// BenchmarkXxx naming convention — Xxx describes what is being benchmarked
+func BenchmarkFibonacciRecursive(b *testing.B) {
+    for i := 0; i < b.N; i++ {
+        Fibonacci(20)
+    }
+}
+
+func BenchmarkFibonacciIterative(b *testing.B) {
+    for i := 0; i < b.N; i++ {
+        FibonacciIterative(20)
+    }
+}
+
+
+NOTE: The loop for i := 0; i < b.N; i++ is the canonical pattern.
+      Never use range b.N (valid in Go 1.22+: for range b.N { })
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 5 — Running Benchmarks
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Command                                  Description
+───────────────────────────────────────  ─────────────────────────────────────────
+go test -bench=.                         Run ALL benchmarks in current package
+go test -bench=BenchmarkFib              Run benchmarks matching "Fib"
+go test -bench=BenchmarkFib -benchtime=5s  Run for 5 seconds (default is 1s)
+go test -bench=. -benchmem               Include memory allocation stats
+go test -bench=. -count=3               Run each benchmark 3 times
+go test -bench=. -cpu=1,2,4             Run with GOMAXPROCS set to 1, 2, and 4
+go test -bench=. -benchtime=100x        Run exactly 100 iterations (not time-based)
+go test -bench=. -run=^$                Skip unit tests, only run benchmarks
+go test -bench=. -v                     Verbose output
+
+-run=^$ is a regex that matches no test name → skips all TestXxx functions.
+This is the standard trick to run ONLY benchmarks.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 6 — Reading Benchmark Output
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Sample output:
+  goos: linux
+  goarch: amd64
+  pkg: mathutils
+  BenchmarkFibonacciRecursive-8    30000    45210 ns/op
+  BenchmarkFibonacciIterative-8  3000000      412 ns/op
+  PASS
+
+Column breakdown:
+
+  BenchmarkFibonacciRecursive-8
+  │                             └── GOMAXPROCS (number of OS threads)
+  └── Benchmark function name
+
+  30000          → b.N — total iterations run in the final round
+  45210 ns/op    → nanoseconds per iteration (time / b.N)
+
+With -benchmem:
+  BenchmarkSomething-8   1000000   1200 ns/op   64 B/op   2 allocs/op
+                                                │            └── heap allocations per iteration
+                                                └── bytes allocated per iteration
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 7 — b.ResetTimer / b.StopTimer / b.StartTimer
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Use these when you have expensive SETUP that should not be counted.
+
+Example — Exclude setup cost with ResetTimer:
+---------------------------------------------
+func BenchmarkWithSetup(b *testing.B) {
+    // Expensive setup — do NOT count this
+    data := make([]int, 1_000_000)
+    for i := range data {
+        data[i] = i
+    }
+
+    b.ResetTimer() // <-- reset: exclude setup time above
+
+    for i := 0; i < b.N; i++ {
+        _ = sum(data) // only this is measured
+    }
+}
+
+
+Example — Pause/resume timer inside the loop:
+---------------------------------------------
+func BenchmarkWithPerIterationSetup(b *testing.B) {
+    for i := 0; i < b.N; i++ {
+        b.StopTimer()                     // pause
+        input := generateRandomInput()    // not measured
+        b.StartTimer()                    // resume
+
+        process(input)                    // measured
+    }
+}
+
+NOTE: StopTimer/StartTimer inside the loop has overhead.
+      Prefer ResetTimer outside the loop when possible.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 8 — Sub-benchmarks (b.Run)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+b.Run works exactly like t.Run for tests — useful for parameterized benchmarks.
+
+func BenchmarkSort(b *testing.B) {
+    sizes := []int{100, 1000, 10000}
+
+    for _, size := range sizes {
+        size := size // capture for goroutine safety (pre-Go 1.22)
+        b.Run(fmt.Sprintf("size=%d", size), func(b *testing.B) {
+            data := make([]int, size)
+            for i := range data {
+                data[i] = rand.Intn(size)
+            }
+            b.ResetTimer()
+
+            for i := 0; i < b.N; i++ {
+                arr := make([]int, size)
+                copy(arr, data)
+                sort.Ints(arr)
+            }
+        })
+    }
+}
+
+Output:
+  BenchmarkSort/size=100-8      200000    7500 ns/op
+  BenchmarkSort/size=1000-8      20000   82000 ns/op
+  BenchmarkSort/size=10000-8      1500  980000 ns/op
+
+Run a specific sub-benchmark:
+  go test -bench=BenchmarkSort/size=1000
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 9 — Parallel Benchmarks (b.RunParallel)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Use b.RunParallel to benchmark concurrent performance.
+The framework spawns GOMAXPROCS goroutines by default.
+
+func BenchmarkConcurrentMap(b *testing.B) {
+    var m sync.Map
+
+    b.RunParallel(func(pb *testing.PB) {
+        // pb.Next() returns true until b.N total iterations are done
+        i := 0
+        for pb.Next() {
+            m.Store(i, i)
+            i++
+        }
+    })
+}
+
+Control parallelism:
+  go test -bench=. -cpu=1,2,4,8
+  // Runs the benchmark at each GOMAXPROCS value
+
+  b.SetParallelism(4) // multiplier on top of GOMAXPROCS
+
+Pattern rules for RunParallel:
+  • Each goroutine gets its own *testing.PB
+  • Call pb.Next() in the loop — not i < b.N
+  • Total iterations across ALL goroutines = b.N
+  • Shared state must be goroutine-safe
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 10 — Memory Benchmarking (b.ReportAllocs / -benchmem)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Two ways to enable memory reporting:
+
+1. Flag at runtime:
+   go test -bench=. -benchmem
+
+2. Programmatically inside the benchmark:
+   b.ReportAllocs()
+
+Example comparing allocating vs non-allocating code:
+-----------------------------------------------------
+// Allocating version
+func joinStrings(parts []string) string {
+    result := ""
+    for _, p := range parts {
+        result += p // each += creates a new string — many allocs
+    }
+    return result
+}
+
+// Non-allocating version
+func joinStringsBuilder(parts []string) string {
+    var sb strings.Builder
+    for _, p := range parts {
+        sb.WriteString(p)
+    }
+    return sb.String()
+}
+
+func BenchmarkJoinStrings(b *testing.B) {
+    parts := []string{"hello", " ", "world", " ", "from", " ", "go"}
+    b.ReportAllocs()
+
+    b.Run("concat", func(b *testing.B) {
+        for i := 0; i < b.N; i++ {
+            _ = joinStrings(parts)
+        }
+    })
+
+    b.Run("builder", func(b *testing.B) {
+        for i := 0; i < b.N; i++ {
+            _ = joinStringsBuilder(parts)
+        }
+    })
+}
+
+Sample output:
+  BenchmarkJoinStrings/concat-8    500000    3200 ns/op   112 B/op   6 allocs/op
+  BenchmarkJoinStrings/builder-8  2000000     600 ns/op    48 B/op   1 allocs/op
+
+Insight: strings.Builder wins on both speed AND allocations.
+
+b.SetBytes(n int64) — for throughput reporting:
+  func BenchmarkHash(b *testing.B) {
+      data := make([]byte, 1024)
+      b.SetBytes(int64(len(data))) // tells the framework the data size
+
+      for i := 0; i < b.N; i++ {
+          sha256.Sum256(data)
+      }
+  }
+  // Output includes: 1.2 GB/s
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 11 — Table-Driven Benchmarks
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Combine table-driven testing style with b.Run for clean multi-case benchmarks.
+
+func BenchmarkPrimeCheck(b *testing.B) {
+    cases := []struct {
+        name  string
+        input int
+    }{
+        {"small_prime", 7},
+        {"medium_prime", 104729},
+        {"large_prime", 15485863},
+    }
+
+    for _, tc := range cases {
+        tc := tc // capture loop var
+        b.Run(tc.name, func(b *testing.B) {
+            for i := 0; i < b.N; i++ {
+                isPrime(tc.input)
+            }
+        })
+    }
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 12 — Common Pitfalls
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PITFALL 1: Compiler optimizing away your code
+─────────────────────────────────────────────
+The compiler might eliminate "dead code" — results never used.
+
+BAD:
+  for i := 0; i < b.N; i++ {
+      Fibonacci(20) // result discarded → compiler may eliminate the call!
+  }
+
+GOOD — use a package-level sink variable:
+  var result int
+
+  func BenchmarkFib(b *testing.B) {
+      var r int
+      for i := 0; i < b.N; i++ {
+          r = Fibonacci(20)
+      }
+      result = r // assign to exported var to prevent dead code elimination
+  }
+
+Or use the blank identifier carefully:
+  _ = Fibonacci(20) // less safe, may still be optimized in simple cases
+
+
+PITFALL 2: Including setup in measurement
+─────────────────────────────────────────
+BAD:
+  func BenchmarkBad(b *testing.B) {
+      for i := 0; i < b.N; i++ {
+          data := make([]byte, 1024*1024) // setup counted!
+          process(data)
+      }
+  }
+
+GOOD:
+  func BenchmarkGood(b *testing.B) {
+      data := make([]byte, 1024*1024) // setup outside loop
+      b.ResetTimer()
+      for i := 0; i < b.N; i++ {
+          process(data)
+      }
+  }
+
+
+PITFALL 3: Assuming b.N is fixed
+─────────────────────────────────
+b.N is different each time the framework calls your function.
+Do NOT assume it's a fixed number. Always loop 0..b.N.
+
+BAD:
+  func BenchmarkWrong(b *testing.B) {
+      for i := 0; i < 1000; i++ { // hardcoded — wrong!
+          doWork()
+      }
+  }
+
+
+PITFALL 4: Not capturing loop variable in sub-benchmarks (pre-Go 1.22)
+───────────────────────────────────────────────────────────────────────
+BAD (pre-Go 1.22):
+  for _, tc := range cases {
+      b.Run(tc.name, func(b *testing.B) {
+          use(tc.input) // tc captured by reference — all share the last value
+      })
+  }
+
+GOOD:
+  for _, tc := range cases {
+      tc := tc // shadow to capture by value
+      b.Run(tc.name, func(b *testing.B) {
+          use(tc.input)
+      })
+  }
+  // In Go 1.22+, loop variable capture is fixed — no shadowing needed.
+
+
+PITFALL 5: Benchmarking with external I/O
+──────────────────────────────────────────
+External I/O (DB, network, disk) introduces non-determinism.
+Use mocks or in-memory fakes for stable benchmarks.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 13 — Java Comparison
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Feature                  Java (JMH)                     Go (testing.B)
+───────────────────────  ─────────────────────────────  ──────────────────────────────
+Built-in support         No (external library: JMH)     Yes (stdlib testing package)
+Warmup                   Explicit @Warmup annotation    Automatic (b.N scaling)
+Iteration control        @Measurement annotation        -benchtime flag / b.N
+Memory stats             GC profilers, @Profilers       -benchmem / b.ReportAllocs()
+Parallel benchmark       @Threads                       b.RunParallel / -cpu
+Dead code prevention     Blackhole.consume()            Package-level sink variable
+Sub-benchmarks           @Param                         b.Run(name, func)
+Setup/teardown           @Setup / @TearDown             Before loop / b.ResetTimer
+Output format            JSON, text                     Plain text (parseable)
+Throughput reporting     @BenchmarkMode(Throughput)     b.SetBytes()
+JIT warmup concern       Yes (JVM)                      No (compiled binary)
+
+Key difference: Go benchmarks are on compiled binaries — no JIT warmup issues.
+JMH has explicit warmup phases to stabilize JIT-compiled code;
+Go doesn't need this, but Go benchmarks CAN suffer from cache warm/cold effects.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 14 — INTERVIEW Q&A — Medior Level
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q1: How do you write a benchmark in Go?                                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+A: A benchmark function must:
+   - Be in a *_test.go file
+   - Have its name start with "Benchmark"
+   - Accept a single argument of type *testing.B
+   - Contain a loop from 0 to b.N
+
+   Example:
+     func BenchmarkAdd(b *testing.B) {
+         for i := 0; i < b.N; i++ {
+             Add(2, 3)
+         }
+     }
+
+   Run with: go test -bench=BenchmarkAdd
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q2: What is b.N and who sets it?                                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+A: b.N is the number of iterations the benchmark should execute.
+   The Go testing framework sets it — you never set it yourself.
+   It starts at 1 and is increased exponentially across multiple calls
+   to your benchmark function until the total elapsed time exceeds
+   1 second (or the value of -benchtime). The final ns/op result is
+   total_time / b.N.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q3: How do you exclude setup time from a benchmark?                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+A: Call b.ResetTimer() after the setup code and before the loop:
+
+     func BenchmarkWithSetup(b *testing.B) {
+         data := loadLargeDataset() // expensive setup
+         b.ResetTimer()             // timer reset here
+         for i := 0; i < b.N; i++ {
+             process(data)
+         }
+     }
+
+   Alternatively, use b.StopTimer() and b.StartTimer() inside the loop
+   for per-iteration setup, but this adds overhead.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q4: How do you run benchmarks and skip unit tests?                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+A: Use -run=^$ to match no test names:
+     go test -bench=. -run=^$
+
+   -bench=. matches all benchmark names (regex).
+   -run=^$ matches nothing (no TestXxx functions run).
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q5: What does -benchmem do?                                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+A: It adds memory allocation statistics to the output:
+     512 B/op   — bytes allocated on the heap per iteration
+     3 allocs/op — number of heap allocations per iteration
+
+   You can also call b.ReportAllocs() inside the function to enable
+   this programmatically without needing the flag at the command line.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q6: What is the purpose of b.Run in benchmarks?                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+A: b.Run creates a sub-benchmark, similar to t.Run for tests.
+   It lets you group related benchmarks under one function and run them
+   with different parameters. Each sub-benchmark gets its own b.N and
+   timing. You can target a sub-benchmark specifically:
+     go test -bench=BenchmarkSort/size=1000
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q7: How do you prevent the compiler from optimizing away your benchmark?    │
+└─────────────────────────────────────────────────────────────────────────────┘
+A: Assign the result to a package-level variable:
+
+     var sink int
+
+     func BenchmarkFib(b *testing.B) {
+         var r int
+         for i := 0; i < b.N; i++ {
+             r = Fibonacci(30)
+         }
+         sink = r // prevents dead code elimination
+     }
+
+   If the result is never used, the compiler may eliminate the function
+   call entirely, making the benchmark measure nothing real.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SECTION 15 — INTERVIEW Q&A — Experienced Level
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q1: Explain how the Go benchmark framework determines the final b.N value.  │
+└─────────────────────────────────────────────────────────────────────────────┘
+A: The framework repeatedly calls your benchmark function.
+   In each round it sets b.N to a larger value (roughly 10x each time: 1,
+   100, 10000, …) and measures how long your loop takes.
+   It continues until the cumulative time meets or exceeds the benchtime
+   threshold (default 1s, set by -benchtime).
+   The final result is: ns/op = total_time / b.N from the last round.
+   This adaptive approach ensures the measurement is statistically stable
+   regardless of how fast or slow the code under test is.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q2: When would you use b.RunParallel and what are the caveats?              │
+└─────────────────────────────────────────────────────────────────────────────┘
+A: Use b.RunParallel when you want to measure throughput under concurrent
+   load — e.g., a goroutine-safe cache, sync.Map, or a connection pool.
+   The framework spawns GOMAXPROCS goroutines, each calling pb.Next()
+   in a loop. Total iterations across all goroutines equals b.N.
+
+   Caveats:
+   1. Shared state must be goroutine-safe (use sync.Mutex, atomic, etc.)
+   2. Per-goroutine local state must be initialized inside the closure.
+   3. Results are harder to interpret — contention adds noise.
+   4. Use -cpu=1,2,4,8 to measure scaling behavior.
+   5. b.SetParallelism(n) multiplies goroutine count beyond GOMAXPROCS.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q3: How do you compare two benchmark runs scientifically?                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+A: Use the `benchstat` tool from golang.org/x/perf/cmd/benchstat.
+
+   Steps:
+   1. Run benchmark multiple times with -count:
+        go test -bench=. -count=10 > old.txt
+      (after changing code)
+        go test -bench=. -count=10 > new.txt
+
+   2. Compare with benchstat:
+        benchstat old.txt new.txt
+
+   benchstat performs statistical analysis (geomean, p-values) and
+   reports whether the delta is statistically significant, helping you
+   distinguish real improvements from noise. -count=5 or -count=10
+   is recommended for meaningful statistics.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q4: What is CPU cache warm-up effect on Go benchmarks and how do you        │
+│     mitigate it?                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+A: Go compiles to native code so JIT warmup is not an issue.
+   However, CPU caches can inflate results: early iterations prime the
+   L1/L2 cache, making subsequent accesses faster than real-world usage.
+
+   Mitigations:
+   1. Use -count=5 or more and let benchstat average out variance.
+   2. For memory-bound benchmarks, use large data sets that exceed cache
+      size to simulate production conditions.
+   3. For algorithms that are typically called on cold data, randomize
+      input data per iteration (but stop the timer during randomization
+      using StopTimer/StartTimer).
+   4. Run -benchtime=10s for longer, more stable measurements.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q5: How does b.SetBytes() work and when would you use it?                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+A: b.SetBytes(n) tells the framework how many bytes each iteration
+   processes. The output then includes MB/s (megabytes per second),
+   which is more meaningful than ns/op for I/O-bound or throughput
+   benchmarks like hashing, compression, or serialization.
+
+   Example — SHA-256 throughput:
+     func BenchmarkSHA256(b *testing.B) {
+         data := make([]byte, 4096)
+         b.SetBytes(int64(len(data)))
+         b.ResetTimer()
+
+         for i := 0; i < b.N; i++ {
+             sha256.Sum256(data)
+         }
+     }
+
+   Output: 5000000   240 ns/op   16384 MB/s
+
+   Use it when your function's performance is best expressed as
+   data throughput rather than latency per call.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q6: What are the limitations of Go benchmarks?                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+A: 1. Single-machine: benchmarks don't capture distributed system latency.
+   2. No explicit warmup control: unlike JMH, you can't specify warmup
+      iterations by design — the adaptive b.N scaling is the warmup.
+   3. System noise: OS scheduling, GC pauses, and CPU throttling can
+      introduce variance. Use -count + benchstat for significance.
+   4. No profiling by default: add -cpuprofile, -memprofile flags or
+      use pprof integration for profiling alongside benchmarks.
+   5. Micro-benchmarks don't reflect macro performance: a 10ns improvement
+      in isolation may be irrelevant at the system level.
+   6. Compiler inlining can cause misleadingly fast results if the
+      function under test is inlined away; use sink vars to prevent this.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q7: How do you profile CPU usage during a benchmark?                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+A: Pass profiling flags to go test:
+
+     go test -bench=BenchmarkFoo -cpuprofile=cpu.out
+     go tool pprof cpu.out
+
+   Or for memory:
+     go test -bench=BenchmarkFoo -memprofile=mem.out
+     go tool pprof mem.out
+
+   Inside pprof: use `top`, `list FunctionName`, `web` (requires graphviz)
+   to identify hotspots.
+
+   You can also use runtime/pprof directly inside the benchmark if you
+   need more granular control over what gets profiled.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  QUICK REFERENCE CHEATSHEET
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Skeleton:
+    func BenchmarkXxx(b *testing.B) {
+        // setup (not measured)
+        b.ResetTimer()
+        for i := 0; i < b.N; i++ {
+            // code to measure
+        }
+    }
+
+  Key flags:
+    -bench=.          run all benchmarks
+    -bench=Name       run matching benchmarks (regex)
+    -run=^$           skip unit tests
+    -benchmem         show memory stats
+    -benchtime=5s     run for 5 seconds
+    -benchtime=100x   run exactly 100 iterations
+    -count=10         repeat 10 times (use with benchstat)
+    -cpu=1,2,4        test at different GOMAXPROCS levels
+    -cpuprofile=f     CPU profile output
+    -memprofile=f     memory profile output
+
+  Key methods:
+    b.N               iteration count (set by framework)
+    b.ResetTimer()    exclude setup from timing
+    b.StopTimer()     pause timer
+    b.StartTimer()    resume timer
+    b.ReportAllocs()  enable memory reporting
+    b.SetBytes(n)     report throughput
+    b.Run(name, f)    sub-benchmark
+    b.RunParallel(f)  concurrent benchmark
+
+  Anti-dead-code pattern:
+    var sink ResultType
+    func BenchmarkFoo(b *testing.B) {
+        var r ResultType
+        for i := 0; i < b.N; i++ { r = foo() }
+        sink = r
+    }
+
+  Comparison tool:
+    go install golang.org/x/perf/cmd/benchstat@latest
+    go test -bench=. -count=10 > old.txt
+    go test -bench=. -count=10 > new.txt
+    benchstat old.txt new.txt
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

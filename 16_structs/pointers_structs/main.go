@@ -66,6 +66,6 @@ func main() {
 
 	fmt.Println("=====================ENCAPSULATED===========================")
 
-	trup := NewTrup("ENCAPSULATED")   // constructor
-	fmt.Println(trup.GetName()) // method call
+	trup := NewTrup("ENCAPSULATED") // constructor
+	fmt.Println(trup.GetName())     // method call
 }

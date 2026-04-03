@@ -2,7 +2,7 @@ package main
 
 import "fmt"
 
-func main () {
+func main() {
 	age := 16
 
 	// Simple if, else if
@@ -19,7 +19,7 @@ func main () {
 	} else if age >= 12 {
 		fmt.Println("Person teenager ", age)
 	}
-	
+
 	var role = "admin"
 	var hasPermissions = true
 

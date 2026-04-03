@@ -1,9 +1,10 @@
 package main
+
 import "fmt"
 
-func main ()  {
+func main() {
 	i := 1
-	
+
 	// Normal loop
 	for i <= 5 {
 		fmt.Println(i)
@@ -20,7 +21,7 @@ func main ()  {
 		fmt.Println(i)
 	}
 
-	// For loop break 
+	// For loop break
 	for i := 0; i <= 6; i++ {
 		// break also possible
 

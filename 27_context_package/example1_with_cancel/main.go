@@ -25,7 +25,7 @@ func main() {
 	defer cancel() // always defer — prevents goroutine leak
 
 	go doWork(ctx, 1)
-	
+
 	go doWork(ctx, 2)
 
 	time.Sleep(1500 * time.Millisecond)

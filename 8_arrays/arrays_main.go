@@ -2,14 +2,14 @@ package main
 
 import "fmt"
 
-func main () {
+func main() {
 	var nums [4]int
 
 	// 0th index as 12
-	nums[0] = 12;
+	nums[0] = 12
 
 	// Array length
-	fmt.Println("length ",  len(nums))
+	fmt.Println("length ", len(nums))
 
 	// All array element
 	fmt.Println(nums)
@@ -23,6 +23,5 @@ func main () {
 	fmt.Println(matrix)
 
 	// Fixed size, that is predictable
-	// Memeory optimization 
+	// Memeory optimization
 }
-

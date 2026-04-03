@@ -1,0 +1,889 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang QUALITY TOOLS: gofmt | go vet | golangci-lint
+════════════════════════════════════════════════════════════════════════════════════
+INDEX
+-----
+  1. Overview & Philosophy
+  2. gofmt — Formatter
+     2.1 What it does
+     2.2 Common flags
+     2.3 goimports variant
+     2.4 Code examples
+  3. go vet — Static Analyzer
+     3.1 What it catches
+     3.2 Common checks explained
+     3.3 Code examples (bad vs good)
+  4. golangci-lint — Meta-Linter
+     4.1 What it is
+     4.2 Popular bundled linters
+     4.3 Configuration (.golangci.yml)
+     4.4 Code examples
+  5. Recommended Pipeline (CI/CD)
+  6. Java vs Go — Tool Comparison
+  7. Interview Q&A — Medior Level
+  8. Interview Q&A — Experienced Level
+
+================================================================================
+  SECTION 1 — OVERVIEW & PHILOSOPHY
+================================================================================
+
+Go enforces code quality at multiple layers:
+
+  Layer 1 → gofmt         : Formatting (style, whitespace, indentation)
+  Layer 2 → go vet        : Static analysis (logic bugs, misuse patterns)
+  Layer 3 → golangci-lint : Meta-linter (runs 50+ linters in one shot)
+
+The Go team's philosophy:
+  "Gofmt's style is no one's favorite, yet gofmt is everyone's favorite."
+
+Unlike Java (Checkstyle, PMD, SpotBugs as separate tools),
+Go ships gofmt and go vet in the standard toolchain.
+golangci-lint is the community standard for production-grade checks.
+
+================================================================================
+  SECTION 2 — gofmt
+================================================================================
+
+2.1 WHAT IT DOES
+----------------
+gofmt automatically formats Go source code to a canonical style.
+It is deterministic — same input always produces same output.
+There is NO configuration. The style is fixed.
+
+Handles:
+  - Indentation (tabs, not spaces)
+  - Brace placement
+  - Spacing around operators
+  - Blank lines between declarations
+  - Alignment in struct fields (sometimes)
+
+2.2 COMMON FLAGS
+----------------
+
+  gofmt file.go              # Print formatted code to stdout
+  gofmt -w file.go           # Write formatted code back to file
+  gofmt -d file.go           # Show diff (what would change)
+  gofmt -l ./...             # List files that need formatting
+  gofmt -w ./...             # Format all Go files recursively
+
+  In CI, use:
+  gofmt -l . && test -z "$(gofmt -l .)"
+  # Fails if any file is not formatted
+
+2.3 GOIMPORTS VARIANT
+---------------------
+goimports = gofmt + automatic import management
+  - Adds missing imports
+  - Removes unused imports
+  - Groups/sorts imports (stdlib, external, internal)
+
+  go install golang.org/x/tools/cmd/goimports@latest
+  goimports -w ./...
+
+2.4 CODE EXAMPLES
+-----------------
+
+BEFORE gofmt (messy):
+
+func add(a int,b int)int{
+return a+b
+}
+
+type Person struct{
+Name string
+Age int
+}
+
+AFTER gofmt (canonical):
+
+func add(a int, b int) int {
+    return a + b
+}
+
+type Person struct {
+    Name string
+    Age  int
+}
+
+--------------------------------------------------
+Checking in a pre-commit hook or CI script:
+
+#!/bin/bash
+# check-fmt.sh
+FILES=$(gofmt -l .)
+if [ -n "$FILES" ]; then
+    echo "The following files need formatting:"
+    echo "$FILES"
+    exit 1
+fi
+echo "All files are properly formatted."
+
+================================================================================
+  SECTION 3 — go vet
+================================================================================
+
+3.1 WHAT IT CATCHES
+-------------------
+go vet performs static analysis beyond formatting.
+It finds real logic bugs that compile fine but behave incorrectly.
+
+Run:
+  go vet ./...
+
+3.2 COMMON CHECKS EXPLAINED
+----------------------------
+
+  CHECK                     | WHAT IT CATCHES
+  --------------------------|-----------------------------------------
+  printf                    | Format string / argument count mismatch
+  copylock                  | Copying a mutex by value
+  loopclosure               | Capturing loop variable in goroutine
+  structtag                 | Malformed struct tags (json, xml, etc.)
+  unreachable               | Code after return/panic
+  shift                     | Shift count >= bit width
+  nilness                   | Nil pointer dereference patterns
+  composites                | Unkeyed struct literals for exported types
+  httpresponse              | HTTP response body not checked for errors
+  shadow (with -shadow flag)| Variable shadowing in inner scope
+
+3.3 CODE EXAMPLES
+-----------------
+
+--- BAD: Printf format mismatch ---
+
+package main
+
+import "fmt"
+
+func main() {
+    name := "Aditya"
+    age := 25
+    fmt.Printf("Name: %d, Age: %s\n", name, age) // wrong verbs
+}
+
+// go vet output:
+// ./main.go:7:2: fmt.Printf format %d has arg name of wrong type string
+// ./main.go:7:2: fmt.Printf format %s has arg age of wrong type int
+
+--- GOOD: Printf format corrected ---
+
+package main
+
+import "fmt"
+
+func main() {
+    name := "Aditya"
+    age := 25
+    fmt.Printf("Name: %s, Age: %d\n", name, age)
+}
+
+--------------------------------------------------
+
+--- BAD: Loop variable capture in goroutine ---
+
+package main
+
+import (
+    "fmt"
+    "sync"
+)
+
+func main() {
+    var wg sync.WaitGroup
+    nums := []int{1, 2, 3}
+
+    for _, n := range nums {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            fmt.Println(n) // captures loop variable — always prints last value
+        }()
+    }
+    wg.Wait()
+}
+
+// go vet output (Go < 1.22):
+// ./main.go:14:16: loop variable n captured by func literal
+
+--- GOOD: Pass loop variable as argument ---
+
+package main
+
+import (
+    "fmt"
+    "sync"
+)
+
+func main() {
+    var wg sync.WaitGroup
+    nums := []int{1, 2, 3}
+
+    for _, n := range nums {
+        wg.Add(1)
+        go func(val int) { // pass n as argument — captures the value, not the variable
+            defer wg.Done()
+            fmt.Println(val)
+        }(n)
+    }
+    wg.Wait()
+}
+
+// NOTE: In Go 1.22+, loop variables are per-iteration by default.
+// go vet still helps for older codebases.
+
+--------------------------------------------------
+
+--- BAD: Copying a sync.Mutex by value ---
+
+package main
+
+import "sync"
+
+type Counter struct {
+    mu    sync.Mutex
+    count int
+}
+
+func process(c Counter) { // passes Counter by value = copies the Mutex
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    c.count++
+}
+
+func main() {
+    c := Counter{}
+    process(c) // BAD: mutex copied
+}
+
+// go vet output:
+// ./main.go:10:16: process passes lock by value: Counter contains sync.Mutex
+
+--- GOOD: Pass pointer to avoid mutex copy ---
+
+package main
+
+import "sync"
+
+type Counter struct {
+    mu    sync.Mutex
+    count int
+}
+
+func process(c *Counter) { // pass pointer — no copy
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    c.count++
+}
+
+func main() {
+    c := &Counter{}
+    process(c)
+}
+
+--------------------------------------------------
+
+--- BAD: Malformed struct tag ---
+
+package main
+
+type User struct {
+    Name string `json:"name" db:"name"`
+    Age  int    `json:"age",omitempty` // incorrect: comma before omitempty, should be inside quotes
+}
+
+// go vet output:
+// ./main.go:5:2: struct field tag `json:"age",omitempty` not compatible with reflect.StructTag.Get
+
+--- GOOD: Correct struct tag syntax ---
+
+package main
+
+type User struct {
+    Name string `json:"name" db:"name"`
+    Age  int    `json:"age,omitempty"` // comma is inside the quotes
+}
+
+================================================================================
+  SECTION 4 — golangci-lint
+================================================================================
+
+4.1 WHAT IT IS
+--------------
+golangci-lint is a fast, parallel meta-linter that runs many linters
+in a single pass. It caches results between runs for performance.
+
+Install:
+  go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+Run:
+  golangci-lint run ./...
+  golangci-lint run --fix ./...   # auto-fix where possible
+
+4.2 POPULAR BUNDLED LINTERS
+-----------------------------
+
+  LINTER          | PURPOSE
+  ----------------|------------------------------------------------------
+  errcheck        | Finds unchecked error return values
+  staticcheck     | Deep static analysis (superset of go vet)
+  revive          | Flexible, configurable style linter (replaces golint)
+  gocritic        | Opinionated suggestions and anti-patterns
+  gosec           | Security issues (SQL injection, weak crypto, etc.)
+  govet           | Wraps go vet checks
+  unused          | Detects unused code (funcs, vars, types)
+  gocyclo         | Cyclomatic complexity limit
+  misspell        | Common English spelling mistakes in comments/strings
+  bodyclose       | Checks HTTP response body is closed
+  depguard        | Restrict which packages can be imported
+  exhaustive      | Checks switch statements cover all enum cases
+  noctx           | Detects HTTP requests made without a context
+  prealloc        | Suggests slice pre-allocation
+
+4.3 CONFIGURATION (.golangci.yml)
+----------------------------------
+
+# .golangci.yml — place in project root
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  enable:
+    - errcheck
+    - staticcheck
+    - revive
+    - gocritic
+    - gosec
+    - unused
+    - misspell
+    - bodyclose
+  disable:
+    - depguard
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - performance
+  gocyclo:
+    min-complexity: 15
+  misspell:
+    locale: US
+
+issues:
+  exclude-rules:
+    - path: "_test.go"
+      linters:
+        - errcheck
+  max-issues-per-linter: 50
+  max-same-issues: 10
+
+4.4 CODE EXAMPLES
+-----------------
+
+--- errcheck: unchecked error ---
+
+BAD:
+    os.Remove("tmp.txt") // error silently ignored
+
+GOOD:
+    if err := os.Remove("tmp.txt"); err != nil {
+        log.Printf("failed to remove file: %v", err)
+    }
+
+--------------------------------------------------
+
+--- bodyclose: HTTP response body not closed ---
+
+BAD:
+
+package main
+
+import "net/http"
+
+func getData(url string) {
+    resp, err := http.Get(url)
+    if err != nil {
+        return
+    }
+    // resp.Body never closed — resource leak
+    _ = resp
+}
+
+GOOD:
+
+package main
+
+import (
+    "io"
+    "net/http"
+)
+
+func getData(url string) {
+    resp, err := http.Get(url)
+    if err != nil {
+        return
+    }
+    defer resp.Body.Close() // always close the body
+    _, _ = io.ReadAll(resp.Body)
+}
+
+--------------------------------------------------
+
+--- gosec: weak random number (security) ---
+
+BAD:
+
+package main
+
+import (
+    "fmt"
+    "math/rand"
+)
+
+func generateToken() string {
+    return fmt.Sprintf("%d", rand.Int()) // G404: insecure random
+}
+
+GOOD:
+
+package main
+
+import (
+    "crypto/rand"
+    "encoding/hex"
+    "fmt"
+)
+
+func generateToken() (string, error) {
+    b := make([]byte, 16)
+    _, err := rand.Read(b)
+    if err != nil {
+        return "", fmt.Errorf("token generation failed: %w", err)
+    }
+    return hex.EncodeToString(b), nil
+}
+
+--------------------------------------------------
+
+--- exhaustive: switch missing enum case ---
+
+BAD:
+
+type Status int
+const (
+    Active   Status = iota
+    Inactive Status = iota
+    Pending  Status = iota
+)
+
+func describe(s Status) string {
+    switch s {
+    case Active:
+        return "active"
+    case Inactive:
+        return "inactive"
+    // Pending not handled — exhaustive linter flags this
+    }
+    return "unknown"
+}
+
+GOOD:
+
+func describe(s Status) string {
+    switch s {
+    case Active:
+        return "active"
+    case Inactive:
+        return "inactive"
+    case Pending:
+        return "pending"
+    default:
+        return "unknown"
+    }
+}
+
+================================================================================
+  SECTION 5 — RECOMMENDED CI/CD PIPELINE
+================================================================================
+
+Recommended order:
+
+  Step 1: gofmt -l .         → fail if any file needs formatting
+  Step 2: go vet ./...       → fail on logic errors
+  Step 3: golangci-lint run  → fail on linter violations
+  Step 4: go test ./...      → run all tests
+
+GitHub Actions example:
+
+name: Go Quality
+
+on: [push, pull_request]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Check formatting
+        run: |
+          if [ "$(gofmt -l . | wc -l)" -gt 0 ]; then
+            echo "Formatting issues found:"
+            gofmt -l .
+            exit 1
+          fi
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
+      - name: Run tests
+        run: go test -race -coverprofile=coverage.out ./...
+
+Makefile targets (common pattern):
+
+.PHONY: fmt vet lint test check
+
+fmt:
+    gofmt -w ./...
+
+vet:
+    go vet ./...
+
+lint:
+    golangci-lint run ./...
+
+test:
+    go test -race ./...
+
+check: fmt vet lint test
+
+================================================================================
+  SECTION 6 — JAVA vs GO TOOL COMPARISON
+================================================================================
+
+  CONCERN              | JAVA                        | GO
+  ---------------------|-----------------------------|--------------------------
+  Formatting           | Checkstyle / Spotless       | gofmt (built-in, no config)
+  Style enforcement    | PMD, Checkstyle             | revive, gocritic
+  Bug finding          | SpotBugs / FindBugs         | go vet, staticcheck
+  Security             | OWASP Dependency Check      | gosec
+  Unused code          | IntelliJ inspections        | unused linter
+  Meta-runner          | SonarQube (heavyweight)     | golangci-lint (lightweight)
+  CI integration       | Maven/Gradle plugins        | golangci-lint-action
+  Config complexity    | High (XML, YAML per tool)   | Low (one .golangci.yml)
+  Speed                | Slow per tool               | Fast (parallel + cache)
+  Format opinion       | Configurable                | Opinionated, no config
+
+Key insight:
+  In Java, you choose and configure each tool separately.
+  In Go, gofmt removes the style debate entirely.
+  golangci-lint replaces a whole suite of Java tools.
+
+================================================================================
+  SECTION 7 — INTERVIEW Q&A  (MEDIOR LEVEL)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  MEDIOR                                                                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q1: What is gofmt and why is it important in Go?                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+gofmt is Go's official code formatter. It enforces a single canonical
+code style across all Go code — tabs for indentation, specific brace
+placement, spacing rules — with zero configuration.
+
+It is important because:
+  - Eliminates code style debates in code reviews
+  - Makes all Go code look the same (readability)
+  - Is expected by the Go community and tooling
+  - IDEs and editors auto-run it on save
+
+Coming from Java: gofmt is like Spotless or google-java-format,
+but it ships with Go and has no options — the style is fixed.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q2: What is the difference between gofmt and goimports?                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+gofmt:
+  - Formats code style only (indentation, spacing, braces)
+  - Does NOT touch imports
+
+goimports:
+  - Does everything gofmt does, PLUS
+  - Adds missing import statements
+  - Removes unused imports
+  - Groups and sorts imports (stdlib → external → internal)
+
+Most teams use goimports in their editor and gofmt in CI.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q3: What does go vet check that the compiler does not?                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+The Go compiler checks for syntax errors and type errors.
+go vet goes further and checks for suspicious constructs that
+compile fine but are likely bugs:
+
+  - fmt.Printf format string vs argument type mismatch
+  - Copying a sync.Mutex by value (breaks the mutex)
+  - Goroutine closures capturing a loop variable (prints wrong values)
+  - Unreachable code after a return or panic statement
+  - Malformed struct tags
+
+Example: fmt.Printf("%d", "hello") compiles but go vet flags it.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q4: What is golangci-lint and why is it preferred over running linters      │
+│     individually?                                                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+golangci-lint is a meta-linter — it runs many linters (50+) in a single
+process, in parallel, with result caching.
+
+Benefits vs running linters individually:
+  - Single install and single run command
+  - Much faster due to shared parse tree and caching
+  - One config file (.golangci.yml) controls all linters
+  - Easier to integrate in CI (one step instead of many)
+  - Consistent output format across all linters
+
+Coming from Java: like running PMD + Checkstyle + SpotBugs in one command.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q5: How do you check if all files in a Go project are properly formatted    │
+│     in a CI script?                                                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Use gofmt -l to list files that need formatting.
+If any file is listed, fail the CI build:
+
+    #!/bin/bash
+    FILES=$(gofmt -l .)
+    if [ -n "$FILES" ]; then
+        echo "Unformatted files:"
+        echo "$FILES"
+        exit 1
+    fi
+
+Or as a one-liner in a Makefile or GitHub Actions step:
+    test -z "$(gofmt -l .)"
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q6: What is the errcheck linter and why is it important in Go?              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+errcheck detects places where error return values are silently ignored.
+
+In Go, almost every function can return an error.
+Ignoring errors is a common mistake that causes silent failures.
+
+Example that errcheck flags:
+    os.Remove("file.txt")     // error ignored
+
+Correct:
+    if err := os.Remove("file.txt"); err != nil {
+        log.Printf("remove failed: %v", err)
+    }
+
+Coming from Java: similar to SpotBugs detecting unchecked exceptions,
+but Go has no checked exceptions — errcheck fills that role.
+
+================================================================================
+  SECTION 8 — INTERVIEW Q&A  (EXPERIENCED LEVEL)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  EXPERIENCED                                                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q1: How does golangci-lint achieve its performance advantage?                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+golangci-lint is fast because of three mechanisms:
+
+1. Shared parse tree
+   All linters run against the same parsed AST.
+   Individual tools (staticcheck, errcheck) each parse the source
+   separately. golangci-lint parses once and shares the result.
+
+2. Result caching
+   golangci-lint caches analysis results per package.
+   Unchanged packages are not re-analyzed on subsequent runs.
+   Cache key is based on file content hash + linter config hash.
+
+3. Parallel execution
+   Linters that do not depend on each other run concurrently
+   across CPU cores.
+
+In CI, use --timeout and cache the golangci-lint result directory
+(~/.cache/golangci-lint) between pipeline runs for maximum speed.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q2: How would you configure golangci-lint to enforce no unchecked errors    │
+│     in production code but allow them in test files?                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Use the issues.exclude-rules section in .golangci.yml:
+
+    linters:
+      enable:
+        - errcheck
+
+    issues:
+      exclude-rules:
+        - path: "_test.go"      # applies to test files only
+          linters:
+            - errcheck
+
+This enables errcheck globally but suppresses it in *_test.go files,
+where it is common to ignore errors in setup/teardown code.
+
+You can also exclude by text pattern:
+    issues:
+      exclude-rules:
+        - linters: [errcheck]
+          text: "rows.Close"    # suppress for specific patterns
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q3: In Go 1.22, the loop variable capture bug was fixed. Does this make     │
+│     go vet's loopclosure check obsolete?                                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Partially. In Go 1.22+, each loop iteration creates a new variable
+binding, so the classic capture bug no longer occurs with range loops.
+
+However, go vet's loopclosure check is NOT fully obsolete because:
+
+1. Codebases with go.mod set to go 1.21 or earlier still have
+   the old behavior — go vet still catches real bugs there.
+
+2. Traditional C-style for loops (for i := 0; i < n; i++) are NOT
+   affected by Go 1.22's fix. Closures capturing i in these loops
+   still have the old behavior.
+
+3. The check is still useful as a code readability signal — even if
+   the behavior is now correct, explicit argument passing is clearer.
+
+Best practice: still pass loop variables explicitly when launching goroutines.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q4: How does staticcheck (bundled in golangci-lint) differ from go vet?     │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+go vet:
+  - Ships with Go toolchain
+  - Conservative — only reports near-certain bugs
+  - Small set of checks (~20)
+  - Zero false positives goal
+
+staticcheck:
+  - Third-party tool by Dominik Honnef
+  - Superset of go vet checks plus much more
+  - Checks deprecated API usage
+  - Detects unnecessary type conversions
+  - Detects redundant nil checks
+  - Detects string conversion issues
+  - Checks for context misuse
+  - More aggressive heuristics — may have rare false positives
+  - Organized into check categories: SA (staticcheck), S (simple),
+    ST (style), QF (quickfix)
+
+In golangci-lint, enabling both govet and staticcheck is common
+and recommended — they complement each other.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q5: You are setting up a new Go microservice team. How would you configure  │
+│     the quality toolchain from scratch?                                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+1. Editor / pre-commit
+   - Configure editors to run goimports on save
+   - Add a pre-commit hook: test -z "$(gofmt -l .)"
+
+2. Makefile targets
+   make fmt    → gofmt -w ./...
+   make vet    → go vet ./...
+   make lint   → golangci-lint run ./...
+   make test   → go test -race ./...
+   make check  → all of the above in order
+
+3. .golangci.yml
+   Enable: errcheck, staticcheck, revive, gocritic,
+           gosec, unused, bodyclose, misspell
+   Set timeout: 5 minutes
+   Exclude errcheck from _test.go files
+
+4. CI (GitHub Actions)
+   Step 1: gofmt -l . → fail if dirty
+   Step 2: go vet ./...
+   Step 3: golangci-lint run (golangci/golangci-lint-action@v6)
+   Step 4: go test -race -coverprofile=coverage.out ./...
+   Cache: ~/.cache/golangci-lint and Go module cache
+
+5. PR process
+   Require green CI before merge.
+   Auto-format with gofmt in pre-commit to avoid CI failures.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Q6: What is the gosec linter and what categories of security issues does    │
+│     it detect?                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+gosec (Go Security Checker) performs static analysis for security
+vulnerabilities in Go code.
+
+Key categories:
+  G101 — Hardcoded credentials (passwords, tokens in source)
+  G201 — SQL injection via string formatting
+  G304 — File path traversal (user-controlled file paths)
+  G401 — Weak crypto (MD5, SHA1 used for security)
+  G404 — Insecure random (math/rand instead of crypto/rand)
+  G501 — Import of weak crypto packages
+  G601 — Implicit memory aliasing in for loop (pre-Go 1.22)
+
+Example G404:
+    import "math/rand"
+    rand.Int()           // flagged: not cryptographically secure
+
+Fix:
+    import "crypto/rand"
+    rand.Read(buf)       // cryptographically secure
+
+In security-sensitive services (auth, payments), gosec is essential.
+It is commonly paired with go test -race for a comprehensive quality gate.
+
+================================================================================
+  QUICK REFERENCE CHEATSHEET
+================================================================================
+
+  TASK                              | COMMAND
+  ----------------------------------|--------------------------------------------
+  Format all files                  | gofmt -w ./...
+  Check formatting (CI)             | test -z "$(gofmt -l .)"
+  Show what gofmt would change      | gofmt -d file.go
+  Format + fix imports              | goimports -w ./...
+  Run static analysis               | go vet ./...
+  Run all linters                   | golangci-lint run ./...
+  Auto-fix where possible           | golangci-lint run --fix ./...
+  Run linters on specific path      | golangci-lint run ./pkg/...
+  Show available linters            | golangci-lint linters
+  Clear lint cache                  | golangci-lint cache clean
+  Lint with verbose output          | golangci-lint run -v ./...
+
+================================================================================
