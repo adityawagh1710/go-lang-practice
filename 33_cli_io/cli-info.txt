@@ -1,0 +1,1243 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang CLI and various CLIs 
+════════════════════════════════════════════════════════════════════════════════════
+
+INDEX
+-----
+  [1]  Overview & When to Use Which
+  [2]  Cobra — Enterprise CLI Framework
+       [2.1]  Installation & Project Setup
+       [2.2]  RootCmd & Execute
+       [2.3]  Subcommands
+       [2.4]  Flags — Local vs Persistent
+       [2.5]  Args & Validators
+       [2.6]  Viper Integration (config + env)
+       [2.7]  Cobra Lifecycle Hooks
+       [2.8]  Full Working Example
+  [3]  urfave/cli — Lightweight CLI Builder
+       [3.1]  Installation
+       [3.2]  cli.App & cli.Command
+       [3.3]  Flags & cli.Context
+       [3.4]  Subcommands & Categories
+       [3.5]  Full Working Example
+  [4]  Bubbletea — Terminal UI (TUI) Framework
+       [4.1]  The Elm Architecture (TEA)
+       [4.2]  Model / Update / View
+       [4.3]  tea.Cmd & tea.Msg (async side effects)
+       [4.4]  Lipgloss — Styling
+       [4.5]  Bubbles — Ready-made Components
+       [4.6]  Full Working TUI Example
+  [5]  Cobra vs urfave/cli vs Bubbletea — Comparison
+  [6]  Java-to-Go Mental Model
+  [7]  Interview Q&A — Medior Level
+  [8]  Interview Q&A — Experienced Level
+
+================================================================================
+[1]  OVERVIEW & WHEN TO USE WHICH
+================================================================================
+
+  Library       | Use When...
+  --------------|--------------------------------------------------------------
+  Cobra         | Building kubectl-style CLIs with many nested subcommands,
+                | persistent config (Viper), auto-generated docs & completions
+  urfave/cli    | Quick scripts, small microtools, prototypes — minimal boiler-
+                | plate, flat or shallow command hierarchy
+  Bubbletea     | Interactive terminal UI: spinners, menus, file pickers,
+                | real-time dashboards — the Elm architecture in Go
+
+  Key point: Cobra and urfave/cli REPLACE main-loop arg parsing.
+             Bubbletea ADD interactive UI ON TOP (often combined with Cobra).
+
+1. COBRA (github.com/spf13/cobra)
+   - Concept: Command-driven (app [command] [subcommand] --flags)
+   - Strengths: Auto-help, shell completion, nested commands.
+   - Ideal for: Large scale tools (CLI frameworks).
+
+2. URFAVE/CLI (github.com/urfave/cli/v2)
+   - Concept: Action-driven.
+   - Strengths: Concise, easy to read, low boilerplate.
+   - Ideal for: Simple utilities and scripts.
+
+3. BUBBLE TEA (github.com/charmbracelet/bubbletea)
+   - Concept: TUI (Terminal User Interface) via Elm Architecture.
+   - Strengths: Highly interactive, beautiful layouts (with Lip Gloss).
+   - Ideal for: Interactive installers, dashboards, terminal games.
+
+COMMON INTERVIEW TOPICS:
+- The Elm Architecture: Model, Update, View.
+- Positional Arguments vs Flags.
+- Standard I/O (Stdin, Stdout, Stderr) management in Go.
+
+================================================================================
+[2]  COBRA — ENTERPRISE CLI FRAMEWORK
+================================================================================
+
+  github.com/spf13/cobra
+  Used by: kubectl, gh, docker, Hugo, Helm, etc.
+
+--------------------------------------------------------------------------------
+[2.1]  Installation & Project Setup
+--------------------------------------------------------------------------------
+
+  go get github.com/spf13/cobra
+  go install github.com/spf13/cobra-cli@latest   # optional scaffolding tool
+
+  # Scaffold a new project
+  cobra-cli init myapp
+  cobra-cli add serve      # adds cmd/serve.go
+  cobra-cli add config     # adds cmd/config.go
+
+  Typical layout:
+  myapp/
+  ├── main.go
+  └── cmd/
+      ├── root.go
+      ├── serve.go
+      └── config.go
+
+--------------------------------------------------------------------------------
+[2.2]  RootCmd & Execute
+--------------------------------------------------------------------------------
+
+  // cmd/root.go
+  package cmd
+
+  import (
+      "fmt"
+      "os"
+
+      "github.com/spf13/cobra"
+  )
+
+  var rootCmd = &cobra.Command{
+      Use:   "myapp",
+      Short: "A brief description of myapp",
+      Long:  `A longer description of myapp shown in the help output.`,
+      // Uncomment to run something at root level:
+      // Run: func(cmd *cobra.Command, args []string) { },
+  }
+
+  func Execute() {
+      if err := rootCmd.Execute(); err != nil {
+          fmt.Fprintln(os.Stderr, err)
+          os.Exit(1)
+      }
+  }
+
+  // main.go
+  package main
+
+  import "myapp/cmd"
+
+  func main() {
+      cmd.Execute()
+  }
+
+--------------------------------------------------------------------------------
+[2.3]  Subcommands
+--------------------------------------------------------------------------------
+
+  // cmd/serve.go
+  package cmd
+
+  import (
+      "fmt"
+      "github.com/spf13/cobra"
+  )
+
+  var port int
+
+  var serveCmd = &cobra.Command{
+      Use:   "serve",
+      Short: "Start the HTTP server",
+      Long:  "Starts the HTTP server on the given port.",
+      RunE: func(cmd *cobra.Command, args []string) error {
+          fmt.Printf("Starting server on port %d\n", port)
+          return nil
+      },
+  }
+
+  func init() {
+      rootCmd.AddCommand(serveCmd)
+      serveCmd.Flags().IntVarP(&port, "port", "p", 8080, "Port to listen on")
+  }
+
+  // Usage:
+  //   myapp serve --port 9090
+  //   myapp serve -p 9090
+
+--------------------------------------------------------------------------------
+[2.4]  Flags — Local vs Persistent
+--------------------------------------------------------------------------------
+
+  LOCAL flag   → only available to the command it's defined on
+  PERSISTENT   → available to the command AND all its children
+
+  var verbose bool
+
+  func init() {
+      // Persistent: available to rootCmd and ALL subcommands
+      rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
+
+      // Local: only on serveCmd
+      serveCmd.Flags().IntVarP(&port, "port", "p", 8080, "port to bind")
+
+      // Mark required
+      serveCmd.MarkFlagRequired("port")
+
+      // Flag types available:
+      //   StringVar, IntVar, BoolVar, Float64Var, StringSliceVar, ...
+  }
+
+  // Reading inside RunE:
+  RunE: func(cmd *cobra.Command, args []string) error {
+      v, _ := cmd.Flags().GetBool("verbose")
+      fmt.Println("verbose:", v)
+      return nil
+  }
+
+--------------------------------------------------------------------------------
+[2.5]  Args & Validators
+--------------------------------------------------------------------------------
+
+  var greetCmd = &cobra.Command{
+      Use:   "greet [name]",
+      Short: "Greet someone",
+      Args:  cobra.ExactArgs(1),   // exactly 1 positional arg required
+      RunE: func(cmd *cobra.Command, args []string) error {
+          fmt.Printf("Hello, %s!\n", args[0])
+          return nil
+      },
+  }
+
+  // Other validators:
+  // cobra.NoArgs
+  // cobra.MinimumNArgs(n)
+  // cobra.MaximumNArgs(n)
+  // cobra.RangeArgs(min, max)
+  // cobra.ArbitraryArgs   — accept anything
+  // cobra.OnlyValidArgs   — whitelist via ValidArgs field
+
+  var deleteCmd = &cobra.Command{
+      Use:       "delete [resource]",
+      ValidArgs: []string{"pod", "service", "deployment"},
+      Args:      cobra.OnlyValidArgs,
+      RunE: func(cmd *cobra.Command, args []string) error {
+          fmt.Printf("Deleting %s\n", args[0])
+          return nil
+      },
+  }
+
+--------------------------------------------------------------------------------
+[2.6]  Viper Integration (config + env)
+--------------------------------------------------------------------------------
+
+  go get github.com/spf13/viper
+
+  // cmd/root.go
+  import (
+      "github.com/spf13/cobra"
+      "github.com/spf13/viper"
+  )
+
+  var cfgFile string
+
+  func init() {
+      cobra.OnInitialize(initConfig)
+      rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default $HOME/.myapp.yaml)")
+
+      // Bind env var
+      viper.BindEnv("port", "APP_PORT")
+      viper.SetDefault("port", 8080)
+  }
+
+  func initConfig() {
+      if cfgFile != "" {
+          viper.SetConfigFile(cfgFile)
+      } else {
+          viper.AddConfigPath("$HOME")
+          viper.SetConfigName(".myapp")
+          viper.SetConfigType("yaml")
+      }
+      viper.AutomaticEnv()
+      viper.ReadInConfig()
+  }
+
+  // Reading config anywhere:
+  port := viper.GetInt("port")
+  host := viper.GetString("host")
+
+--------------------------------------------------------------------------------
+[2.7]  Cobra Lifecycle Hooks
+--------------------------------------------------------------------------------
+
+  // Execution order (all are optional):
+  //
+  //   PersistentPreRunE  (parent, propagates down)
+  //       PreRunE        (this command only)
+  //           RunE       (main logic — use this)
+  //       PostRunE       (this command only)
+  //   PersistentPostRunE (parent, propagates down)
+
+  var rootCmd = &cobra.Command{
+      Use: "myapp",
+      PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+          fmt.Println("always runs before any subcommand")
+          return nil
+      },
+  }
+
+  var serveCmd = &cobra.Command{
+      Use:   "serve",
+      PreRunE: func(cmd *cobra.Command, args []string) error {
+          fmt.Println("runs before serve RunE only")
+          return nil
+      },
+      RunE: func(cmd *cobra.Command, args []string) error {
+          fmt.Println("main serve logic")
+          return nil
+      },
+      PostRunE: func(cmd *cobra.Command, args []string) error {
+          fmt.Println("cleanup after serve")
+          return nil
+      },
+  }
+
+--------------------------------------------------------------------------------
+[2.8]  Full Working Cobra Example
+--------------------------------------------------------------------------------
+
+  // main.go
+  package main
+
+  import "myapp/cmd"
+
+  func main() {
+      cmd.Execute()
+  }
+
+  // cmd/root.go
+  package cmd
+
+  import (
+      "fmt"
+      "os"
+
+      "github.com/spf13/cobra"
+  )
+
+  var verbose bool
+
+  var rootCmd = &cobra.Command{
+      Use:   "myapp",
+      Short: "My demo CLI",
+  }
+
+  func Execute() {
+      if err := rootCmd.Execute(); err != nil {
+          fmt.Fprintln(os.Stderr, err)
+          os.Exit(1)
+      }
+  }
+
+  func init() {
+      rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
+  }
+
+  // cmd/greet.go
+  package cmd
+
+  import (
+      "fmt"
+      "github.com/spf13/cobra"
+  )
+
+  var greetCmd = &cobra.Command{
+      Use:   "greet [name]",
+      Short: "Print a greeting",
+      Args:  cobra.ExactArgs(1),
+      RunE: func(cmd *cobra.Command, args []string) error {
+          if verbose {
+              fmt.Println("[verbose] running greet command")
+          }
+          fmt.Printf("Hello, %s!\n", args[0])
+          return nil
+      },
+  }
+
+  func init() {
+      rootCmd.AddCommand(greetCmd)
+  }
+
+  // Run: go run main.go greet Aditya --verbose
+  // Output:
+  //   [verbose] running greet command
+  //   Hello, Aditya!
+
+================================================================================
+[3]  URFAVE/CLI — LIGHTWEIGHT CLI BUILDER
+================================================================================
+
+  github.com/urfave/cli/v2
+  Simpler, struct-based, less magic, no code generation needed.
+
+--------------------------------------------------------------------------------
+[3.1]  Installation
+--------------------------------------------------------------------------------
+
+  go get github.com/urfave/cli/v2
+
+--------------------------------------------------------------------------------
+[3.2]  cli.App & cli.Command
+--------------------------------------------------------------------------------
+
+  // main.go
+  package main
+
+  import (
+      "fmt"
+      "log"
+      "os"
+
+      "github.com/urfave/cli/v2"
+  )
+
+  func main() {
+      app := &cli.App{
+          Name:    "greet",
+          Usage:   "fight the loneliness!",
+          Version: "1.0.0",
+          Action: func(ctx *cli.Context) error {
+              fmt.Println("Hello, World!")
+              return nil
+          },
+      }
+      if err := app.Run(os.Args); err != nil {
+          log.Fatal(err)
+      }
+  }
+
+--------------------------------------------------------------------------------
+[3.3]  Flags & cli.Context
+--------------------------------------------------------------------------------
+
+  app := &cli.App{
+      Flags: []cli.Flag{
+          &cli.StringFlag{
+              Name:    "name",
+              Aliases: []string{"n"},
+              Value:   "World",
+              Usage:   "who to greet",
+              EnvVars: []string{"GREET_NAME"},
+          },
+          &cli.IntFlag{
+              Name:  "count",
+              Value: 1,
+              Usage: "number of greetings",
+          },
+          &cli.BoolFlag{
+              Name:  "loud",
+              Usage: "shout the greeting",
+          },
+      },
+      Action: func(ctx *cli.Context) error {
+          name := ctx.String("name")
+          count := ctx.Int("count")
+          for i := 0; i < count; i++ {
+              msg := fmt.Sprintf("Hello, %s!", name)
+              if ctx.Bool("loud") {
+                  msg = strings.ToUpper(msg)
+              }
+              fmt.Println(msg)
+          }
+          return nil
+      },
+  }
+
+  // Flag types: StringFlag, IntFlag, BoolFlag, Float64Flag,
+  //             StringSliceFlag, IntSliceFlag, DurationFlag, etc.
+
+--------------------------------------------------------------------------------
+[3.4]  Subcommands & Categories
+--------------------------------------------------------------------------------
+
+  app := &cli.App{
+      Name: "myapp",
+      Commands: []*cli.Command{
+          {
+              Name:    "add",
+              Aliases: []string{"a"},
+              Usage:   "add a task to the list",
+              Action: func(ctx *cli.Context) error {
+                  fmt.Println("added task:", ctx.Args().First())
+                  return nil
+              },
+          },
+          {
+              Name:  "complete",
+              Usage: "complete a task on the list",
+              Action: func(ctx *cli.Context) error {
+                  fmt.Println("completed task:", ctx.Args().First())
+                  return nil
+              },
+          },
+          {
+              Name:  "server",
+              Usage: "server management commands",
+              Subcommands: []*cli.Command{
+                  {
+                      Name:  "start",
+                      Usage: "start a server",
+                      Flags: []cli.Flag{
+                          &cli.IntFlag{Name: "port", Value: 8080},
+                      },
+                      Action: func(ctx *cli.Context) error {
+                          fmt.Printf("server started on port %d\n", ctx.Int("port"))
+                          return nil
+                      },
+                  },
+                  {
+                      Name:  "stop",
+                      Usage: "stop a server",
+                      Action: func(ctx *cli.Context) error {
+                          fmt.Println("server stopped")
+                          return nil
+                      },
+                  },
+              },
+          },
+      },
+  }
+
+--------------------------------------------------------------------------------
+[3.5]  Full Working urfave/cli Example
+--------------------------------------------------------------------------------
+
+  package main
+
+  import (
+      "fmt"
+      "log"
+      "os"
+      "strings"
+
+      "github.com/urfave/cli/v2"
+  )
+
+  func main() {
+      app := &cli.App{
+          Name:    "todo",
+          Usage:   "manage your todos",
+          Version: "1.0.0",
+          Commands: []*cli.Command{
+              {
+                  Name:    "add",
+                  Aliases: []string{"a"},
+                  Usage:   "add a new todo",
+                  Flags: []cli.Flag{
+                      &cli.StringFlag{
+                          Name:     "task",
+                          Aliases:  []string{"t"},
+                          Required: true,
+                          Usage:    "task description",
+                      },
+                      &cli.BoolFlag{
+                          Name:  "urgent",
+                          Usage: "mark as urgent",
+                      },
+                  },
+                  Action: func(ctx *cli.Context) error {
+                      task := ctx.String("task")
+                      if ctx.Bool("urgent") {
+                          task = "[URGENT] " + strings.ToUpper(task)
+                      }
+                      fmt.Println("Added:", task)
+                      return nil
+                  },
+              },
+              {
+                  Name:  "list",
+                  Usage: "list all todos",
+                  Action: func(ctx *cli.Context) error {
+                      fmt.Println("Listing all todos...")
+                      return nil
+                  },
+              },
+          },
+      }
+      if err := app.Run(os.Args); err != nil {
+          log.Fatal(err)
+      }
+  }
+
+  // Run: go run main.go add --task "Write Go notes" --urgent
+  // Output: Added: [URGENT] WRITE GO NOTES
+
+================================================================================
+[4]  BUBBLETEA — TERMINAL UI (TUI) FRAMEWORK
+================================================================================
+
+  github.com/charmbracelet/bubbletea
+  Follows The Elm Architecture (TEA): Model → Update → View
+  Sister libraries: Lipgloss (styling), Bubbles (components)
+
+--------------------------------------------------------------------------------
+[4.1]  The Elm Architecture (TEA) — Core Concept
+--------------------------------------------------------------------------------
+
+  ┌──────────┐     Msg     ┌──────────────┐     string    ┌───────────────┐
+  │  Model   │ ──────────► │  Update()    │ ─────────────► │   View()      │
+  │ (state)  │             │  (new state) │                │ (render term) │
+  └──────────┘             └──────────────┘                └───────────────┘
+       ▲                         │
+       │          tea.Cmd        │
+       └─────────────────────────┘
+         (side effects → new Msg)
+
+  Model   = your app state (struct)
+  Update  = pure function: (Model, Msg) → (Model, tea.Cmd)
+  View    = pure function: Model → string (what to render)
+  Msg     = events (key press, timer tick, HTTP response done...)
+  Cmd     = async action that eventually produces a Msg
+
+--------------------------------------------------------------------------------
+[4.2]  Model / Update / View — Minimal Example
+--------------------------------------------------------------------------------
+
+  package main
+
+  import (
+      "fmt"
+
+      tea "github.com/charmbracelet/bubbletea"
+  )
+
+  // 1. Model — app state
+  type model struct {
+      count int
+  }
+
+  // 2. Init — called once at startup
+  func (m model) Init() tea.Cmd {
+      return nil // no initial command
+  }
+
+  // 3. Update — handle messages, return new state + optional cmd
+  func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+      switch msg := msg.(type) {
+      case tea.KeyMsg:
+          switch msg.String() {
+          case "q", "ctrl+c":
+              return m, tea.Quit
+          case "up", "k":
+              m.count++
+          case "down", "j":
+              m.count--
+          }
+      }
+      return m, nil
+  }
+
+  // 4. View — render model as a string
+  func (m model) View() string {
+      return fmt.Sprintf(
+          "Counter: %d\n\nPress up/k to increment, down/j to decrement, q to quit.\n",
+          m.count,
+      )
+  }
+
+  func main() {
+      p := tea.NewProgram(model{count: 0})
+      if _, err := p.Run(); err != nil {
+          fmt.Printf("Error: %v\n", err)
+      }
+  }
+
+--------------------------------------------------------------------------------
+[4.3]  tea.Cmd & tea.Msg — Async Side Effects
+--------------------------------------------------------------------------------
+
+  // A Cmd is a function that returns a Msg (run in goroutine by Bubbletea)
+  type someResponseMsg struct {
+      body string
+  }
+
+  func fetchData() tea.Msg {
+      // simulate HTTP call
+      return someResponseMsg{body: "data loaded"}
+  }
+
+  func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+      switch msg := msg.(type) {
+      case tea.KeyMsg:
+          if msg.String() == "f" {
+              return m, fetchData  // return Cmd (a function, not a call!)
+          }
+      case someResponseMsg:
+          m.data = msg.body
+          return m, nil
+      }
+      return m, nil
+  }
+
+  // Built-in Cmds:
+  //   tea.Quit                 — exit the program
+  //   tea.Batch(cmd1, cmd2)    — run multiple Cmds concurrently
+  //   tea.Tick(d, fn)          — emit a Msg every duration d
+  //   tea.ClearScreen          — clear terminal
+
+  // Tick example (real-time clock):
+  type tickMsg time.Time
+
+  func tick() tea.Cmd {
+      return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+          return tickMsg(t)
+      })
+  }
+
+  func (m model) Init() tea.Cmd {
+      return tick()
+  }
+
+  func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+      switch msg.(type) {
+      case tickMsg:
+          m.time = time.Now()
+          return m, tick() // re-schedule
+      }
+      return m, nil
+  }
+
+--------------------------------------------------------------------------------
+[4.4]  Lipgloss — CSS-like Terminal Styling
+--------------------------------------------------------------------------------
+
+  go get github.com/charmbracelet/lipgloss
+
+  import "github.com/charmbracelet/lipgloss"
+
+  var (
+      // Colors
+      highlight = lipgloss.Color("#FF79C6")
+      subtle    = lipgloss.Color("#6272A4")
+      special   = lipgloss.Color("#50FA7B")
+
+      // Styles
+      titleStyle = lipgloss.NewStyle().
+          Bold(true).
+          Foreground(highlight).
+          Padding(0, 1)
+
+      boxStyle = lipgloss.NewStyle().
+          Border(lipgloss.RoundedBorder()).
+          BorderForeground(subtle).
+          Padding(1, 2).
+          Width(30)
+
+      selectedStyle = lipgloss.NewStyle().
+          Foreground(special).
+          Bold(true).
+          PaddingLeft(2)
+
+      normalStyle = lipgloss.NewStyle().
+          PaddingLeft(2)
+  )
+
+  // Usage in View():
+  func (m model) View() string {
+      title := titleStyle.Render("My TUI App")
+      box   := boxStyle.Render("Content goes here")
+      return lipgloss.JoinVertical(lipgloss.Left, title, box)
+  }
+
+  // Layout helpers:
+  //   lipgloss.JoinVertical(align, strs...)
+  //   lipgloss.JoinHorizontal(align, strs...)
+  //   lipgloss.Place(w, h, hAlign, vAlign, str)
+
+--------------------------------------------------------------------------------
+[4.5]  Bubbles — Ready-made Components
+--------------------------------------------------------------------------------
+
+  go get github.com/charmbracelet/bubbles
+
+  // Components available:
+  //   bubbles/textinput  — text input field
+  //   bubbles/textarea   — multi-line text area
+  //   bubbles/list       — scrollable list with filtering
+  //   bubbles/table      — data table
+  //   bubbles/spinner    — loading spinner
+  //   bubbles/progress   — progress bar
+  //   bubbles/viewport   — scrollable content area
+  //   bubbles/paginator  — page indicator
+
+  // Spinner example:
+  import (
+      "github.com/charmbracelet/bubbles/spinner"
+      tea "github.com/charmbracelet/bubbletea"
+  )
+
+  type model struct {
+      spinner  spinner.Model
+      loading  bool
+  }
+
+  func initialModel() model {
+      s := spinner.New()
+      s.Spinner = spinner.Dot
+      s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+      return model{spinner: s, loading: true}
+  }
+
+  func (m model) Init() tea.Cmd {
+      return m.spinner.Tick
+  }
+
+  func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+      switch msg := msg.(type) {
+      case tea.KeyMsg:
+          if msg.String() == "q" {
+              return m, tea.Quit
+          }
+      case spinner.TickMsg:
+          var cmd tea.Cmd
+          m.spinner, cmd = m.spinner.Update(msg)
+          return m, cmd
+      }
+      return m, nil
+  }
+
+  func (m model) View() string {
+      if m.loading {
+          return fmt.Sprintf("%s Loading...\n\nPress q to quit.", m.spinner.View())
+      }
+      return "Done!\n"
+  }
+
+--------------------------------------------------------------------------------
+[4.6]  Full Working TUI Example — List with Navigation
+--------------------------------------------------------------------------------
+
+  package main
+
+  import (
+      "fmt"
+      "os"
+      "strings"
+
+      tea "github.com/charmbracelet/bubbletea"
+      "github.com/charmbracelet/lipgloss"
+  )
+
+  var (
+      selectedStyle = lipgloss.NewStyle().
+          Foreground(lipgloss.Color("#04B575")).
+          Bold(true).
+          PaddingLeft(2)
+
+      normalStyle = lipgloss.NewStyle().
+          Foreground(lipgloss.Color("#888888")).
+          PaddingLeft(2)
+
+      titleStyle = lipgloss.NewStyle().
+          Bold(true).
+          Foreground(lipgloss.Color("#FF79C6")).
+          MarginBottom(1)
+  )
+
+  type model struct {
+      choices  []string
+      cursor   int
+      selected map[int]struct{}
+  }
+
+  func initialModel() model {
+      return model{
+          choices: []string{
+              "Learn Cobra",
+              "Learn urfave/cli",
+              "Learn Bubbletea",
+              "Build a CLI tool",
+          },
+          selected: make(map[int]struct{}),
+      }
+  }
+
+  func (m model) Init() tea.Cmd {
+      return nil
+  }
+
+  func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+      switch msg := msg.(type) {
+      case tea.KeyMsg:
+          switch msg.String() {
+          case "ctrl+c", "q":
+              return m, tea.Quit
+          case "up", "k":
+              if m.cursor > 0 {
+                  m.cursor--
+              }
+          case "down", "j":
+              if m.cursor < len(m.choices)-1 {
+                  m.cursor++
+              }
+          case "enter", " ":
+              if _, ok := m.selected[m.cursor]; ok {
+                  delete(m.selected, m.cursor)
+              } else {
+                  m.selected[m.cursor] = struct{}{}
+              }
+          }
+      }
+      return m, nil
+  }
+
+  func (m model) View() string {
+      var sb strings.Builder
+
+      sb.WriteString(titleStyle.Render("Go CLI Learning Checklist"))
+      sb.WriteString("\n")
+
+      for i, choice := range m.choices {
+          prefix := "  "
+          if m.cursor == i {
+              prefix = "> "
+          }
+
+          checked := " "
+          if _, ok := m.selected[i]; ok {
+              checked = "x"
+          }
+
+          line := fmt.Sprintf("%s[%s] %s", prefix, checked, choice)
+
+          if m.cursor == i {
+              sb.WriteString(selectedStyle.Render(line))
+          } else {
+              sb.WriteString(normalStyle.Render(line))
+          }
+          sb.WriteString("\n")
+      }
+
+      sb.WriteString("\n")
+      sb.WriteString(normalStyle.Render("j/k or ↑/↓ to navigate • space to toggle • q to quit"))
+      sb.WriteString("\n")
+
+      return sb.String()
+  }
+
+  func main() {
+      p := tea.NewProgram(initialModel(), tea.WithAltScreen())
+      if _, err := p.Run(); err != nil {
+          fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+          os.Exit(1)
+      }
+  }
+
+================================================================================
+[5]  COBRA vs URFAVE/CLI vs BUBBLETEA — COMPARISON
+================================================================================
+
+  Feature               | Cobra          | urfave/cli v2  | Bubbletea
+  ----------------------|----------------|----------------|------------------
+  Purpose               | CLI framework  | CLI framework  | TUI framework
+  Setup complexity      | Medium         | Low            | Medium
+  Subcommands           | Hierarchical   | Flat/nested    | N/A (TUI)
+  Flag parsing          | pflag-based    | Own system     | N/A
+  Config mgmt           | Viper built-in | Manual         | N/A
+  Auto completions      | Yes            | Yes            | N/A
+  Auto-gen docs         | Yes (man/md)   | Limited        | N/A
+  Interactive UI        | No             | No             | Yes (core)
+  Architecture pattern  | Imperative     | Struct-based   | Elm (TEA)
+  Used by               | kubectl, Hugo  | cloud66, etc.  | gh, gum, mods
+  Best for              | Big CLIs       | Simple scripts | TUI apps
+
+  COMBINING THEM:
+  A real-world pattern — Cobra handles routing + flags, Bubbletea handles
+  the interactive UI for specific subcommands:
+
+  var interactiveCmd = &cobra.Command{
+      Use: "interactive",
+      RunE: func(cmd *cobra.Command, args []string) error {
+          // Hand off to Bubbletea
+          p := tea.NewProgram(initialModel())
+          _, err := p.Run()
+          return err
+      },
+  }
+
+================================================================================
+[6]  JAVA-TO-GO MENTAL MODEL
+================================================================================
+
+  Java Concept              | Go CLI Equivalent
+  --------------------------|------------------------------------------------------
+  Apache Commons CLI        | Cobra or urfave/cli
+  Spring Shell              | Cobra (more feature-rich equivalent)
+  Picocli @Command          | cobra.Command struct
+  @Option / @Parameters     | cmd.Flags().StringVar() / Args
+  ApplicationRunner         | cmd.Execute() → RunE
+  @Bean lifecycle hooks     | PersistentPreRunE / PostRunE
+  JavaFX / Swing (GUI)      | Bubbletea (terminal UI equivalent)
+  Observer pattern (events) | tea.Msg / tea.Cmd (Bubbletea)
+  MVC (Model-View-Ctrl)     | Model / View / Update in Bubbletea (TEA)
+  Properties / YAML config  | Viper (Cobra companion)
+  Environment variables     | viper.AutomaticEnv() or os.Getenv()
+
+  Key mindset shift:
+  - Java CLIs: annotation-driven, reflection-heavy (Picocli)
+  - Go CLIs: explicit struct/function wiring, no reflection magic
+  - Go errors are values returned from RunE — no exception hierarchy
+  - Bubbletea's Update() is a pure function — similar to Java's functional
+    style with immutable value returns, but enforced by pattern
+
+================================================================================
+[7]  INTERVIEW Q&A — MEDIOR LEVEL
+================================================================================
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q1: What is the difference between cobra.Command.Run and RunE?         │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  A: Run has the signature func(cmd *cobra.Command, args []string) — it
+     cannot return an error. RunE has the signature
+     func(cmd *cobra.Command, args []string) error — it can return an error,
+     which Cobra will print and cause a non-zero exit. Always prefer RunE
+     so you can propagate errors cleanly.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q2: What is the difference between a local flag and a persistent flag  │
+  │     in Cobra?                                                           │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  A: A local flag (defined via cmd.Flags()) is only available on the
+     specific command it is defined on. A persistent flag (defined via
+     cmd.PersistentFlags()) is available on that command AND inherited by
+     all of its subcommands. --verbose on rootCmd is the classic example
+     of a persistent flag.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q3: How do you read a flag value inside RunE in urfave/cli?            │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  A: Through the cli.Context passed as the parameter:
+       name := ctx.String("name")
+       count := ctx.Int("count")
+       verbose := ctx.Bool("verbose")
+     The context is populated by the framework from os.Args before RunE is
+     called.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q4: What are the three methods every Bubbletea model must implement?   │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  A: The tea.Model interface requires:
+       Init() tea.Cmd
+       Update(msg tea.Msg) (tea.Model, tea.Cmd)
+       View() string
+     Init runs once at startup. Update handles messages and returns a new
+     state. View renders the current state as a string to the terminal.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q5: What is a tea.Cmd and how is it different from a tea.Msg?          │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  A: A tea.Msg is a value (usually a struct) describing something that
+     happened — e.g., a key press or an HTTP response. A tea.Cmd is a
+     function that Bubbletea runs in a goroutine and which returns a Msg.
+     Cmd is the mechanism for async side effects (I/O, timers, etc.). You
+     never call a Cmd yourself; you return it from Update and the runtime
+     executes it.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q6: How do you add shell auto-completion to a Cobra CLI?               │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  A: Cobra generates completion scripts automatically. The user runs:
+       myapp completion bash >> ~/.bashrc
+       myapp completion zsh  >> ~/.zshrc
+       myapp completion fish > ~/.config/fish/completions/myapp.fish
+     These are built-in subcommands added by Cobra. You can also add
+     ValidArgs or RegisterFlagCompletionFunc to customise completions
+     for specific commands and flags.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q7: How do you mark a flag as required in Cobra?                       │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  A: Call cmd.MarkFlagRequired("flagname") in init() after defining the
+     flag. If the user does not pass the flag, Cobra prints an error and
+     exits before RunE is called. For persistent flags use
+     cmd.MarkPersistentFlagRequired("flagname").
+
+================================================================================
+[8]  INTERVIEW Q&A — EXPERIENCED LEVEL
+================================================================================
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q1: Explain Bubbletea's The Elm Architecture (TEA) and why it is       │
+  │     well-suited to terminal UIs.                                        │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  A: TEA separates state (Model), transitions (Update), and rendering
+     (View) into three pure functions. This has several advantages for TUIs:
+     (1) Determinism — given the same Model and Msg, Update always produces
+     the same result, making it trivially testable.
+     (2) No shared mutable state — concurrent events (key presses, timers,
+     HTTP responses) are serialised into Msgs by the runtime, so Update is
+     never called concurrently.
+     (3) Clear data flow — all state changes go through Update; there is no
+     scattered event handler soup.
+     (4) Composability — sub-components implement tea.Model themselves and
+     are nested inside a parent model, delegating Msgs down and bubbling
+     Cmds back up.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q2: How would you compose multiple Bubbletea sub-components?           │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  A: Embed sub-models in the parent model. Delegate matching Msgs to sub-
+     components in Update, then combine their Views in View():
+
+  type parentModel struct {
+      list    list.Model
+      spinner spinner.Model
+      loading bool
+  }
+
+  func (m parentModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+      var cmds []tea.Cmd
+      var cmd tea.Cmd
+
+      m.list, cmd = m.list.Update(msg)
+      cmds = append(cmds, cmd)
+
+      m.spinner, cmd = m.spinner.Update(msg)
+      cmds = append(cmds, cmd)
+
+      return m, tea.Batch(cmds...)
+  }
+
+  func (m parentModel) View() string {
+      if m.loading {
+          return m.spinner.View()
+      }
+      return m.list.View()
+  }
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q3: How does Viper's precedence order work when a value exists in      │
+  │     multiple sources?                                                   │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  A: Viper resolves values with the following priority (highest first):
+     1. Explicit call to viper.Set()
+     2. Flag (pflag, bound via BindPFlag)
+     3. Environment variable (bound via BindEnv or AutomaticEnv)
+     4. Config file (YAML/TOML/JSON/etc.)
+     5. Key/value store (etcd, Consul)
+     6. Default (viper.SetDefault)
+     This lets environment variables override config files, which override
+     defaults — the standard 12-factor app pattern.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q4: How would you test a Cobra command's RunE without running the       │
+  │     full binary?                                                        │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  A: Execute the command directly in a test by setting Args and capturing
+     output via SetOut/SetErr:
+
+  func TestServeCmd(t *testing.T) {
+      buf := new(bytes.Buffer)
+      rootCmd.SetOut(buf)
+      rootCmd.SetErr(buf)
+      rootCmd.SetArgs([]string{"serve", "--port", "9090"})
+
+      err := rootCmd.Execute()
+      if err != nil {
+          t.Fatalf("unexpected error: %v", err)
+      }
+      if !strings.Contains(buf.String(), "9090") {
+          t.Errorf("expected port 9090 in output, got: %s", buf.String())
+      }
+  }
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q5: How would you handle long-running operations (e.g., polling an     │
+  │     API) inside a Bubbletea TUI?                                        │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  A: Use tea.Tick to emit periodic Msgs, or return a tea.Cmd from Update
+     that performs the async work:
+
+  type pollResultMsg struct {
+      data string
+      err  error
+  }
+
+  func pollAPI(url string) tea.Cmd {
+      return func() tea.Msg {
+          resp, err := http.Get(url)
+          if err != nil {
+              return pollResultMsg{err: err}
+          }
+          defer resp.Body.Close()
+          body, _ := io.ReadAll(resp.Body)
+          return pollResultMsg{data: string(body)}
+      }
+  }
+
+  func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+      switch msg := msg.(type) {
+      case pollResultMsg:
+          if msg.err != nil {
+              m.errMsg = msg.err.Error()
+              return m, nil
+          }
+          m.data = msg.data
+          // Schedule next poll in 5s:
+          return m, tea.Tick(5*time.Second, func(t time.Time) tea.Msg {
+              return pollAPI("https://api.example.com/status")()
+          })
+      }
+      return m, nil
+  }
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q6: What is tea.WithAltScreen() and when should you use it?            │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  A: tea.WithAltScreen() is a Program option that makes Bubbletea switch to
+     the terminal's alternate screen buffer on startup (like vim does) and
+     restore the original screen on exit. Use it when your TUI should occupy
+     the full terminal and you do not want the previous shell output to
+     remain visible. Without it, the TUI renders inline in the scrollback
+     buffer, which is suitable for short outputs or progress indicators.
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │ Q7: How do Cobra's PersistentPreRunE hooks interact across parent and  │
+  │     child commands when the child also defines one?                     │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+  A: By default in Cobra, if a child command defines its own PersistentPreRunE,
+     the parent's PersistentPreRunE is NOT called. Cobra executes only the
+     innermost matching hook. To chain them, you must explicitly call the
+     parent's hook from the child:
+
+  var childCmd = &cobra.Command{
+      PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+          // Manually call parent's hook
+          if err := rootCmd.PersistentPreRunE(cmd, args); err != nil {
+              return err
+          }
+          // Child-specific logic
+          fmt.Println("child pre-run")
+          return nil
+      },
+  }
+
+  This is a common interview gotcha — many developers expect automatic
+  chaining but Cobra does not do it by default.
+
+================================================================================
