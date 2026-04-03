@@ -1,0 +1,684 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang TESTS
+════════════════════════════════════════════════════════════════════════════════════
+
+TABLE OF CONTENTS
+-----------------
+  [1]  Overview — the testing package
+  [2]  TestXxx — top-level test functions
+  [3]  t.Run — subtests
+  [4]  Key t.* methods cheat-sheet
+  [5]  Table-driven tests (idiomatic Go pattern)
+  [6]  t.Parallel — running tests concurrently
+  [7]  t.Helper — clean failure output
+  [8]  TestMain — setup & teardown
+  [9]  Running tests — go test flags
+  [10] Java vs Go testing comparison
+  [11] Interview Q&A — Medior Level
+  [12] Interview Q&A — Experienced Level
+
+
+================================================================================
+[1] OVERVIEW — THE TESTING PACKAGE
+================================================================================
+
+Go ships a built-in "testing" package. No external framework is required for
+writing and running unit tests. The test runner is invoked with:
+
+    go test ./...
+
+Rules enforced by the test runner:
+  - Test files must end with _test.go
+  - Test functions must match  func TestXxx(t *testing.T)
+  - Benchmark functions match  func BenchmarkXxx(b *testing.B)
+  - Example functions match    func ExampleXxx()
+
+The testing.T type is the core handle injected by the framework into every
+test function. It carries helpers for reporting failures, logging, skipping,
+and spawning subtests.
+
+
+================================================================================
+[2] TestXxx — TOP-LEVEL TEST FUNCTIONS
+================================================================================
+
+SIGNATURE
+---------
+    func TestXxx(t *testing.T)
+
+Rules:
+  - Function name must start with "Test" (capital T)
+  - The character after "Test" must NOT be a lowercase letter
+    e.g.  TestAdd       -> valid
+          TestAddition  -> valid
+          Testadd       -> INVALID (runner ignores it)
+  - Must be in a _test.go file
+  - Must accept exactly one parameter: *testing.T
+  - Must return nothing
+  - go test ./...  ## Run tests in current and subdirectories
+  - go test -v     ## Verbose output
+  - go test -cover ## Show code coverage
+
+EXAMPLE — basic assertions
+
+    // math_test.go
+    package math
+
+    import "testing"
+
+    func Add(a, b int) int {
+        return a + b
+    }
+
+    func TestAdd(t *testing.T) {
+        result := Add(2, 3)
+        expected := 5
+
+        if result != expected {
+            t.Errorf("Add(2, 3) = %d; want %d", result, expected)
+        }
+    }
+
+EXAMPLE — multiple assertions in one test
+
+    func TestAddVariants(t *testing.T) {
+        if Add(0, 0) != 0 {
+            t.Error("0+0 should be 0")
+        }
+        if Add(-1, 1) != 0 {
+            t.Error("-1+1 should be 0")
+        }
+        if Add(100, -100) != 0 {
+            t.Error("100-100 should be 0")
+        }
+    }
+
+KEY POINT: t.Error marks the test as failed but continues execution.
+           t.Fatal marks the test as failed and STOPS execution immediately.
+
+
+================================================================================
+[3] t.Run — SUBTESTS
+================================================================================
+
+SIGNATURE
+---------
+    func (t *testing.T) Run(name string, f func(t *testing.T)) bool
+
+Purpose:
+  - Group related assertions under a named subtest
+  - Each subtest runs in its own goroutine (when parallel)
+  - Failures in a subtest are isolated and reported clearly
+  - You can target a specific subtest with go test -run
+
+EXAMPLE — basic subtests
+
+    func TestDivide(t *testing.T) {
+
+        t.Run("positive numbers", func(t *testing.T) {
+            result := Divide(10, 2)
+            if result != 5 {
+                t.Errorf("expected 5, got %d", result)
+            }
+        })
+
+        t.Run("negative divisor", func(t *testing.T) {
+            result := Divide(10, -2)
+            if result != -5 {
+                t.Errorf("expected -5, got %d", result)
+            }
+        })
+
+        t.Run("divide by zero", func(t *testing.T) {
+            _, err := DivideSafe(10, 0)
+            if err == nil {
+                t.Fatal("expected an error for division by zero, got nil")
+            }
+        })
+    }
+
+Output format when a subtest fails:
+    --- FAIL: TestDivide (0.00s)
+        --- FAIL: TestDivide/divide_by_zero (0.00s)
+
+Note: spaces in subtest names are replaced by underscores in the output.
+
+EXAMPLE — nested subtests (subtests inside subtests)
+
+    func TestStringOps(t *testing.T) {
+        t.Run("reverse", func(t *testing.T) {
+            t.Run("empty string", func(t *testing.T) {
+                if Reverse("") != "" {
+                    t.Error("reverse of empty should be empty")
+                }
+            })
+            t.Run("single char", func(t *testing.T) {
+                if Reverse("a") != "a" {
+                    t.Error("reverse of single char should be same")
+                }
+            })
+            t.Run("palindrome", func(t *testing.T) {
+                if Reverse("racecar") != "racecar" {
+                    t.Error("palindrome reversed should equal itself")
+                }
+            })
+        })
+    }
+
+Output path: TestStringOps/reverse/palindrome
+
+
+================================================================================
+[4] KEY t.* METHODS CHEAT-SHEET
+================================================================================
+
+FAILURE REPORTING
+-----------------
+    t.Error(args...)          // log failure message; test continues
+    t.Errorf(format, args...) // formatted; test continues
+    t.Fatal(args...)          // log failure message; test STOPS (calls runtime.Goexit)
+    t.Fatalf(format, args...) // formatted; test STOPS
+
+LOGGING
+-------
+    t.Log(args...)            // printed only when test fails or -v flag is used
+    t.Logf(format, args...)   // formatted version
+
+SKIPPING
+--------
+    t.Skip(args...)           // skip remaining test; mark as skipped
+    t.Skipf(format, args...)  // formatted skip message
+    t.SkipNow()               // skip immediately, no message
+
+PARALLELISM
+-----------
+    t.Parallel()              // signal this test/subtest can run in parallel
+
+NAMING & HELPERS
+----------------
+    t.Name()                  // returns the name of the current test
+    t.Helper()                // marks current fn as a test helper (cleaner trace)
+    t.Cleanup(func())         // register a function to run when test completes
+    t.TempDir()               // create a temp dir that is auto-cleaned up
+
+EXAMPLE — t.Skip usage
+
+    func TestFeatureX(t *testing.T) {
+        if os.Getenv("FEATURE_X_ENABLED") == "" {
+            t.Skip("skipping: FEATURE_X_ENABLED not set")
+        }
+        // test body
+    }
+
+EXAMPLE — t.Cleanup usage
+
+    func TestWithDB(t *testing.T) {
+        db := openTestDB(t)
+        t.Cleanup(func() {
+            db.Close()
+        })
+        // test body — db is always closed after test
+    }
+
+
+================================================================================
+[5] TABLE-DRIVEN TESTS (IDIOMATIC GO PATTERN)
+================================================================================
+
+Table-driven tests are the standard Go idiom. You define a slice of test cases
+(the "table") and loop over them with t.Run.
+
+EXAMPLE — table-driven test for an Add function
+
+    func TestAddTableDriven(t *testing.T) {
+        tests := []struct {
+            name     string
+            a        int
+            b        int
+            expected int
+        }{
+            {"both positive", 2, 3, 5},
+            {"both negative", -2, -3, -5},
+            {"one zero", 0, 5, 5},
+            {"both zero", 0, 0, 0},
+            {"mixed signs", -1, 1, 0},
+        }
+
+        for _, tc := range tests {
+            tc := tc // capture range variable — critical for parallel subtests
+            t.Run(tc.name, func(t *testing.T) {
+                result := Add(tc.a, tc.b)
+                if result != tc.expected {
+                    t.Errorf("Add(%d, %d) = %d; want %d",
+                        tc.a, tc.b, result, tc.expected)
+                }
+            })
+        }
+    }
+
+WHY tc := tc?
+  In Go < 1.22, loop variables are shared across iterations. If subtests run
+  in parallel (or even sequentially with closures), tc might be overwritten.
+  Shadowing with tc := tc creates a new binding per iteration.
+  Go 1.22+ fixed loop variable semantics, so this is no longer required
+  on modern toolchains — but it is still widely seen in codebases.
+
+EXAMPLE — table-driven test for error cases
+
+    type ParseResult struct {
+        Value int
+        Err   error
+    }
+
+    func ParseInt(s string) (int, error) {
+        return strconv.Atoi(s)
+    }
+
+    func TestParseInt(t *testing.T) {
+        tests := []struct {
+            name    string
+            input   string
+            want    int
+            wantErr bool
+        }{
+            {"valid number", "42", 42, false},
+            {"zero", "0", 0, false},
+            {"negative", "-10", -10, false},
+            {"empty string", "", 0, true},
+            {"letters", "abc", 0, true},
+            {"float string", "3.14", 0, true},
+        }
+
+        for _, tc := range tests {
+            tc := tc
+            t.Run(tc.name, func(t *testing.T) {
+                got, err := ParseInt(tc.input)
+                if (err != nil) != tc.wantErr {
+                    t.Fatalf("ParseInt(%q) error = %v, wantErr %v",
+                        tc.input, err, tc.wantErr)
+                }
+                if !tc.wantErr && got != tc.want {
+                    t.Errorf("ParseInt(%q) = %d; want %d",
+                        tc.input, got, tc.want)
+                }
+            })
+        }
+    }
+
+
+================================================================================
+[6] t.Parallel — RUNNING TESTS CONCURRENTLY
+================================================================================
+
+By default, top-level TestXxx functions run sequentially.
+Call t.Parallel() at the top of a test or subtest to allow it to run
+concurrently with other parallel tests.
+
+RULES
+  1. Call t.Parallel() as the very first statement in the test/subtest.
+  2. The parent test WAITS for all parallel subtests to finish before it returns.
+  3. Always capture loop variables (tc := tc) when combining with table-driven
+     tests to avoid data races.
+
+EXAMPLE — parallel subtests
+
+    func TestAddParallel(t *testing.T) {
+        tests := []struct {
+            name     string
+            a, b     int
+            expected int
+        }{
+            {"case1", 1, 2, 3},
+            {"case2", 10, 20, 30},
+            {"case3", -1, -1, -2},
+        }
+
+        for _, tc := range tests {
+            tc := tc
+            t.Run(tc.name, func(t *testing.T) {
+                t.Parallel() // run this subtest in parallel with siblings
+                result := Add(tc.a, tc.b)
+                if result != tc.expected {
+                    t.Errorf("Add(%d, %d) = %d; want %d",
+                        tc.a, tc.b, result, tc.expected)
+                }
+            })
+        }
+    }
+
+EXAMPLE — parallel top-level tests
+
+    func TestServiceA(t *testing.T) {
+        t.Parallel()
+        // ... test ServiceA
+    }
+
+    func TestServiceB(t *testing.T) {
+        t.Parallel()
+        // ... test ServiceB — runs at same time as TestServiceA
+    }
+
+
+================================================================================
+[7] t.Helper — CLEAN FAILURE OUTPUT
+================================================================================
+
+When you extract assertion logic into a helper function, failure messages
+by default point to the line INSIDE the helper, not the caller.
+Calling t.Helper() marks the function so the stack trace skips it.
+
+WITHOUT t.Helper
+
+    func assertEqual(t *testing.T, got, want int) {
+        if got != want {
+            t.Errorf("got %d, want %d", got, want) // <-- reported here
+        }
+    }
+
+WITH t.Helper (correct)
+
+    func assertEqual(t *testing.T, got, want int) {
+        t.Helper() // marks this function as a helper
+        if got != want {
+            t.Errorf("got %d, want %d", got, want) // <-- now reported at CALLER
+        }
+    }
+
+    func TestSomething(t *testing.T) {
+        assertEqual(t, Add(1, 2), 3) // failure points to THIS line
+    }
+
+EXAMPLE — reusable helper with t.Helper
+
+    func requireNoError(t *testing.T, err error) {
+        t.Helper()
+        if err != nil {
+            t.Fatalf("unexpected error: %v", err)
+        }
+    }
+
+    func requireEqual(t *testing.T, got, want interface{}) {
+        t.Helper()
+        if got != want {
+            t.Errorf("got %v; want %v", got, want)
+        }
+    }
+
+    func TestUserCreation(t *testing.T) {
+        user, err := CreateUser("alice@example.com")
+        requireNoError(t, err)
+        requireEqual(t, user.Email, "alice@example.com")
+    }
+
+
+================================================================================
+[8] TestMain — SETUP & TEARDOWN
+================================================================================
+
+TestMain is a special function that gives you control over the entire test
+binary lifecycle. Useful for:
+  - Starting/stopping a database or server before/after all tests
+  - Setting up shared state
+  - Calling os.Exit with a proper code
+
+SIGNATURE
+    func TestMain(m *testing.M)
+
+Only ONE TestMain is allowed per package.
+
+EXAMPLE
+
+    var testDB *sql.DB
+
+    func TestMain(m *testing.M) {
+        // Setup
+        var err error
+        testDB, err = sql.Open("postgres", "postgres://test:test@localhost/testdb")
+        if err != nil {
+            log.Fatalf("failed to connect to test db: %v", err)
+        }
+
+        // Run all tests
+        code := m.Run()
+
+        // Teardown
+        testDB.Close()
+
+        os.Exit(code)
+    }
+
+    func TestInsertUser(t *testing.T) {
+        // testDB is available here
+        _, err := testDB.Exec("INSERT INTO users(name) VALUES($1)", "alice")
+        if err != nil {
+            t.Fatalf("insert failed: %v", err)
+        }
+    }
+
+
+================================================================================
+[9] RUNNING TESTS — go test FLAGS
+================================================================================
+
+    go test ./...                     # run all tests in all packages
+    go test .                         # run tests in current package
+    go test -v ./...                  # verbose — show all test names
+    go test -run TestAdd              # run tests matching regex "TestAdd"
+    go test -run TestDivide/zero      # run specific subtest
+    go test -count=1 ./...            # disable test caching
+    go test -race ./...               # enable race detector
+    go test -timeout 30s ./...        # set per-test timeout
+    go test -cover ./...              # show coverage %
+    go test -coverprofile=c.out ./... # save coverage to file
+    go tool cover -html=c.out         # open coverage in browser
+
+TARGETING SUBTESTS
+    go test -run "TestAdd/both_positive"
+    go test -run "TestDivide/(zero|negative)"
+
+
+================================================================================
+[10] JAVA vs GO TESTING COMPARISON
+================================================================================
+
+Concept             | Java (JUnit 5)                 | Go (testing package)
+--------------------|--------------------------------|----------------------------------
+Test function       | @Test void testXxx()           | func TestXxx(t *testing.T)
+Assertion           | assertEquals(a, b)             | if a != b { t.Errorf(...) }
+Fail & continue     | fail()                         | t.Error() / t.Errorf()
+Fail & stop         | assumeTrue(false) / fail()+ex  | t.Fatal() / t.Fatalf()
+Grouped tests       | @Nested class                  | t.Run("name", func(t *testing.T))
+Parametrized tests  | @ParameterizedTest             | table-driven loop + t.Run
+Setup per test      | @BeforeEach                    | t.Cleanup() or defer
+Global setup        | @BeforeAll                     | TestMain(m *testing.M)
+Skip a test         | @Disabled / assumeTrue(false)  | t.Skip(msg)
+Concurrent test     | @Execution(CONCURRENT)         | t.Parallel()
+Test discovery      | classpath + annotations        | _test.go + TestXxx naming
+External framework  | JUnit, Mockito, AssertJ        | none required; testify popular
+Helper assertion    | not needed (exceptions)        | t.Helper() + custom fn
+
+
+================================================================================
+[11] INTERVIEW Q&A — MEDIOR LEVEL
+================================================================================
+
++------------------------------------------------------------------------------+
+| Q1: What naming rules must a Go test function follow?                        |
++------------------------------------------------------------------------------+
+A: The function must:
+   1. Be in a file ending with _test.go
+   2. Start with "Test" followed by a name that does NOT begin with a lowercase
+      letter. e.g. TestAdd is valid; Testadd is silently ignored.
+   3. Accept exactly (t *testing.T) and return nothing.
+
++------------------------------------------------------------------------------+
+| Q2: What is the difference between t.Error and t.Fatal?                      |
++------------------------------------------------------------------------------+
+A: t.Error (and t.Errorf) marks the test as failed but allows the rest of the
+   test function to continue executing. t.Fatal (and t.Fatalf) marks the test
+   as failed AND immediately stops the test by calling runtime.Goexit() — the
+   current goroutine exits cleanly, running deferred functions.
+
+   Use t.Fatal when a subsequent assertion would panic if the prior one
+   already failed (e.g., nil pointer dereference).
+
++------------------------------------------------------------------------------+
+| Q3: What is t.Run and why would you use it?                                  |
++------------------------------------------------------------------------------+
+A: t.Run creates a named subtest within a parent test. Benefits:
+   - Isolates failures — one subtest failing doesn't block the others
+   - Produces structured output: TestParent/SubtestName
+   - Allows running specific subtests with -run flag
+   - Enables parallel execution of subtests with t.Parallel()
+   - Subtests can be nested arbitrarily
+
++------------------------------------------------------------------------------+
+| Q4: What is a table-driven test and why is it idiomatic in Go?               |
++------------------------------------------------------------------------------+
+A: A table-driven test defines all test cases as a slice of structs (the
+   "table") and iterates over them with a loop, calling t.Run for each entry.
+   It is idiomatic because:
+   - Adding new cases requires only a new struct entry, not a new function
+   - Output clearly names failing cases
+   - The pattern eliminates duplicated test boilerplate
+   - It is the style recommended by the Go team
+
++------------------------------------------------------------------------------+
+| Q5: How do you run a specific subtest from the command line?                 |
++------------------------------------------------------------------------------+
+A: Use the -run flag with a slash-separated pattern:
+   go test -run "TestDivide/divide_by_zero"
+   Spaces in subtest names are replaced by underscores in the matcher.
+   The pattern is a regex, so you can also write:
+   go test -run "TestDivide/(zero|negative)"
+
++------------------------------------------------------------------------------+
+| Q6: What does t.Cleanup do and how is it different from defer?               |
++------------------------------------------------------------------------------+
+A: t.Cleanup registers a function to run when the current test (or subtest)
+   finishes, regardless of pass/fail. It is preferred over bare defer in
+   tests because:
+   - It works correctly inside subtests (the cleanup is tied to t, not the
+     parent scope)
+   - Multiple cleanups can be registered; they run in LIFO order
+   - Useful for cleaning temp files, closing connections, resetting state
+
++------------------------------------------------------------------------------+
+| Q7: What file naming conventions does the Go test runner require?            |
++------------------------------------------------------------------------------+
+A: Test files must end with _test.go. The runner automatically excludes them
+   from the production build. They can live in the same package (white-box
+   testing, access to unexported symbols) or in a separate package with a
+   _test suffix (black-box testing). E.g.:
+     package math         -> white-box: can access unexported funcs
+     package math_test    -> black-box: only exported API visible
+
+
+================================================================================
+[12] INTERVIEW Q&A — EXPERIENCED LEVEL
+================================================================================
+
++------------------------------------------------------------------------------+
+| Q1: Explain how t.Parallel works at the runtime level.                       |
++------------------------------------------------------------------------------+
+A: When t.Parallel() is called, the subtest pauses immediately and signals to
+   the parent that it is ready to be run in parallel. The parent continues
+   spawning remaining subtests. Once the parent's test function returns, the
+   test framework releases all paused parallel subtests to run concurrently,
+   up to GOMAXPROCS goroutines by default (controllable with -parallel flag).
+   The parent itself does NOT return to the caller until ALL parallel subtests
+   finish. This ensures the test binary's exit code correctly reflects all
+   results.
+
++------------------------------------------------------------------------------+
+| Q2: Why must you write tc := tc when running parallel table-driven tests     |
+|     in Go < 1.22?                                                            |
++------------------------------------------------------------------------------+
+A: In Go versions before 1.22, for-range loop variables are allocated once
+   and mutated each iteration. If a subtest closure captures the variable
+   rather than copying it, all subtests may read the same (last) value by the
+   time they execute, producing flaky or incorrect results and potential data
+   races. Writing tc := tc inside the loop body creates a new variable scoped
+   to that iteration that the closure safely captures. Go 1.22 changed loop
+   variable semantics so each iteration gets its own binding, making this
+   idiom unnecessary on modern toolchains.
+
++------------------------------------------------------------------------------+
+| Q3: How does TestMain differ from using init() for test setup?               |
++------------------------------------------------------------------------------+
+A: init() runs before any test but cannot influence the test exit code and
+   cannot run teardown after all tests finish. TestMain(m *testing.M) gives
+   full control: you call m.Run() to execute all tests, capture the integer
+   exit code, run teardown logic, and call os.Exit(code). This is the only
+   way to cleanly start/stop shared resources (databases, HTTP servers) for
+   an entire test package while guaranteeing proper cleanup and exit code
+   propagation.
+
++------------------------------------------------------------------------------+
+| Q4: What does t.Helper() do and why does it matter?                          |
++------------------------------------------------------------------------------+
+A: t.Helper() marks the calling function as a test helper. When a test fails
+   inside a helper, Go's testing framework walks up the call stack and
+   reports the failure at the first non-helper frame — i.e., the actual test
+   line that called the helper. Without t.Helper(), failure output points
+   inside the helper function, forcing the developer to mentally trace back to
+   the real call site. It has zero runtime cost and dramatically improves
+   failure diagnostic clarity.
+
++------------------------------------------------------------------------------+
+| Q5: What is the difference between black-box and white-box testing in Go     |
+|     and how do you implement each?                                           |
++------------------------------------------------------------------------------+
+A: White-box testing uses package math in the _test.go file — the test code
+   is in the same package and can access unexported identifiers. Good for
+   unit-testing internal logic.
+
+   Black-box testing uses package math_test — the test code sees only the
+   exported API, just as an external user would. Good for verifying public
+   contracts and avoiding tests that are too tightly coupled to internals.
+
+   Go allows both patterns to coexist in the same directory by accepting both
+   package declarations in _test.go files simultaneously.
+
++------------------------------------------------------------------------------+
+| Q6: How would you test a function that depends on the current time?          |
++------------------------------------------------------------------------------+
+A: Inject a time source as a dependency rather than calling time.Now()
+   directly inside the function. Common approaches:
+   1. Pass a time.Time parameter or a func() time.Time argument.
+   2. Define an interface (e.g. Clock) with a Now() method, inject a real
+      implementation in production and a stub in tests.
+   This makes the function deterministic in tests — you control exactly what
+   "now" is, removing test flakiness.
+
++------------------------------------------------------------------------------+
+| Q7: How does the -race flag interact with parallel tests?                    |
++------------------------------------------------------------------------------+
+A: The -race flag enables Go's built-in race detector, which instruments
+   memory accesses at compile time and reports unsynchronized concurrent
+   reads/writes at runtime. Parallel tests are the primary scenario where
+   races can manifest — two subtests sharing a closure variable without
+   synchronization is a classic example (the tc := tc bug). Running
+   go test -race ./... with parallel tests is the recommended practice in CI
+   to catch races that are invisible in sequential runs.
+
++------------------------------------------------------------------------------+
+| Q8: What are the tradeoffs of using testify vs the standard library?         |
++------------------------------------------------------------------------------+
+A: Standard library (testing package):
+   - No dependencies — important for library authors
+   - Verbose manual if-then-Errorf assertions
+   - Forces explicit, readable error messages
+
+   testify (github.com/stretchr/testify):
+   - require.Equal, assert.NoError etc. reduce boilerplate significantly
+   - assert package continues on failure; require package stops (mirrors
+     t.Error vs t.Fatal)
+   - Adds a dependency to the module, which some teams want to avoid
+   - Mock package provides interface mocking (alternative to hand-written fakes)
+
+   For libraries meant to be imported, prefer stdlib to keep the dependency
+   graph clean. For application code and integration tests, testify's
+   ergonomics often outweigh the cost.
+
+================================================================================
