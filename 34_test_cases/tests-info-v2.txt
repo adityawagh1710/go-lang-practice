@@ -1,0 +1,216 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang TESTS
+════════════════════════════════════════════════════════════════════════════════════
+
+1. BASIC TEST STRUCTURE
+
+- File must end with _test.go
+- Function must start with Test
+- Signature: func TestXxx(t *testing.T)
+
+Example:
+
+package mathutils
+
+import "testing"
+
+func Add(a, b int) int {
+	return a + b
+}
+
+func TestAdd(t *testing.T) {
+	result := Add(2, 3)
+
+	if result != 5 {
+		t.Errorf("Expected 5, got %d", result)
+	}
+}
+
+
+2. COMMON METHODS
+
+t.Error("msg")
+	Logs error and continues
+
+t.Fatal("msg")
+	Logs error and stops execution
+
+t.Fail()
+	Marks test as failed
+
+t.Log("msg")
+	Prints log (visible with -v)
+
+
+3. TABLE-DRIVEN TESTS
+
+func TestAdd_TableDriven(t *testing.T) {
+	tests := []struct {
+		name string
+		a, b int
+		want int
+	}{
+		{"case1", 1, 2, 3},
+		{"case2", 5, 5, 10},
+		{"case3", 0, 0, 0},
+	}
+
+	for _, tt := range tests {
+		result := Add(tt.a, tt.b)
+
+		if result != tt.want {
+			t.Errorf("%s: got %d, want %d", tt.name, result, tt.want)
+		}
+	}
+}
+
+
+4. SUBTESTS USING t.Run
+
+func TestAdd_Subtests(t *testing.T) {
+	tests := []struct {
+		name string
+		a, b int
+		want int
+	}{
+		{"case1", 1, 2, 3},
+		{"case2", 2, 3, 5},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			result := Add(tt.a, tt.b)
+
+			if result != tt.want {
+				t.Errorf("got %d, want %d", result, tt.want)
+			}
+		})
+	}
+}
+
+
+5. PARALLEL TESTS
+
+func TestParallel(t *testing.T) {
+	t.Parallel()
+
+	result := Add(1, 2)
+
+	if result != 3 {
+		t.Errorf("Expected 3, got %d", result)
+	}
+}
+
+
+6. BENCHMARK TESTS
+
+func BenchmarkAdd(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		Add(2, 3)
+	}
+}
+
+
+7. TEST HELPERS
+
+func assertEqual(t *testing.T, got, want int) {
+	t.Helper()
+
+	if got != want {
+		t.Errorf("got %d, want %d", got, want)
+	}
+}
+
+
+8. SETUP AND TEARDOWN (TestMain)
+
+package main
+
+import (
+	"os"
+	"testing"
+)
+
+func TestMain(m *testing.M) {
+	setup()
+
+	code := m.Run()
+
+	teardown()
+
+	os.Exit(code)
+}
+
+func setup() {
+	println("setup")
+}
+
+func teardown() {
+	println("teardown")
+}
+
+
+9. EXAMPLE TEST
+
+func ExampleAdd() {
+	println(Add(2, 3))
+	// Output: 5
+}
+
+
+10. USEFUL COMMANDS
+
+go test
+go test -v
+go test -run TestAdd
+go test ./...
+go test -cover
+go test -bench=.
+go test -race
+go test -count=1
+
+
+11. COMMON MISTAKES
+
+- File not ending with _test.go
+- Function not starting with Test
+- Package mismatch
+- Running from wrong directory
+- No .go file present
+
+
+INTERVIEW QUESTIONS
+
+Q1: Why must test functions start with Test?
+A: Go detects them using naming convention.
+
+Q2: Difference between t.Error and t.Fatal?
+A: t.Error continues, t.Fatal stops execution.
+
+Q3: What is t.Run used for?
+A: To create subtests.
+
+Q4: What are table-driven tests?
+A: Multiple test cases using slice of structs.
+
+Q5: How to run a specific test?
+A: go test -run TestAdd
+
+Q6: What is b.N in benchmark?
+A: Number of iterations set by Go.
+
+Q7: Why use t.Helper()?
+A: Cleaner error output.
+
+Q8: Can tests run in parallel?
+A: Yes, using t.Parallel()
+
+Q9: What is TestMain?
+A: Entry point for setup/teardown.
+
+Q10: How to check coverage?
+A: go test -cover
+
+END
