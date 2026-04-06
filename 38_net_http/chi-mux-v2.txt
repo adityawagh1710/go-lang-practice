@@ -1,0 +1,1488 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang ROUTERS: CHI & GORILLA/MUX
+════════════════════════════════════════════════════════════════════════════════════
+INDEX
+─────
+ 1. Overview: Why Third-Party Routers?
+ 2. stdlib net/http Router (baseline)
+ 3. gorilla/mux — Full Reference
+ 4. chi — Full Reference
+ 5. Feature Comparison: stdlib vs gorilla/mux vs chi
+ 6. URL Parameter Patterns & Regex Constraints
+ 7. Middleware Integration
+ 8. Sub-routers & Route Groups
+ 9. Building a Real API Structure
+10. Testing Routes & Handlers
+11. Common Pitfalls & Best Practices
+12. Java vs Go Comparison
+13. Interview Q&A — Medior Level
+14. Interview Q&A — Senior Level
+
+═══════════════════════════════════════════════════════════════════════════════
+ 1. OVERVIEW: WHY THIRD-PARTY ROUTERS?
+═══════════════════════════════════════════════════════════════════════════════
+
+Go's stdlib net/http ServeMux is intentionally minimal:
+
+    Stdlib limitations (pre-Go 1.22):
+    ✗ No named URL path parameters  (/users/{id})
+    ✗ No HTTP method routing        (GET vs POST on same path)
+    ✗ No regex path constraints     ({id:[0-9]+})
+    ✗ No route groups / sub-routers
+    ✗ No middleware chaining built-in
+    ✗ No wildcard sub-path matching
+
+    Go 1.22 stdlib improvements:
+    ✓ Method routing:  "GET /users/{id}"
+    ✓ Named params:    r.PathValue("id")
+    ✓ Wildcard:        "/files/{path...}"
+    ✗ Still no regex constraints
+    ✗ Still no route groups
+    ✗ Still no built-in middleware stack
+
+When to use stdlib only:
+    • Simple internal services, CLIs with an HTTP health endpoint
+    • Go 1.22+ with basic routing needs
+    • Minimising dependencies is a hard requirement
+
+When to use a router:
+    • REST APIs with resource nesting (/users/{id}/posts/{postId})
+    • Multiple HTTP methods on same path
+    • Route groups with per-group middleware (auth, rate limiting)
+    • Complex path patterns or regex validation
+
+The two most widely used routers:
+
+    gorilla/mux  — feature-rich, battle-tested, explicit configuration
+    chi          — lightweight, stdlib-compatible, middleware-first design
+
+Both implement http.Handler, so they drop in anywhere net/http is used.
+
+═══════════════════════════════════════════════════════════════════════════════
+ 2. STDLIB net/http ROUTER (BASELINE)
+═══════════════════════════════════════════════════════════════════════════════
+
+    package main
+
+    import (
+        "fmt"
+        "net/http"
+    )
+
+    func main() {
+        mux := http.NewServeMux()
+
+        // Pre-1.22: prefix matching, no method routing, no named params
+        mux.HandleFunc("/users/", usersHandler)  // matches /users/anything
+
+        // Go 1.22+: method + named params
+        mux.HandleFunc("GET /users/{id}", getUserHandler)
+        mux.HandleFunc("POST /users", createUserHandler)
+        mux.HandleFunc("GET /files/{path...}", filesHandler) // wildcard
+
+        http.ListenAndServe(":8080", mux)
+    }
+
+    func getUserHandler(w http.ResponseWriter, r *http.Request) {
+        id := r.PathValue("id")   // Go 1.22+ only
+        fmt.Fprintf(w, "user: %s", id)
+    }
+
+    func filesHandler(w http.ResponseWriter, r *http.Request) {
+        path := r.PathValue("path") // captures everything after /files/
+        fmt.Fprintf(w, "file: %s", path)
+    }
+
+    // Limitations still present in 1.22:
+    // - No regex constraints on {id}
+    // - No route groups / sub-muxes with middleware
+    // - Panic on conflicting patterns (not graceful)
+
+═══════════════════════════════════════════════════════════════════════════════
+ 3. gorilla/mux — FULL REFERENCE
+═══════════════════════════════════════════════════════════════════════════════
+
+    go get github.com/gorilla/mux
+
+──────────────────────────────────────────
+ 3a. Basic Setup & Route Registration
+──────────────────────────────────────────
+
+    import "github.com/gorilla/mux"
+
+    func main() {
+        r := mux.NewRouter()
+
+        // Method + path:
+        r.HandleFunc("/users", listUsers).Methods("GET")
+        r.HandleFunc("/users", createUser).Methods("POST")
+        r.HandleFunc("/users/{id}", getUser).Methods("GET")
+        r.HandleFunc("/users/{id}", updateUser).Methods("PUT")
+        r.HandleFunc("/users/{id}", deleteUser).Methods("DELETE")
+
+        // Multiple methods on one route:
+        r.HandleFunc("/users/{id}", handleUser).Methods("GET", "HEAD")
+
+        http.ListenAndServe(":8080", r)
+    }
+
+──────────────────────────────────────────
+ 3b. Path Parameters
+──────────────────────────────────────────
+
+    // Extract with mux.Vars(r) — returns map[string]string
+    func getUser(w http.ResponseWriter, r *http.Request) {
+        vars := mux.Vars(r)
+        id := vars["id"]
+
+        // Type conversion (always validate):
+        userID, err := strconv.Atoi(id)
+        if err != nil {
+            http.Error(w, "invalid id", http.StatusBadRequest)
+            return
+        }
+        fmt.Fprintf(w, "User ID: %d", userID)
+    }
+
+    // Nested params:
+    r.HandleFunc("/users/{userID}/posts/{postID}", getPost).Methods("GET")
+
+    func getPost(w http.ResponseWriter, r *http.Request) {
+        vars := mux.Vars(r)
+        userID := vars["userID"]
+        postID := vars["postID"]
+        fmt.Fprintf(w, "user=%s post=%s", userID, postID)
+    }
+
+──────────────────────────────────────────
+ 3c. Regex Constraints on Path Params
+──────────────────────────────────────────
+
+    // Syntax: {name:pattern}
+    r.HandleFunc("/users/{id:[0-9]+}", getUser)        // integers only
+    r.HandleFunc("/posts/{slug:[a-z0-9-]+}", getPost)  // lowercase slug
+    r.HandleFunc("/files/{name:.+\\.go}", getFile)     // .go files only
+    r.HandleFunc("/v{version:[1-9]}/api", handler)     // v1 through v9
+
+    // If pattern doesn't match → gorilla returns 405 or falls to next route
+    // If no route matches at all → 404 (via NotFoundHandler)
+
+──────────────────────────────────────────
+ 3d. Query String Matching
+──────────────────────────────────────────
+
+    // Route only matches if query param is present (and optionally matches value):
+    r.HandleFunc("/search", searchHandler).
+        Methods("GET").
+        Queries("q", "{query}")              // q must be present
+
+    r.HandleFunc("/users", listUsers).
+        Methods("GET").
+        Queries("role", "admin")             // role must equal "admin"
+
+    r.HandleFunc("/filter", filterHandler).
+        Methods("GET").
+        Queries("type", "{type:[a-z]+}")     // regex on query value
+
+    // Note: .Queries() is rarely used in practice — prefer extracting
+    // query params in the handler with r.URL.Query()
+
+──────────────────────────────────────────
+ 3e. Host & Scheme Matching
+──────────────────────────────────────────
+
+    // Match by host:
+    r.Host("api.myapp.com").HandleFunc("/users", listUsers)
+
+    // Host with variable:
+    r.Host("{subdomain:[a-z]+}.myapp.com").HandleFunc("/", homeHandler)
+    // Retrieve: mux.Vars(r)["subdomain"]
+
+    // Match by scheme:
+    r.Schemes("https").HandleFunc("/secure", secureHandler)
+
+    // Header matching:
+    r.Headers("X-API-Version", "2").HandleFunc("/api", v2Handler)
+
+──────────────────────────────────────────
+ 3f. Sub-Routers
+──────────────────────────────────────────
+
+    r := mux.NewRouter()
+
+    // API sub-router with prefix:
+    api := r.PathPrefix("/api/v1").Subrouter()
+    api.Use(AuthMiddleware)         // middleware on sub-router only
+    api.HandleFunc("/users", listUsers).Methods("GET")
+    api.HandleFunc("/users/{id}", getUser).Methods("GET")
+
+    // Admin sub-router:
+    admin := r.PathPrefix("/admin").Subrouter()
+    admin.Use(AuthMiddleware)
+    admin.Use(RequireAdminMiddleware)
+    admin.HandleFunc("/stats", statsHandler).Methods("GET")
+
+    // Note: PathPrefix("/api/v1") matches /api/v1 AND /api/v1/anything
+    // For exact match use: r.Path("/api/v1").HandlerFunc(handler)
+
+──────────────────────────────────────────
+ 3g. Custom NotFound & MethodNotAllowed Handlers
+──────────────────────────────────────────
+
+    r := mux.NewRouter()
+
+    r.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusNotFound)
+        json.NewEncoder(w).Encode(map[string]string{"error": "route not found"})
+    })
+
+    r.MethodNotAllowedHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusMethodNotAllowed)
+        json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
+    })
+
+──────────────────────────────────────────
+ 3h. URL Building (reverse routing)
+──────────────────────────────────────────
+
+    // Name a route:
+    r.HandleFunc("/users/{id}", getUser).Methods("GET").Name("get-user")
+    r.HandleFunc("/posts/{postID}/comments/{id}", getComment).Name("get-comment")
+
+    // Build URL from route name:
+    url, err := r.Get("get-user").URL("id", "42")
+    // url.String() → "/users/42"
+
+    url, err = r.Get("get-comment").URL("postID", "10", "id", "5")
+    // url.String() → "/posts/10/comments/5"
+
+    // With host:
+    url, err = r.Get("get-user").URL("id", "42")
+    // Useful for generating Location headers, HATEOAS links, redirects
+
+──────────────────────────────────────────
+ 3i. Middleware with gorilla/mux
+──────────────────────────────────────────
+
+    r := mux.NewRouter()
+
+    // Global middleware (applies to all routes on this router):
+    r.Use(LoggingMiddleware)
+    r.Use(RecoveryMiddleware)
+
+    // Sub-router scoped middleware:
+    api := r.PathPrefix("/api").Subrouter()
+    api.Use(AuthMiddleware)
+
+    // Middleware signature must match mux.MiddlewareFunc:
+    // type MiddlewareFunc func(http.Handler) http.Handler
+    // — same as the standard middleware signature
+
+    // Inline per-route (wrap handler manually):
+    r.Handle("/upload", RateLimiter(10)(http.HandlerFunc(uploadHandler))).Methods("POST")
+
+──────────────────────────────────────────
+ 3j. Walking Routes (introspection)
+──────────────────────────────────────────
+
+    // Iterate all registered routes (useful for docs, testing):
+    r.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
+        path, _ := route.GetPathTemplate()
+        methods, _ := route.GetMethods()
+        fmt.Printf("%-30s %v\n", path, methods)
+        return nil
+    })
+
+──────────────────────────────────────────
+ 3k. StrictSlash
+──────────────────────────────────────────
+
+    // StrictSlash(true): redirect /users/ → /users (or vice versa, based on registration)
+    r := mux.NewRouter()
+    r.StrictSlash(true)
+    r.HandleFunc("/users", listUsers) // /users/ will redirect to /users
+
+    // StrictSlash(false) (default): /users and /users/ are different routes
+
+═══════════════════════════════════════════════════════════════════════════════
+ 4. chi — FULL REFERENCE
+═══════════════════════════════════════════════════════════════════════════════
+
+    go get github.com/go-chi/chi/v5
+
+──────────────────────────────────────────
+ 4a. Basic Setup & Route Registration
+──────────────────────────────────────────
+
+    import (
+        "github.com/go-chi/chi/v5"
+        "github.com/go-chi/chi/v5/middleware"
+    )
+
+    func main() {
+        r := chi.NewRouter()
+
+        // Global middleware:
+        r.Use(middleware.Logger)
+        r.Use(middleware.Recoverer)
+        r.Use(middleware.RequestID)
+
+        // Routes:
+        r.Get("/users", listUsers)
+        r.Post("/users", createUser)
+        r.Get("/users/{id}", getUser)
+        r.Put("/users/{id}", updateUser)
+        r.Patch("/users/{id}", patchUser)
+        r.Delete("/users/{id}", deleteUser)
+
+        // Any method:
+        r.Handle("/webhook", webhookHandler)   // all methods
+        r.HandleFunc("/ping", pingHandler)     // all methods, func form
+
+        // Method not allowed returns 405 automatically
+
+        http.ListenAndServe(":8080", r)
+    }
+
+──────────────────────────────────────────
+ 4b. Path Parameters
+──────────────────────────────────────────
+
+    // Extract with chi.URLParam:
+    func getUser(w http.ResponseWriter, r *http.Request) {
+        id := chi.URLParam(r, "id")   // returns "" if not found
+
+        userID, err := strconv.Atoi(id)
+        if err != nil {
+            http.Error(w, "invalid id", http.StatusBadRequest)
+            return
+        }
+        fmt.Fprintf(w, "User: %d", userID)
+    }
+
+    // From context directly (same thing, useful in service layers):
+    func getUser(w http.ResponseWriter, r *http.Request) {
+        id := chi.URLParamFromCtx(r.Context(), "id")
+        fmt.Fprintf(w, "User: %s", id)
+    }
+
+    // Nested params:
+    r.Get("/users/{userID}/posts/{postID}", func(w http.ResponseWriter, r *http.Request) {
+        userID := chi.URLParam(r, "userID")
+        postID := chi.URLParam(r, "postID")
+        fmt.Fprintf(w, "user=%s post=%s", userID, postID)
+    })
+
+──────────────────────────────────────────
+ 4c. Wildcard & Optional Segments
+──────────────────────────────────────────
+
+    // Wildcard — matches rest of path:
+    r.Get("/files/*", func(w http.ResponseWriter, r *http.Request) {
+        // chi.URLParam(r, "*") to get the wildcard portion
+        path := chi.URLParam(r, "*")
+        fmt.Fprintf(w, "file path: %s", path)
+    })
+
+    // Or use named wildcard:
+    r.Get("/static/{filepath:*}", staticHandler)
+
+    // Mount a sub-router or http.Handler at a prefix:
+    r.Mount("/api/v1", apiRouter())
+
+──────────────────────────────────────────
+ 4d. Route Groups
+──────────────────────────────────────────
+
+    r := chi.NewRouter()
+    r.Use(middleware.Logger)    // global
+
+    // Inline group — same prefix scope, different middleware:
+    r.Group(func(r chi.Router) {
+        r.Use(AuthMiddleware)   // only for routes inside this group
+
+        r.Get("/profile", profileHandler)
+        r.Put("/profile", updateProfileHandler)
+        r.Delete("/account", deleteAccountHandler)
+    })
+
+    // Route with prefix — sub-router equivalent:
+    r.Route("/users", func(r chi.Router) {
+        r.Use(AuthMiddleware)
+
+        r.Get("/", listUsers)               // GET /users/
+        r.Post("/", createUser)             // POST /users/
+        r.Get("/{id}", getUser)             // GET /users/{id}
+        r.Put("/{id}", updateUser)          // PUT /users/{id}
+        r.Delete("/{id}", deleteUser)       // DELETE /users/{id}
+
+        // Nested sub-route:
+        r.Route("/{userID}/posts", func(r chi.Router) {
+            r.Get("/", listUserPosts)       // GET /users/{userID}/posts/
+            r.Post("/", createUserPost)     // POST /users/{userID}/posts/
+            r.Get("/{postID}", getUserPost) // GET /users/{userID}/posts/{postID}
+        })
+    })
+
+    // Admin group with extra middleware:
+    r.Route("/admin", func(r chi.Router) {
+        r.Use(AuthMiddleware)
+        r.Use(RequireRole("admin"))
+
+        r.Get("/stats", statsHandler)
+        r.Get("/users", adminListUsers)
+    })
+
+──────────────────────────────────────────
+ 4e. Per-Route Inline Middleware (r.With)
+──────────────────────────────────────────
+
+    // Apply middleware to single route only:
+    r.With(RateLimiter(5)).Post("/upload", uploadHandler)
+    r.With(CacheMiddleware(5*time.Minute)).Get("/expensive", expensiveHandler)
+
+    // Chain multiple inline:
+    r.With(AuthMiddleware, RequireRole("admin")).Delete("/users/{id}", adminDeleteUser)
+
+    // r.With returns a new Router scoped to that route — does not affect others
+
+──────────────────────────────────────────
+ 4f. Mount — Attaching Sub-Routers
+──────────────────────────────────────────
+
+    // Mount attaches a handler (or chi.Router) at a prefix
+    func apiV1Router() chi.Router {
+        r := chi.NewRouter()
+        r.Use(AuthMiddleware)
+        r.Get("/users", listUsers)
+        r.Post("/users", createUser)
+        return r
+    }
+
+    func apiV2Router() chi.Router {
+        r := chi.NewRouter()
+        r.Use(AuthMiddleware)
+        r.Use(APIv2Middleware)
+        r.Get("/users", listUsersV2)
+        return r
+    }
+
+    // Main router:
+    r := chi.NewRouter()
+    r.Use(middleware.Logger)
+    r.Use(middleware.Recoverer)
+
+    r.Mount("/api/v1", apiV1Router())  // all /api/v1/* routes
+    r.Mount("/api/v2", apiV2Router())  // all /api/v2/* routes
+
+    // Mount a plain http.Handler (e.g. prometheus metrics):
+    r.Mount("/metrics", promhttp.Handler())
+
+    // Mount with StripPrefix equivalent — chi.Mount does NOT strip automatically
+    // Use http.StripPrefix if needed:
+    r.Mount("/static", http.StripPrefix("/static",
+        http.FileServer(http.Dir("./static"))))
+
+──────────────────────────────────────────
+ 4g. Built-in Middleware (chi/middleware)
+──────────────────────────────────────────
+
+    import "github.com/go-chi/chi/v5/middleware"
+
+    r.Use(middleware.RequestID)         // X-Request-Id header injection
+    r.Use(middleware.RealIP)            // sets r.RemoteAddr from X-Forwarded-For
+    r.Use(middleware.Logger)            // structured request logging
+    r.Use(middleware.Recoverer)         // panic recovery → 500
+    r.Use(middleware.Compress(5))       // gzip compression, level 5
+    r.Use(middleware.StripSlashes)      // /users/ → /users
+    r.Use(middleware.RedirectSlashes)   // /users → /users/ (redirect)
+    r.Use(middleware.Heartbeat("/ping")) // lightweight health endpoint
+    r.Use(middleware.NoCache)           // sets Cache-Control: no-cache headers
+    r.Use(middleware.CleanPath)         // clean double slashes //
+    r.Use(middleware.AllowContentType("application/json")) // 415 for others
+    r.Use(middleware.SetHeader("X-Powered-By", "chi"))
+
+    // Timeout:
+    r.Use(middleware.Timeout(60 * time.Second))
+
+    // Throttle (concurrency limiter, not rate limiter):
+    r.Use(middleware.Throttle(100))     // max 100 concurrent requests
+
+    // Basic auth:
+    r.Use(middleware.BasicAuth("realm", map[string]string{"user": "pass"}))
+
+──────────────────────────────────────────
+ 4h. Custom 404 & 405 Handlers
+──────────────────────────────────────────
+
+    r := chi.NewRouter()
+
+    r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusNotFound)
+        json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
+    })
+
+    r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusMethodNotAllowed)
+        json.NewEncoder(w).Encode(map[string]string{"error": "method not allowed"})
+    })
+
+──────────────────────────────────────────
+ 4i. chi Context & Route Info
+──────────────────────────────────────────
+
+    // Get current route pattern (useful in logging middleware):
+    routePattern := chi.RouteContext(r.Context()).RoutePattern()
+    // → "/users/{id}" (not the actual URL)
+
+    // URL params from context (same as chi.URLParam):
+    rctx := chi.RouteContext(r.Context())
+    id := rctx.URLParam("id")
+
+    // All matched params:
+    rctx.URLParams.Keys    // []string — param names
+    rctx.URLParams.Values  // []string — param values
+
+═══════════════════════════════════════════════════════════════════════════════
+ 5. FEATURE COMPARISON: stdlib vs gorilla/mux vs chi
+═══════════════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────┬───────────────┬───────────────┬───────────────┐
+│ Feature                         │ stdlib 1.22+  │ gorilla/mux   │ chi           │
+├─────────────────────────────────┼───────────────┼───────────────┼───────────────┤
+│ Named path params               │ ✓ {id}        │ ✓ {id}        │ ✓ {id}        │
+│ Method routing                  │ ✓ "GET /path" │ ✓ .Methods()  │ ✓ r.Get()     │
+│ Regex param constraints         │ ✗             │ ✓ {id:[0-9]+} │ ✗ (limited)   │
+│ Wildcard sub-path               │ ✓ {path...}   │ ✗ (manual)    │ ✓ /*          │
+│ Route groups / sub-routers      │ ✗             │ ✓ .Subrouter()│ ✓ r.Route()   │
+│ Inline per-route middleware     │ ✗             │ manual wrap   │ ✓ r.With()    │
+│ Built-in middleware library     │ ✗             │ ✗             │ ✓ chi/middleware│
+│ Named routes / URL generation   │ ✗             │ ✓ .Name()     │ ✗             │
+│ Host/scheme/header matching     │ ✗             │ ✓             │ ✗             │
+│ Query param route matching      │ ✗             │ ✓ .Queries()  │ ✗             │
+│ Custom 404/405 handlers         │ ✗             │ ✓             │ ✓             │
+│ Route introspection (Walk)      │ ✗             │ ✓             │ ✗             │
+│ StrictSlash                     │ ✗             │ ✓             │ ✓ middleware  │
+│ http.Handler compatibility      │ ✓             │ ✓             │ ✓             │
+│ Zero external deps              │ ✓             │ ✗             │ ✗             │
+│ Active maintenance (2024)       │ ✓             │ moderate      │ ✓ active      │
+│ Performance                     │ fastest       │ moderate      │ fast          │
+│ Mount sub-handlers              │ ✗             │ ✓ Subrouter   │ ✓ r.Mount()   │
+├─────────────────────────────────┼───────────────┼───────────────┼───────────────┤
+│ Approx. binary size impact      │ 0             │ ~500KB        │ ~300KB        │
+│ Import path                     │ net/http      │ gorilla/mux   │ go-chi/chi/v5 │
+└─────────────────────────────────┴───────────────┴───────────────┴───────────────┘
+
+When to choose:
+    stdlib 1.22+   Simple services, no route groups needed, zero deps preferred
+    gorilla/mux    Regex constraints required, named URL generation (HATEOAS),
+                   host/scheme matching, existing gorilla ecosystem
+    chi            REST APIs, route groups with middleware, rich built-in mw,
+                   idiomatic Go style, most active development
+
+NOTE: gorilla/mux was in maintenance-mode for a period but received new
+      maintainers and continues to be updated. chi is more actively developed
+      and is the more common choice for new Go services.
+
+═══════════════════════════════════════════════════════════════════════════════
+ 6. URL PARAMETER PATTERNS & REGEX CONSTRAINTS
+═══════════════════════════════════════════════════════════════════════════════
+
+──────────────────────────────────────────
+ 6a. gorilla/mux Patterns
+──────────────────────────────────────────
+
+    // Basic named param — matches any non-slash segment:
+    /users/{id}                     → matches /users/42, /users/abc
+                                    → does NOT match /users/42/posts
+
+    // Regex constraint:
+    /users/{id:[0-9]+}              → only integers
+    /users/{slug:[a-z0-9-]+}        → lowercase alphanumeric + hyphens
+    /files/{name:.+\.go}            → any path ending in .go
+    /api/v{ver:[1-9][0-9]*}         → v1, v2, v10 ...
+
+    // Multiple segments:
+    /files/{path:.*}                → matches /files/a/b/c (any depth)
+
+    // Literal + param:
+    /users/{id:[0-9]+}/posts        → only /users/42/posts (not /users/abc/posts)
+
+    // Common patterns:
+    {id:[0-9]+}                     integers
+    {uuid:[0-9a-f-]{36}}            UUID v4
+    {slug:[a-z][a-z0-9-]*}         URL slug
+    {date:[0-9]{4}-[0-9]{2}-[0-9]{2}} YYYY-MM-DD date
+    {version:[0-9]+\.[0-9]+}        semantic version (major.minor)
+
+──────────────────────────────────────────
+ 6b. chi Patterns
+──────────────────────────────────────────
+
+    // Basic named param — matches single non-slash segment:
+    /users/{id}             → /users/42, /users/abc
+
+    // Wildcard — matches rest including slashes:
+    /files/*                → /files/a/b/c
+    chi.URLParam(r, "*")    → "a/b/c"
+
+    // chi does NOT support inline regex like gorilla.
+    // Validate in handler instead:
+    func getUser(w http.ResponseWriter, r *http.Request) {
+        id := chi.URLParam(r, "id")
+        if _, err := strconv.Atoi(id); err != nil {
+            http.Error(w, "id must be integer", http.StatusBadRequest)
+            return
+        }
+        // proceed
+    }
+
+    // Or use a middleware for validation:
+    func ValidateIntParam(param string) func(http.Handler) http.Handler {
+        return func(next http.Handler) http.Handler {
+            return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+                val := chi.URLParam(r, param)
+                if _, err := strconv.Atoi(val); err != nil {
+                    http.Error(w, param+" must be an integer", http.StatusBadRequest)
+                    return
+                }
+                next.ServeHTTP(w, r)
+            })
+        }
+    }
+
+    // Usage:
+    r.With(ValidateIntParam("id")).Get("/users/{id}", getUser)
+
+═══════════════════════════════════════════════════════════════════════════════
+ 7. MIDDLEWARE INTEGRATION
+═══════════════════════════════════════════════════════════════════════════════
+
+──────────────────────────────────────────
+ 7a. gorilla/mux Middleware
+──────────────────────────────────────────
+
+    r := mux.NewRouter()
+
+    // Router-level (all routes):
+    r.Use(mux.MiddlewareFunc(LoggingMiddleware))
+    // or since gorilla accepts func(http.Handler) http.Handler directly:
+    r.Use(LoggingMiddleware)
+
+    // Sub-router scoped:
+    api := r.PathPrefix("/api").Subrouter()
+    api.Use(AuthMiddleware)
+    api.Use(JSONContentType)
+
+    // Per-route via manual wrapping:
+    r.Handle("/upload",
+        RateLimiter(5)(http.HandlerFunc(uploadHandler)),
+    ).Methods("POST")
+
+    // Order: r.Use() applies in registration order
+    // First r.Use() = outermost (first to run on request)
+
+──────────────────────────────────────────
+ 7b. chi Middleware
+──────────────────────────────────────────
+
+    r := chi.NewRouter()
+
+    // Global:
+    r.Use(middleware.Recoverer)     // outermost — first in slice = first to run
+    r.Use(middleware.RequestID)
+    r.Use(middleware.Logger)
+
+    // Group-scoped:
+    r.Route("/api", func(r chi.Router) {
+        r.Use(AuthMiddleware)
+        r.Use(middleware.AllowContentType("application/json"))
+        r.Get("/users", listUsers)
+    })
+
+    // Per-route (r.With does NOT modify the router — returns scoped router):
+    r.With(RateLimiter(10)).Post("/upload", uploadHandler)
+
+    // Combining With and Group:
+    r.Group(func(r chi.Router) {
+        r.Use(AuthMiddleware)
+        r.With(RequireRole("admin")).Delete("/users/{id}", deleteUser)
+        r.Get("/users/{id}", getUser) // auth only, no admin check
+    })
+
+═══════════════════════════════════════════════════════════════════════════════
+ 8. SUB-ROUTERS & ROUTE GROUPS
+═══════════════════════════════════════════════════════════════════════════════
+
+──────────────────────────────────────────
+ 8a. gorilla/mux Sub-Router Deep Dive
+──────────────────────────────────────────
+
+    r := mux.NewRouter()
+
+    // PathPrefix creates a sub-router that shares the parent prefix:
+    v1 := r.PathPrefix("/api/v1").Subrouter()
+    v1.Use(AuthMiddleware)
+    v1.Use(LoggingMiddleware)
+
+    // Routes under v1 — DO NOT repeat the prefix:
+    v1.HandleFunc("/users", listUsers).Methods("GET")          // /api/v1/users
+    v1.HandleFunc("/users/{id}", getUser).Methods("GET")       // /api/v1/users/{id}
+    v1.HandleFunc("/posts", listPosts).Methods("GET")          // /api/v1/posts
+
+    // Nested sub-routers:
+    admin := v1.PathPrefix("/admin").Subrouter()
+    admin.Use(RequireAdminMiddleware)
+    admin.HandleFunc("/stats", statsHandler).Methods("GET")    // /api/v1/admin/stats
+
+    // IMPORTANT: PathPrefix("/api/v1") strips nothing — mux.Vars still
+    // works correctly within the sub-router
+
+──────────────────────────────────────────
+ 8b. chi Route Group Deep Dive
+──────────────────────────────────────────
+
+    r := chi.NewRouter()
+    r.Use(middleware.Recoverer)
+    r.Use(middleware.RequestID)
+
+    // Public routes:
+    r.Get("/health", healthHandler)
+    r.Post("/auth/login", loginHandler)
+    r.Post("/auth/register", registerHandler)
+
+    // Versioned API with mount:
+    r.Mount("/api/v1", v1Router())
+    r.Mount("/api/v2", v2Router())
+
+    func v1Router() chi.Router {
+        r := chi.NewRouter()
+        r.Use(middleware.Logger)
+        r.Use(AuthMiddleware)
+
+        r.Route("/users", func(r chi.Router) {
+            r.Get("/", listUsers)
+            r.Post("/", createUser)
+            r.Route("/{userID}", func(r chi.Router) {
+                r.Get("/", getUser)
+                r.Put("/", updateUser)
+                r.Delete("/", deleteUser)
+                r.Route("/posts", func(r chi.Router) {
+                    r.Get("/", listUserPosts)
+                    r.Post("/", createUserPost)
+                    r.Get("/{postID}", getUserPost)
+                })
+            })
+        })
+
+        r.Route("/orders", func(r chi.Router) {
+            r.Get("/", listOrders)
+            r.Post("/", createOrder)
+            r.Get("/{id}", getOrder)
+        })
+
+        return r
+    }
+
+    // Group vs Route vs Mount:
+    // r.Group(fn)       — same path prefix as parent, different middleware
+    // r.Route(pat, fn)  — new path prefix, creates sub-router automatically
+    // r.Mount(pat, h)   — attaches any http.Handler at prefix (more flexible)
+
+═══════════════════════════════════════════════════════════════════════════════
+ 9. BUILDING A REAL API STRUCTURE
+═══════════════════════════════════════════════════════════════════════════════
+
+──────────────────────────────────────────
+ 9a. Production-Style chi API Layout
+──────────────────────────────────────────
+
+    // main.go
+    func main() {
+        db := connectDB()
+        logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
+        userHandler := NewUserHandler(db, logger)
+        postHandler := NewPostHandler(db, logger)
+
+        r := chi.NewRouter()
+
+        // Global middleware:
+        r.Use(middleware.Recoverer)
+        r.Use(RequestIDMiddleware)
+        r.Use(LoggerMiddleware(logger))
+        r.Use(middleware.Timeout(30 * time.Second))
+
+        // Public:
+        r.Get("/health", healthCheck)
+        r.Post("/auth/login", authHandler.Login)
+
+        // Protected API:
+        r.Route("/api/v1", func(r chi.Router) {
+            r.Use(AuthMiddleware)
+
+            r.Route("/users", func(r chi.Router) {
+                r.Get("/", userHandler.List)
+                r.Post("/", userHandler.Create)
+                r.Route("/{userID}", func(r chi.Router) {
+                    r.Get("/", userHandler.Get)
+                    r.Put("/", userHandler.Update)
+                    r.Delete("/", userHandler.Delete)
+                    r.Route("/posts", func(r chi.Router) {
+                        r.Get("/", postHandler.ListByUser)
+                        r.Post("/", postHandler.Create)
+                    })
+                })
+            })
+
+            // Admin only:
+            r.Route("/admin", func(r chi.Router) {
+                r.Use(RequireRole("admin"))
+                r.Get("/stats", adminHandler.Stats)
+                r.Get("/users", adminHandler.AllUsers)
+            })
+        })
+
+        // Metrics — no auth:
+        r.Mount("/metrics", promhttp.Handler())
+
+        srv := &http.Server{
+            Addr:         ":8080",
+            Handler:      r,
+            ReadTimeout:  15 * time.Second,
+            WriteTimeout: 15 * time.Second,
+            IdleTimeout:  60 * time.Second,
+        }
+        log.Fatal(srv.ListenAndServe())
+    }
+
+──────────────────────────────────────────
+ 9b. Handler as Struct (dependency injection)
+──────────────────────────────────────────
+
+    // UserHandler holds dependencies — methods are the route handlers
+    type UserHandler struct {
+        db     *sql.DB
+        logger *slog.Logger
+    }
+
+    func NewUserHandler(db *sql.DB, logger *slog.Logger) *UserHandler {
+        return &UserHandler{db: db, logger: logger}
+    }
+
+    func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
+        // use h.db, h.logger
+        rows, err := h.db.QueryContext(r.Context(), "SELECT id, name FROM users")
+        // ...
+        writeJSON(w, http.StatusOK, users)
+    }
+
+    func (h *UserHandler) Get(w http.ResponseWriter, r *http.Request) {
+        id := chi.URLParam(r, "userID")
+        // ...
+    }
+
+    func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
+        var req CreateUserRequest
+        if err := decodeJSON(r, &req); err != nil {
+            writeError(w, http.StatusBadRequest, err.Error())
+            return
+        }
+        // ...
+    }
+
+    // Routes registration:
+    r.Route("/users", func(r chi.Router) {
+        r.Get("/", userHandler.List)
+        r.Post("/", userHandler.Create)
+        r.Get("/{userID}", userHandler.Get)
+    })
+
+──────────────────────────────────────────
+ 9c. Production-Style gorilla/mux API Layout
+──────────────────────────────────────────
+
+    func NewRouter(userHandler *UserHandler, authMw, adminMw func(http.Handler) http.Handler) *mux.Router {
+        r := mux.NewRouter()
+        r.Use(LoggingMiddleware)
+        r.Use(RecoveryMiddleware)
+
+        // Custom error handlers:
+        r.NotFoundHandler = jsonNotFoundHandler()
+        r.MethodNotAllowedHandler = jsonMethodNotAllowedHandler()
+
+        // Public:
+        r.HandleFunc("/health", healthCheck).Methods("GET")
+        r.HandleFunc("/auth/login", loginHandler).Methods("POST")
+
+        // API v1 sub-router:
+        api := r.PathPrefix("/api/v1").Subrouter()
+        api.Use(authMw)
+
+        api.HandleFunc("/users", userHandler.List).Methods("GET")
+        api.HandleFunc("/users", userHandler.Create).Methods("POST")
+        api.HandleFunc("/users/{id:[0-9]+}", userHandler.Get).Methods("GET")
+        api.HandleFunc("/users/{id:[0-9]+}", userHandler.Update).Methods("PUT")
+        api.HandleFunc("/users/{id:[0-9]+}", userHandler.Delete).Methods("DELETE")
+
+        // Admin sub-router:
+        admin := api.PathPrefix("/admin").Subrouter()
+        admin.Use(adminMw)
+        admin.HandleFunc("/stats", adminHandler.Stats).Methods("GET")
+
+        return r
+    }
+
+═══════════════════════════════════════════════════════════════════════════════
+10. TESTING ROUTES & HANDLERS
+═══════════════════════════════════════════════════════════════════════════════
+
+──────────────────────────────────────────
+ 10a. Testing with chi (httptest)
+──────────────────────────────────────────
+
+    func TestGetUser_chi(t *testing.T) {
+        // Build minimal router with just the route under test:
+        r := chi.NewRouter()
+        r.Get("/users/{id}", getUser)
+
+        // Create request:
+        req := httptest.NewRequest("GET", "/users/42", nil)
+        rr := httptest.NewRecorder()
+
+        r.ServeHTTP(rr, req)
+
+        if rr.Code != http.StatusOK {
+            t.Fatalf("expected 200 got %d: %s", rr.Code, rr.Body.String())
+        }
+
+        var resp UserResponse
+        if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+            t.Fatal("invalid JSON response")
+        }
+        if resp.ID != 42 {
+            t.Errorf("expected ID 42 got %d", resp.ID)
+        }
+    }
+
+    // Testing with middleware:
+    func TestGetUser_WithAuth(t *testing.T) {
+        r := chi.NewRouter()
+        r.Use(AuthMiddleware)
+        r.Get("/users/{id}", getUser)
+
+        // Without token — expect 401:
+        req := httptest.NewRequest("GET", "/users/1", nil)
+        rr := httptest.NewRecorder()
+        r.ServeHTTP(rr, req)
+        if rr.Code != http.StatusUnauthorized {
+            t.Errorf("expected 401 got %d", rr.Code)
+        }
+
+        // With valid token:
+        req = httptest.NewRequest("GET", "/users/1", nil)
+        req.Header.Set("Authorization", "Bearer "+validTestToken)
+        rr = httptest.NewRecorder()
+        r.ServeHTTP(rr, req)
+        if rr.Code != http.StatusOK {
+            t.Errorf("expected 200 got %d", rr.Code)
+        }
+    }
+
+──────────────────────────────────────────
+ 10b. Testing with gorilla/mux
+──────────────────────────────────────────
+
+    func TestGetUser_gorilla(t *testing.T) {
+        r := mux.NewRouter()
+        r.HandleFunc("/users/{id:[0-9]+}", getUser).Methods("GET")
+
+        req := httptest.NewRequest("GET", "/users/42", nil)
+        rr := httptest.NewRecorder()
+        r.ServeHTTP(rr, req)
+
+        if rr.Code != http.StatusOK {
+            t.Fatalf("expected 200 got %d", rr.Code)
+        }
+    }
+
+    // Testing regex constraints:
+    func TestGetUser_NonIntID(t *testing.T) {
+        r := mux.NewRouter()
+        r.HandleFunc("/users/{id:[0-9]+}", getUser).Methods("GET")
+
+        req := httptest.NewRequest("GET", "/users/abc", nil)
+        rr := httptest.NewRecorder()
+        r.ServeHTTP(rr, req)
+
+        // gorilla returns 405 (no matching route) not 404
+        // because a route for /users/{id} exists, just the regex doesn't match
+        if rr.Code != http.StatusNotFound && rr.Code != http.StatusMethodNotAllowed {
+            t.Errorf("expected 404/405 got %d", rr.Code)
+        }
+    }
+
+    // Testing mux.Vars directly (without full router — inject vars):
+    func TestGetUserHandler_Direct(t *testing.T) {
+        req := httptest.NewRequest("GET", "/users/99", nil)
+        // Inject vars manually for unit testing without full router:
+        req = mux.SetURLVars(req, map[string]string{"id": "99"})
+        rr := httptest.NewRecorder()
+
+        getUser(rr, req)
+
+        if rr.Code != http.StatusOK {
+            t.Errorf("expected 200 got %d", rr.Code)
+        }
+    }
+
+──────────────────────────────────────────
+ 10c. Table-Driven Route Tests
+──────────────────────────────────────────
+
+    func TestRoutes(t *testing.T) {
+        r := setupRouter() // returns chi.Router or *mux.Router
+
+        tests := []struct {
+            name   string
+            method string
+            path   string
+            token  string
+            want   int
+        }{
+            {"list users - auth",    "GET",    "/api/v1/users",    validToken, 200},
+            {"list users - no auth", "GET",    "/api/v1/users",    "",         401},
+            {"get user",             "GET",    "/api/v1/users/1",  validToken, 200},
+            {"get user bad id",      "GET",    "/api/v1/users/abc",validToken, 400},
+            {"create user",          "POST",   "/api/v1/users",    validToken, 201},
+            {"delete user admin",    "DELETE", "/api/v1/users/1",  adminToken, 204},
+            {"delete user non-admin","DELETE", "/api/v1/users/1",  validToken, 403},
+            {"not found",            "GET",    "/api/v1/nope",     validToken, 404},
+            {"method not allowed",   "PATCH",  "/api/v1/users",    validToken, 405},
+        }
+
+        for _, tc := range tests {
+            t.Run(tc.name, func(t *testing.T) {
+                req := httptest.NewRequest(tc.method, tc.path, nil)
+                if tc.token != "" {
+                    req.Header.Set("Authorization", "Bearer "+tc.token)
+                }
+                rr := httptest.NewRecorder()
+                r.ServeHTTP(rr, req)
+
+                if rr.Code != tc.want {
+                    t.Errorf("want %d got %d (body: %s)", tc.want, rr.Code, rr.Body.String())
+                }
+            })
+        }
+    }
+
+═══════════════════════════════════════════════════════════════════════════════
+11. COMMON PITFALLS & BEST PRACTICES
+═══════════════════════════════════════════════════════════════════════════════
+
+PITFALL 1 — gorilla: not calling .Methods() leads to accepting all methods
+    ❌ r.HandleFunc("/users", createUser)        // accepts GET, POST, DELETE...
+    ✅ r.HandleFunc("/users", createUser).Methods("POST")
+
+PITFALL 2 — gorilla: PathPrefix sub-router matches too broadly
+    ❌ r.PathPrefix("/api").Subrouter()          // matches /api, /api-docs, /apikey
+    ✅ r.PathPrefix("/api/").Subrouter()         // trailing slash scopes it
+    Or:
+    ✅ r.PathPrefix("/api").Subrouter().StrictSlash(true)
+
+PITFALL 3 — chi: r.Route vs r.Group confusion
+    r.Group(fn)  — groups routes at SAME path level, adds middleware only
+    r.Route(p,fn)— creates a new path PREFIX + a sub-router
+    ❌ Using r.Group for resource nesting (wrong prefix behavior)
+    ✅ Use r.Route for resource nesting, r.Group for middleware grouping
+
+PITFALL 4 — chi: r.With does NOT persist across routes
+    r.With(mw).Get(...)  — mw applies ONLY to this one route
+    ❌ Expecting r.With() to affect subsequent route registrations
+    ✅ Use r.Group or r.Route with r.Use() for multiple routes
+
+PITFALL 5 — gorilla: mux.Vars returns nil map if not using mux router
+    ❌ Calling mux.Vars(r) in a handler not served by a mux.Router
+    ✅ Test with mux.SetURLVars(req, map) for unit tests without full router
+
+PITFALL 6 — gorilla: regex too permissive
+    ❌ {path:.*}         — matches across path separators + eats all routes below
+    ✅ Only use .* for intentional catch-all at end of pattern
+
+PITFALL 7 — chi: URLParam returns "" silently for missing params
+    id := chi.URLParam(r, "typo") // returns "" — no error
+    ✅ Always validate that chi.URLParam is non-empty before using
+
+PITFALL 8 — Not setting http.Server timeouts (router-independent)
+    ❌ http.ListenAndServe(":8080", r)  // zero timeouts — Slowloris attack
+    ✅ &http.Server{ReadTimeout: 15*time.Second, WriteTimeout: 15*time.Second, ...}
+
+PITFALL 9 — Mounting without considering path stripping (chi)
+    r.Mount("/static", http.FileServer(http.Dir(".")))
+    // FileServer sees /static/file.txt, looks for ./static/file.txt — WRONG
+    ✅ r.Mount("/static", http.StripPrefix("/static", http.FileServer(...)))
+
+PITFALL 10 — Gorilla middleware added after route registration
+    // gorilla processes r.Use() calls before route dispatch
+    // but routes registered before r.Use() in older versions had issues
+    ✅ Always call r.Use() before r.HandleFunc() for clarity
+
+BEST PRACTICES:
+    • Use chi for new services — more active development, cleaner API
+    • Use gorilla when you need regex constraints or named URL generation
+    • Structure handlers as structs — inject dependencies via constructor
+    • Always set http.Server timeouts regardless of router choice
+    • Use route groups to scope middleware — avoid global auth on health/metrics
+    • Test routes using the full router (not just the handler) — verifies routing
+    • Use chi.RouteContext(r.Context()).RoutePattern() in logging for clean URLs
+    • Never use gorilla's .Queries() for param validation — do it in handler
+    • Define custom 404/405 handlers that return JSON for API servers
+    • Keep route registration in one place (route file or setupRouter function)
+
+═══════════════════════════════════════════════════════════════════════════════
+12. JAVA vs GO COMPARISON
+═══════════════════════════════════════════════════════════════════════════════
+
+┌──────────────────────────────┬──────────────────────────────────┬──────────────────────────────────────┐
+│ Concept                      │ Java (Spring Boot)               │ Go (chi / gorilla/mux)               │
+├──────────────────────────────┼──────────────────────────────────┼──────────────────────────────────────┤
+│ Router setup                 │ @RestController auto-scanned     │ chi.NewRouter() / mux.NewRouter()    │
+│                              │ DispatcherServlet config         │ explicit registration                │
+├──────────────────────────────┼──────────────────────────────────┼──────────────────────────────────────┤
+│ Route registration           │ @GetMapping("/users/{id}")       │ r.Get("/users/{id}", handler)        │
+├──────────────────────────────┼──────────────────────────────────┼──────────────────────────────────────┤
+│ Path variable                │ @PathVariable Long id            │ chi.URLParam(r, "id")                │
+│                              │                                  │ mux.Vars(r)["id"]                    │
+├──────────────────────────────┼──────────────────────────────────┼──────────────────────────────────────┤
+│ Type conversion              │ Automatic (String → Long)        │ Manual (strconv.Atoi)                │
+├──────────────────────────────┼──────────────────────────────────┼──────────────────────────────────────┤
+│ Route groups                 │ @RequestMapping("/api/v1")       │ r.Route("/api/v1", fn) (chi)         │
+│                              │ on class                         │ r.PathPrefix("/api/v1").Subrouter()  │
+├──────────────────────────────┼──────────────────────────────────┼──────────────────────────────────────┤
+│ Route-level middleware       │ @PreAuthorize / HandlerInterceptor│ r.With(mw) (chi)                    │
+│                              │                                  │ manual wrap (gorilla)                │
+├──────────────────────────────┼──────────────────────────────────┼──────────────────────────────────────┤
+│ Dependency injection         │ @Autowired in Controller         │ Constructor injection into struct     │
+├──────────────────────────────┼──────────────────────────────────┼──────────────────────────────────────┤
+│ Regex path constraint        │ @GetMapping("/users/{id:\\d+}")  │ /users/{id:[0-9]+} (gorilla)         │
+│                              │                                  │ manual validation (chi)              │
+├──────────────────────────────┼──────────────────────────────────┼──────────────────────────────────────┤
+│ Custom error pages           │ @ExceptionHandler + ErrorController│ r.NotFound() / r.MethodNotAllowed()│
+├──────────────────────────────┼──────────────────────────────────┼──────────────────────────────────────┤
+│ URL generation               │ MvcUriComponentsBuilder          │ r.Get("name").URL(...) (gorilla)     │
+├──────────────────────────────┼──────────────────────────────────┼──────────────────────────────────────┤
+│ Static resources             │ resources/static auto-serve      │ http.FileServer + r.Mount            │
+├──────────────────────────────┼──────────────────────────────────┼──────────────────────────────────────┤
+│ Testing                      │ MockMvc / @WebMvcTest            │ httptest.NewRequest + r.ServeHTTP    │
+└──────────────────────────────┴──────────────────────────────────┴──────────────────────────────────────┘
+
+Key mindset shift:
+  • Spring auto-discovers controllers, auto-converts types, wires middleware via AOP.
+  • Go routers are explicit registrations — every route, method, and middleware
+    is manually registered in code you write and control.
+  • No reflection, no annotations, no container startup overhead.
+  • Testing is simple: build the router in a test, send httptest.Request, assert.
+
+═══════════════════════════════════════════════════════════════════════════════
+13. INTERVIEW Q&A — MEDIOR LEVEL
+═══════════════════════════════════════════════════════════════════════════════
+
+Q1. What are the limitations of Go's stdlib ServeMux that make third-party
+    routers necessary?
+A:  Before Go 1.22, stdlib had no named path parameters, no method routing,
+    no route groups, no regex constraints, and no built-in middleware chaining.
+    Even with Go 1.22 improvements (named params, method routing), it still
+    lacks regex constraints, route groups with scoped middleware, and rich
+    middleware libraries. For REST APIs with resource nesting and per-group
+    auth, chi or gorilla/mux remain the practical choice.
+
+Q2. How do you extract a path parameter in chi vs gorilla/mux?
+A:  chi:       chi.URLParam(r, "id")
+    gorilla:   mux.Vars(r)["id"]      (returns map[string]string)
+    Both return strings — you must manually convert to int, UUID, etc.
+    and always validate; chi returns "" silently for missing params.
+
+Q3. What is the difference between r.Group and r.Route in chi?
+A:  r.Group(fn) — creates a group at the SAME path prefix as the parent.
+    Used to apply middleware to a subset of routes without changing the path.
+    r.Route(prefix, fn) — creates a sub-router with a new path prefix AND
+    allows scoped middleware. Used for resource nesting like /users/{id}/posts.
+
+Q4. How does gorilla/mux handle method routing and what happens when a path
+    matches but the method doesn't?
+A:  Each route is registered with .Methods("GET", "POST", ...). If a request
+    path matches a registered route but the method doesn't match, gorilla
+    returns 405 Method Not Allowed (not 404). Without .Methods(), the route
+    accepts ALL methods — a common source of bugs.
+
+Q5. What is r.With() in chi and how does it differ from r.Use()?
+A:  r.Use(mw) adds middleware to ALL routes registered on this router (global
+    or group scope). r.With(mw) returns a new inline router with the middleware
+    applied ONLY to the next route registered after it. It does not persist
+    to other route registrations. Use r.With() for single-route middleware
+    and r.Use() inside r.Group/r.Route for group-scoped middleware.
+
+Q6. How does chi's r.Mount differ from r.Route?
+A:  r.Route(prefix, fn) takes a function that registers chi routes —
+    only works with chi routers internally.
+    r.Mount(prefix, h) attaches any http.Handler — including plain net/http
+    handlers, other chi routers, prometheus handlers, etc. Mount is more
+    flexible and is used to compose any handler type at a prefix.
+    Note: chi.Mount does NOT strip the prefix from the request path; use
+    http.StripPrefix if the mounted handler doesn't expect the prefix.
+
+Q7. How would you add a route that handles both GET and POST on the same path
+    differently in chi?
+A:  Register them separately:
+        r.Get("/users", listUsers)
+        r.Post("/users", createUser)
+    chi dispatches by method first — same path, different method = different
+    handler. If a method is not registered, chi automatically returns 405.
+
+Q8. What is mux.SetURLVars and when would you use it?
+A:  mux.SetURLVars(req, map[string]string{"id": "42"}) returns a new request
+    with gorilla's URL variables injected into its context. It is used in
+    unit tests to test handler functions in isolation without standing up
+    a full mux.Router — you inject the path params that mux.Vars(r) would
+    normally populate from the URL pattern match.
+
+Q9. How do you implement custom 404 and 405 handlers for a JSON API?
+A:  chi:     r.NotFound(handlerFunc); r.MethodNotAllowed(handlerFunc)
+    gorilla: r.NotFoundHandler = httpHandler; r.MethodNotAllowedHandler = httpHandler
+    In the handler, set Content-Type: application/json, write the correct
+    status code, and encode a JSON error body. This ensures all error
+    responses from the router have the same format as application errors.
+
+Q10. What are the http.Server fields you should always configure regardless
+     of which router you use?
+A:  ReadTimeout  — max time to read request headers and body (prevents Slowloris)
+    WriteTimeout — max time to write the response
+    IdleTimeout  — max time for keep-alive connections between requests
+    Handler      — the router
+    Addr         — the address to listen on
+    Example:
+        &http.Server{
+            Addr:         ":8080",
+            Handler:      router,
+            ReadTimeout:  15 * time.Second,
+            WriteTimeout: 15 * time.Second,
+            IdleTimeout:  60 * time.Second,
+        }
+    Without these, the server is vulnerable to slow client attacks and
+    resource exhaustion.
+
+═══════════════════════════════════════════════════════════════════════════════
+14. INTERVIEW Q&A — SENIOR LEVEL
+═══════════════════════════════════════════════════════════════════════════════
+
+Q1. How does chi store and retrieve URL parameters internally, and what are
+    the performance implications?
+A:  Chi stores URL parameters in a RouteContext struct attached to the request's
+    context via context.WithValue. The RouteContext holds two parallel slices:
+    URLParams.Keys and URLParams.Values (both []string). chi.URLParam does a
+    linear scan over Keys to find the matching index, then returns Values[i].
+    For typical REST APIs with 1-4 path params, this is negligible (nanoseconds).
+    The context allocation per request is the main overhead — one shallow copy
+    of *http.Request via r.WithContext per request. This is unavoidable with
+    Go's context model and is consistent across all context-based routers.
+
+Q2. Gorilla/mux uses a trie-based route matching algorithm — how does this
+    affect performance and route registration order?
+A:  Gorilla/mux builds a route list internally and matches by iterating routes
+    in registration order — it is NOT a pure trie. Routes are tested
+    sequentially until a match is found. This means:
+    1. More specific routes should be registered BEFORE less specific ones.
+    2. Catch-all routes (PathPrefix without sub-routes) should come last.
+    3. Performance degrades linearly with the number of routes for unmatched paths.
+    chi uses a radix tree (compressed trie) for O(log n) route matching —
+    significantly faster for large route tables (100+ routes). For most APIs
+    with < 50 routes, the difference is imperceptible. For high-throughput
+    services with many routes, chi's radix tree is meaningfully better.
+
+Q3. How would you implement API versioning at the router level, and what are
+    the trade-offs of URL versioning vs header versioning in Go?
+A:  URL versioning (/api/v1, /api/v2):
+        r.Mount("/api/v1", v1Router())
+        r.Mount("/api/v2", v2Router())
+    Pros: visible, cacheable, simple to route, easy to deprecate v1.
+    Cons: URL is not purely a resource identifier per REST principles.
+
+    Header versioning (Accept: application/vnd.myapi.v2+json):
+    Implemented in a middleware or at the top of handlers:
+        func versionMiddleware(next http.Handler) http.Handler {
+            return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+                version := r.Header.Get("API-Version")
+                ctx := context.WithValue(r.Context(), versionKey{}, version)
+                next.ServeHTTP(w, r.WithContext(ctx))
+            })
+        }
+    Route to different handlers based on version from context.
+    Pros: clean URLs, conforms to REST theory.
+    Cons: not cacheable by CDN (Vary: API-Version), invisible in browser,
+          harder to test, harder for clients to discover.
+
+    For most practical APIs: URL versioning wins for operability.
+
+Q4. How would you implement route-based rate limiting where different endpoints
+    have different limits?
+A:  Use chi's r.With() to apply a configured rate limiter per route or group:
+
+    type RateLimiterConfig struct {
+        rps   rate.Limit
+        burst int
+    }
+
+    func RateLimit(cfg RateLimiterConfig) func(http.Handler) http.Handler {
+        limiter := rate.NewLimiter(cfg.rps, cfg.burst)
+        return func(next http.Handler) http.Handler {
+            return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+                if !limiter.Allow() {
+                    http.Error(w, "too many requests", http.StatusTooManyRequests)
+                    return
+                }
+                next.ServeHTTP(w, r)
+            })
+        }
+    }
+
+    r.With(RateLimit(RateLimiterConfig{rps: 100, burst: 20})).Get("/users", listUsers)
+    r.With(RateLimit(RateLimiterConfig{rps: 5, burst: 2})).Post("/upload", upload)
+    r.With(RateLimit(RateLimiterConfig{rps: 1000, burst: 100})).Get("/health", health)
+
+    For distributed rate limiting (multiple instances), replace the in-process
+    token bucket with a Redis-backed limiter (go-redis + sliding window or
+    token bucket in Lua script).
+
+Q5. What happens when two routes in gorilla/mux could both match a request?
+    How does gorilla resolve the ambiguity?
+A:  Gorilla resolves by registration order — the first registered matching
+    route wins. This is different from chi which uses a radix tree and resolves
+    by specificity (longer/more specific match wins). In gorilla:
+        r.HandleFunc("/users/new", newUserForm)   // register FIRST
+        r.HandleFunc("/users/{id}", getUser)      // register SECOND
+    If registered in the opposite order, /users/new would match {id}="new".
+    This is a subtle source of bugs in gorilla. chi's radix tree handles this
+    correctly regardless of registration order — literal segments always
+    beat parameterized segments at the same position.
+
+Q6. How would you design a router setup that supports graceful shutdown?
+A:  The router itself doesn't manage shutdown — http.Server does. Combine:
+
+    srv := &http.Server{Addr: ":8080", Handler: router}
+
+    // Start server in goroutine:
+    go func() {
+        if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+            log.Fatalf("server error: %v", err)
+        }
+    }()
+
+    // Wait for interrupt signal:
+    quit := make(chan os.Signal, 1)
+    signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+    <-quit
+
+    // Graceful shutdown with timeout:
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    defer cancel()
+    if err := srv.Shutdown(ctx); err != nil {
+        log.Fatalf("shutdown error: %v", err)
+    }
+    log.Println("server stopped")
+
+    // srv.Shutdown waits for in-flight requests to complete.
+    // The router's context cancellation propagates to handlers via r.Context().
+
+Q7. How would you add OpenAPI / Swagger documentation generation from chi routes?
+A:  Two approaches:
+    1. Code-first with go-swagger or swaggo/swag:
+       Annotate handlers with special comments:
+           // @Summary Get user by ID
+           // @Param id path int true "User ID"
+           // @Success 200 {object} UserResponse
+           // @Router /users/{id} [get]
+       Run swag init to generate swagger.json. Mount the UI:
+           r.Mount("/swagger", httpSwagger.WrapHandler)
+
+    2. Spec-first with kin-openapi or oapi-codegen:
+       Write the OpenAPI spec first, generate server stubs:
+           oapi-codegen --package api spec.yaml > server.gen.go
+       Generated code produces chi routes with type-safe request/response
+       binding. Your job: implement the ServerInterface methods.
+       This approach gives full OpenAPI compliance and keeps spec authoritative.
+
+Q8. What is the difference in how chi and gorilla handle the OPTIONS method
+    for CORS preflight requests?
+A:  Without CORS middleware, both routers by default:
+    - chi: returns 405 Method Not Allowed if OPTIONS isn't explicitly registered
+    - gorilla: returns 405 if .Methods() doesn't include "OPTIONS"
+
+    Both routers require you to either:
+    1. Handle OPTIONS in CORS middleware (preferred — respond before routing):
+           if r.Method == http.MethodOptions { w.WriteHeader(204); return }
+    2. Register explicit OPTIONS routes.
+
+    CORS middleware should be outermost (before the router's method dispatch)
+    to intercept OPTIONS before the router can return 405.
+    chi's middleware.CORS (in chi/middleware) handles this correctly.
+    For gorilla, use rs/cors package or implement as shown in section 4g.
+
+═══════════════════════════════════════════════════════════════════════════════
+ QUICK REFERENCE CHEAT SHEET
+═══════════════════════════════════════════════════════════════════════════════
+
+GORILLA/MUX:
+    r := mux.NewRouter()
+    r.HandleFunc("/path", handler).Methods("GET", "POST")
+    r.HandleFunc("/path/{id:[0-9]+}", handler).Methods("GET")
+    vars := mux.Vars(r)["id"]                          // path param
+    sub := r.PathPrefix("/prefix").Subrouter()
+    sub.Use(middleware)
+    r.NotFoundHandler = http.HandlerFunc(fn)
+    url, _ := r.Get("name").URL("id", "42")            // reverse routing
+    r.Walk(func(route *mux.Route, ...) error { ... })  // introspect routes
+
+CHI:
+    r := chi.NewRouter()
+    r.Use(middleware.Recoverer)                         // global
+    r.Get("/path", handler)
+    r.Post("/path", handler)
+    r.Get("/path/{id}", handler)
+    chi.URLParam(r, "id")                              // path param
+    r.Route("/prefix", func(r chi.Router) {
+        r.Use(mw)                                      // group middleware
+        r.Get("/", handler)
+        r.Get("/{id}", handler)
+    })
+    r.Group(func(r chi.Router) { r.Use(mw); ... })    // same prefix, middleware only
+    r.With(mw).Get("/path", handler)                   // single-route middleware
+    r.Mount("/prefix", subRouter)                      // attach any http.Handler
+    r.NotFound(fn)
+    r.MethodNotAllowed(fn)
+    chi.RouteContext(r.Context()).RoutePattern()        // "/users/{id}" in logging
+
+HTTP SERVER (always configure):
+    srv := &http.Server{
+        Addr:         ":8080",
+        Handler:      router,
+        ReadTimeout:  15 * time.Second,
+        WriteTimeout: 15 * time.Second,
+        IdleTimeout:  60 * time.Second,
+    }
+    log.Fatal(srv.ListenAndServe())
+
+TESTING:
+    req := httptest.NewRequest("GET", "/users/42", nil)
+    rr  := httptest.NewRecorder()
+    router.ServeHTTP(rr, req)
+    // assert rr.Code, rr.Body
+
+GORILLA UNIT TEST (no full router):
+    req = mux.SetURLVars(req, map[string]string{"id": "42"})
+
+═══════════════════════════════════════════════════════════════════════════════

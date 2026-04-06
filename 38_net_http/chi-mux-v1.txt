@@ -1,0 +1,370 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang ROUTERS: CHI & GORILLA/MUX
+════════════════════════════════════════════════════════════════════════════════════
+1. OVERVIEW
+
+----------------------------------------------
+
+Go’s standard net/http is minimal. Routers extend it with:
+
+* URL parameter parsing
+* Middleware chaining
+* Route grouping
+* Method-based routing
+* Cleaner APIs
+
+Two widely used routers:
+
+1. chi (lightweight, idiomatic, fast)
+2. gorilla/mux (feature-rich, older, now archived but still widely used)
+
+----------------------------------------------
+
+2. CHI ROUTER
+
+----------------------------------------------
+
+Package:
+github.com/go-chi/chi
+
+Key Features:
+
+* Lightweight and fast
+* Idiomatic net/http style
+* Built-in middleware support
+* Nested routing (Route, Group)
+* Context-based param handling
+
+Basic Example:
+
+```go id="c1a9pk"
+package main
+
+import (
+	"fmt"
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+)
+
+func main() {
+	r := chi.NewRouter()
+
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Welcome"))
+	})
+
+	r.Get("/users/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		fmt.Fprintf(w, "User ID: %s", id)
+	})
+
+	http.ListenAndServe(":8080", r)
+}
+```
+
+Middleware in chi:
+
+```go id="0s6hzb"
+r.Use(loggingMiddleware)
+r.Use(authMiddleware)
+```
+
+Route grouping:
+
+```go id="5n2lwe"
+r.Route("/api", func(r chi.Router) {
+	r.Get("/users", getUsers)
+	r.Post("/users", createUser)
+})
+```
+
+----------------------------------------------
+
+3. GORILLA/MUX ROUTER
+
+----------------------------------------------
+
+Package:
+github.com/gorilla/mux
+
+NOTE:
+
+* Officially archived (no new features)
+* Still stable and widely used in legacy systems
+
+Key Features:
+
+* Powerful route matching
+* Regex support in routes
+* Host-based routing
+* Method constraints
+
+Basic Example:
+
+```go id="x3k8qm"
+package main
+
+import (
+	"fmt"
+	"net/http"
+
+	"github.com/gorilla/mux"
+)
+
+func main() {
+	r := mux.NewRouter()
+
+	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Welcome"))
+	})
+
+	r.HandleFunc("/users/{id}", func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		id := vars["id"]
+
+		fmt.Fprintf(w, "User ID: %s", id)
+	})
+
+	http.ListenAndServe(":8080", r)
+}
+```
+
+Method-based routing:
+
+```go id="d4r6yz"
+r.HandleFunc("/users", getUsers).Methods("GET")
+r.HandleFunc("/users", createUser).Methods("POST")
+```
+
+Regex example:
+
+```go id="y8p3hn"
+r.HandleFunc("/users/{id:[0-9]+}", handler)
+```
+
+----------------------------------------------
+
+4. CHI VS GORILLA/MUX
+
+----------------------------------------------
+
+Feature Comparison:
+
+* Performance:
+  chi → faster, low overhead
+  mux → slower due to heavy matching
+
+* Maintenance:
+  chi → actively maintained
+  mux → archived
+
+* API Style:
+  chi → closer to net/http
+  mux → more expressive, flexible
+
+* Middleware:
+  chi → built-in support
+  mux → manual wrapping
+
+* Learning Curve:
+  chi → simpler
+  mux → slightly more complex
+
+----------------------------------------------
+
+5. WHEN TO USE WHAT?
+
+----------------------------------------------
+
+Use chi when:
+
+* Building new services
+* Need performance + simplicity
+* Prefer idiomatic Go
+
+Use gorilla/mux when:
+
+* Maintaining legacy apps
+* Need advanced matching (regex-heavy routes)
+* Already integrated in system
+
+----------------------------------------------
+
+6. MIDDLEWARE IN ROUTERS
+
+----------------------------------------------
+
+chi:
+
+```go id="l9s4pq"
+r.Use(loggingMiddleware)
+```
+
+gorilla/mux:
+
+```go id="k2f7xn"
+r.Use(loggingMiddleware)
+```
+
+(Both support middleware, but chi’s is more idiomatic)
+
+----------------------------------------------
+
+7. ADVANCED ROUTING (CHI)
+
+----------------------------------------------
+
+```go id="t6u2vb"
+r.Route("/users", func(r chi.Router) {
+	r.Get("/", listUsers)
+	r.Post("/", createUser)
+
+	r.Route("/{id}", func(r chi.Router) {
+		r.Get("/", getUser)
+		r.Put("/", updateUser)
+		r.Delete("/", deleteUser)
+	})
+})
+```
+
+----------------------------------------------
+
+8. COMMON PITFALLS
+
+----------------------------------------------
+
+* Overusing regex in mux → performance hit
+* Not validating params after extraction
+* Middleware order issues
+* Deep nesting → hard to maintain
+* Ignoring router-specific context
+
+----------------------------------------------
+
+9. INTERVIEW QUESTIONS (MID → SENIOR)
+
+----------------------------------------------
+
+Q1: Why not use net/http directly?
+A:
+
+* No native routing for params
+* No grouping or middleware chaining support
+* Routers simplify API design
+
+----------------------------------------------
+
+Q2: Why is chi preferred over gorilla/mux today?
+A:
+
+* Better performance
+* Actively maintained
+* Idiomatic design
+
+----------------------------------------------
+
+Q3: How do routers extract path params internally?
+A:
+
+* Pattern matching (tree/trie-based)
+* Store params in request context
+
+----------------------------------------------
+
+Q4: What is the cost of regex routing?
+A:
+
+* Slower matching
+* Increased CPU usage
+* Should be used sparingly
+
+----------------------------------------------
+
+Q5: How do you structure large APIs using routers?
+A:
+
+* Route grouping (/api/v1)
+* Modular handlers
+* Middleware per group
+
+----------------------------------------------
+
+Q6: Can you mix routers with net/http?
+A:
+
+* Yes, routers implement http.Handler
+* Can be plugged into standard server
+
+----------------------------------------------
+
+Q7: How do you version APIs?
+A:
+
+* URL versioning (/v1, /v2)
+* Router groups
+
+----------------------------------------------
+
+Q8: How do you test router handlers?
+A:
+
+* Use httptest
+* Simulate requests
+* Assert response
+
+----------------------------------------------
+
+Q9: How do you handle middleware per route group?
+A:
+
+* chi: r.Group / r.Route
+* mux: subrouters
+
+----------------------------------------------
+
+Q10: What are alternatives to chi and mux?
+A:
+
+* Gin (high-level framework)
+* Echo
+* Fiber (not net/http based)
+
+----------------------------------------------
+
+10. ADVANCED: SUBROUTERS (MUX)
+
+----------------------------------------------
+
+```go id="h5v1tr"
+api := r.PathPrefix("/api").Subrouter()
+
+api.HandleFunc("/users", getUsers).Methods("GET")
+api.Use(authMiddleware)
+```
+
+----------------------------------------------
+
+11. BEST PRACTICES
+
+----------------------------------------------
+
+* Prefer chi for new projects
+* Keep routes flat and readable
+* Use grouping for large APIs
+* Avoid deep nesting
+* Validate all inputs
+* Keep handlers thin (business logic separate)
+
+----------------------------------------------
+
+12. SUMMARY
+
+----------------------------------------------
+
+* chi → modern, fast, idiomatic
+* gorilla/mux → powerful but archived
+* Both extend net/http
+* Routers simplify API development significantly
+
+=================================================================

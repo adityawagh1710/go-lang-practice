@@ -40,6 +40,7 @@ require (
 
 require (
 	github.com/fatih/color v1.19.0
+	github.com/go-chi/chi/v5 v5.2.5
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/mux v1.8.1
 	github.com/spf13/cobra v1.10.2
