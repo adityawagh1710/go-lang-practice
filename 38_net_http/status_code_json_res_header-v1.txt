@@ -1,0 +1,368 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang RESPONSE WRITING: STATUS CODES, JSON RESPONSES, HEADERS
+════════════════════════════════════════════════════════════════════════════════════
+1. OVERVIEW
+----------------------------------------------
+
+In Go, HTTP request parsing is handled using the `net/http` package. The `http.Request` object provides access to:
+
+* URL path parameters (via router or manual parsing)
+* Query parameters (?key=value)
+* Request body (JSON, form, etc.)
+
+Understanding parsing is critical for building APIs, middleware, and services.
+
+----------------------------------------------
+
+2. URL PARAMS (PATH PARAMETERS)
+
+----------------------------------------------
+
+Go’s standard library does NOT provide built-in path param parsing.
+You usually use:
+
+* Third-party routers (gorilla/mux, chi, gin)
+* OR manual parsing using strings
+
+Example using net/http (manual):
+
+```go
+package main
+
+import (
+	"fmt"
+	"net/http"
+	"strings"
+)
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	// Example URL: /users/123
+	parts := strings.Split(r.URL.Path, "/")
+
+	if len(parts) >= 3 {
+		userID := parts[2]
+		fmt.Fprintf(w, "User ID: %s", userID)
+		return
+	}
+
+	http.Error(w, "Invalid URL", http.StatusBadRequest)
+}
+
+func main() {
+	http.HandleFunc("/users/", handler)
+	http.ListenAndServe(":8080", nil)
+}
+```
+
+Using router (gorilla/mux):
+
+```go
+import (
+	"fmt"
+	"net/http"
+
+	"github.com/gorilla/mux"
+)
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	fmt.Fprintf(w, "User ID: %s", id)
+}
+
+func main() {
+	r := mux.NewRouter()
+	r.HandleFunc("/users/{id}", handler)
+
+	http.ListenAndServe(":8080", r)
+}
+```
+
+----------------------------------------------
+
+3. QUERY PARAMETERS
+
+----------------------------------------------
+
+Query params are accessed via:
+
+* r.URL.Query() → map[string][]string
+
+Example:
+
+```go
+func handler(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+
+	name := query.Get("name") // returns first value
+	age := query.Get("age")
+
+	fmt.Fprintf(w, "Name: %s, Age: %s", name, age)
+}
+```
+
+Example URL:
+http://localhost:8080?name=aditya&age=25
+
+Handling multiple values:
+
+```go
+tags := query["tag"] // []string
+```
+
+----------------------------------------------
+
+4. FORM DATA (POST/PUT)
+
+----------------------------------------------
+
+For form data (application/x-www-form-urlencoded or multipart):
+
+```go
+func handler(w http.ResponseWriter, r *http.Request) {
+	err := r.ParseForm()
+	if err != nil {
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+		return
+	}
+
+	name := r.FormValue("name")
+	email := r.FormValue("email")
+
+	fmt.Fprintf(w, "Name: %s Email: %s", name, email)
+}
+```
+
+Notes:
+
+* ParseForm() populates r.Form and r.PostForm
+* FormValue() is shortcut (safe + simple)
+
+----------------------------------------------
+
+5. JSON BODY DECODING
+
+----------------------------------------------
+
+Most APIs use JSON.
+
+Example:
+
+```go
+package main
+
+import (
+	"encoding/json"
+	"net/http"
+)
+
+type User struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	var user User
+
+	err := json.NewDecoder(r.Body).Decode(&user)
+	if err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	w.Write([]byte("User received: " + user.Name))
+}
+```
+
+Important:
+
+* Always decode into struct
+* Always handle error
+* r.Body is stream → can be read only once
+
+----------------------------------------------
+
+6. BEST PRACTICES
+
+----------------------------------------------
+
+1. Validate input after parsing
+2. Use struct tags for JSON mapping
+3. Limit body size to prevent abuse:
+
+```go
+r.Body = http.MaxBytesReader(w, r.Body, 1048576) // 1MB
+```
+
+4. Close body if manually handled:
+
+```go
+defer r.Body.Close()
+```
+
+5. Use context for request lifecycle:
+
+```go
+ctx := r.Context()
+```
+
+6. Avoid reading body multiple times
+
+----------------------------------------------
+
+7. COMMON PITFALLS
+
+----------------------------------------------
+
+* Forgetting to check Decode() error
+* Reading body twice (will fail)
+* Not calling ParseForm()
+* Assuming query params always exist
+* Not validating types (string vs int)
+
+----------------------------------------------
+
+8. INTERVIEW QUESTIONS (MID → SENIOR)
+
+----------------------------------------------
+
+Q1: Difference between URL params and query params?
+A:
+
+* URL params → part of path (/users/123)
+* Query params → after ? (/users?id=123)
+* URL params usually define resource identity
+* Query params used for filtering, pagination
+
+----------------------------------------------
+
+Q2: Why use json.Decoder instead of json.Unmarshal?
+A:
+
+* Decoder works with streams (r.Body)
+* More memory efficient
+* Can handle large payloads
+
+----------------------------------------------
+
+Q3: What happens if you read r.Body twice?
+A:
+
+* It will be empty after first read
+* Because it’s a stream (io.ReadCloser)
+* Solution: buffer it if needed
+
+----------------------------------------------
+
+Q4: How do you validate request payloads?
+A:
+
+* Decode into struct
+* Use custom validation (manual or libraries like validator)
+* Check required fields, formats, ranges
+
+----------------------------------------------
+
+Q5: How do you prevent large payload attacks?
+A:
+
+* Use http.MaxBytesReader
+* Set server timeouts
+* Validate Content-Length
+
+----------------------------------------------
+
+Q6: How do you handle optional query params?
+A:
+
+* Use query.Get()
+* Check empty string
+* Apply defaults if missing
+
+----------------------------------------------
+
+Q7: How do routers extract path params internally?
+A:
+
+* They match route patterns
+* Use trie/tree-based routing
+* Extract variables via pattern matching
+
+----------------------------------------------
+
+Q8: How would you design a generic request parser middleware?
+A:
+
+* Read request body once
+* Decode into struct
+* Store in context
+* Pass downstream
+
+----------------------------------------------
+
+Q9: How do you handle different content types?
+A:
+
+* Check header:
+  r.Header.Get("Content-Type")
+
+* Switch logic:
+
+  * JSON → decode
+  * Form → ParseForm
+  * Multipart → ParseMultipartForm
+
+----------------------------------------------
+
+Q10: How do you ensure backward compatibility in APIs?
+A:
+
+* Versioning (v1, v2)
+* Optional fields
+* Default values
+* Avoid breaking schema changes
+
+----------------------------------------------
+
+9. ADVANCED PATTERN (STRUCT + VALIDATION)
+
+----------------------------------------------
+
+```go
+type CreateUserRequest struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	var req CreateUserRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if req.Name == "" || req.Email == "" {
+		http.Error(w, "Missing fields", http.StatusBadRequest)
+		return
+	}
+
+	// business logic
+}
+```
+
+----------------------------------------------
+
+10. SUMMARY
+
+----------------------------------------------
+
+* URL params → path-based extraction
+* Query params → r.URL.Query()
+* Forms → ParseForm()
+* JSON → json.Decoder
+* Always validate + handle errors
+* Stream-based reading is key concept
+
+=================================================================

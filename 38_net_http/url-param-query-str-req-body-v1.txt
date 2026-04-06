@@ -1,0 +1,876 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang REQUEST PARSING: URL PARAMS, QUERY STRINGS, BODY DECODING
+════════════════════════════════════════════════════════════════════════════════════
+INDEX
+─────
+ 1. Overview: HTTP Request Anatomy in Go
+ 2. URL Path Parameters (net/http + gorilla/mux + chi)
+ 3. Query String Parsing
+ 4. Request Body Decoding (JSON, Form, Multipart)
+ 5. Header Parsing
+ 6. Binding & Validation Patterns
+ 7. Common Pitfalls & Best Practices
+ 8. Java vs Go Comparison
+ 9. Interview Q&A — Medior Level
+10. Interview Q&A — Senior Level
+
+═══════════════════════════════════════════════════════════════════════════════
+ 1. OVERVIEW: HTTP REQUEST ANATOMY IN GO
+═══════════════════════════════════════════════════════════════════════════════
+
+In Go, every HTTP request is represented by *http.Request:
+
+    type Request struct {
+        Method     string          // GET, POST, PUT, etc.
+        URL        *url.URL        // Parsed URL
+        Header     http.Header     // map[string][]string
+        Body       io.ReadCloser   // Readable once, must be closed
+        Form       url.Values      // Parsed form data (after ParseForm)
+        PostForm   url.Values      // Only POST body form data
+        MultipartForm *multipart.Form
+        // ... more fields
+    }
+
+The *url.URL struct:
+
+    type URL struct {
+        Scheme   string   // "https"
+        Host     string   // "example.com"
+        Path     string   // "/users/42/posts"
+        RawQuery string   // "page=2&limit=10"
+        Fragment string   // after #
+    }
+
+Key rule: r.Body is an io.ReadCloser — it can only be read ONCE.
+Reading it twice returns empty. Always decode early, never re-read.
+
+═══════════════════════════════════════════════════════════════════════════════
+ 2. URL PATH PARAMETERS
+═══════════════════════════════════════════════════════════════════════════════
+
+──────────────────────────────────────────
+ 2a. net/http (stdlib) — Manual Extraction
+──────────────────────────────────────────
+
+stdlib does NOT support named path params natively (pre-Go 1.22).
+You extract them by parsing r.URL.Path yourself:
+
+    // Route: /users/{id}/posts/{postId}
+    func handler(w http.ResponseWriter, r *http.Request) {
+        parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+        // parts = ["users", "42", "posts", "7"]
+        if len(parts) < 4 {
+            http.Error(w, "invalid path", http.StatusBadRequest)
+            return
+        }
+        userID := parts[1]
+        postID := parts[3]
+        fmt.Fprintf(w, "User: %s, Post: %s", userID, postID)
+    }
+
+──────────────────────────────────────────
+ 2b. Go 1.22+ net/http — Built-in Path Params
+──────────────────────────────────────────
+
+Go 1.22 added native pattern matching with {name} syntax:
+
+    mux := http.NewServeMux()
+    mux.HandleFunc("GET /users/{id}", func(w http.ResponseWriter, r *http.Request) {
+        id := r.PathValue("id")   // <-- new in 1.22
+        fmt.Fprintf(w, "User ID: %s", id)
+    })
+
+    // Wildcards:
+    mux.HandleFunc("/files/{path...}", handler) // matches /files/a/b/c
+
+    // PathValue returns "" if param not found (no error)
+
+──────────────────────────────────────────
+ 2c. gorilla/mux — Path Params
+──────────────────────────────────────────
+
+    import "github.com/gorilla/mux"
+
+    r := mux.NewRouter()
+    r.HandleFunc("/users/{id:[0-9]+}/posts/{postId}", handler)
+
+    func handler(w http.ResponseWriter, r *http.Request) {
+        vars := mux.Vars(r)         // map[string]string
+        id     := vars["id"]
+        postID := vars["postId"]
+
+        // Type conversion (always validate):
+        userID, err := strconv.Atoi(id)
+        if err != nil {
+            http.Error(w, "invalid id", http.StatusBadRequest)
+            return
+        }
+        fmt.Fprintf(w, "User: %d, Post: %s", userID, postID)
+    }
+
+Regex constraints in gorilla:
+    {id:[0-9]+}          — integers only
+    {slug:[a-z-]+}       — lowercase slug
+    {file:.+\\.go}       — files ending in .go
+
+──────────────────────────────────────────
+ 2d. chi Router — Path Params
+──────────────────────────────────────────
+
+    import "github.com/go-chi/chi/v5"
+
+    r := chi.NewRouter()
+    r.Get("/users/{userID}/posts/{postID}", func(w http.ResponseWriter, r *http.Request) {
+        userID := chi.URLParam(r, "userID")
+        postID := chi.URLParam(r, "postID")
+        fmt.Fprintf(w, "User: %s, Post: %s", userID, postID)
+    })
+
+    // chi stores params in context — chi.URLParam extracts from ctx
+    // You can also do it manually:
+    ctx := r.Context()
+    userID := chi.URLParamFromCtx(ctx, "userID")
+
+═══════════════════════════════════════════════════════════════════════════════
+ 3. QUERY STRING PARSING
+═══════════════════════════════════════════════════════════════════════════════
+
+URL example: /search?q=golang&page=2&tags=go&tags=web&active=true
+
+──────────────────────────────────────────
+ 3a. Basic Query Param Access
+──────────────────────────────────────────
+
+    func searchHandler(w http.ResponseWriter, r *http.Request) {
+        q := r.URL.Query()   // returns url.Values = map[string][]string
+
+        // Single value — returns "" if missing
+        search := q.Get("q")
+
+        // Check existence
+        pageStr, ok := q["page"]
+        if !ok {
+            // "page" key not present at all
+        }
+
+        // Multiple values for same key (e.g., tags=go&tags=web)
+        tags := q["tags"]   // []string{"go", "web"}
+
+        // Safe int parse with default
+        page := 1
+        if p := q.Get("page"); p != "" {
+            parsed, err := strconv.Atoi(p)
+            if err != nil || parsed < 1 {
+                http.Error(w, "invalid page", http.StatusBadRequest)
+                return
+            }
+            page = parsed
+        }
+
+        // Bool
+        active := q.Get("active") == "true"
+
+        fmt.Fprintf(w, "search=%s page=%d tags=%v active=%v", search, page, tags, active)
+    }
+
+──────────────────────────────────────────
+ 3b. Encoding / Decoding Query Strings
+──────────────────────────────────────────
+
+    // Build a query string programmatically:
+    params := url.Values{}
+    params.Set("q", "hello world")   // encodes spaces as +
+    params.Add("tags", "go")
+    params.Add("tags", "web")
+    encoded := params.Encode()
+    // → "q=hello+world&tags=go&tags=web"
+
+    // Parse a raw query string manually:
+    raw := "q=hello+world&page=2"
+    vals, err := url.ParseQuery(raw)
+    if err != nil {
+        // handle
+    }
+    fmt.Println(vals.Get("q"))  // "hello world"
+
+──────────────────────────────────────────
+ 3c. Nil-safe Pattern (production)
+──────────────────────────────────────────
+
+    // Safe helper to get query param with default
+    func queryInt(r *http.Request, key string, def int) (int, error) {
+        val := r.URL.Query().Get(key)
+        if val == "" {
+            return def, nil
+        }
+        n, err := strconv.Atoi(val)
+        if err != nil {
+            return 0, fmt.Errorf("invalid %s: %w", key, err)
+        }
+        return n, nil
+    }
+
+    // Usage:
+    page, err := queryInt(r, "page", 1)
+    limit, err := queryInt(r, "limit", 20)
+
+═══════════════════════════════════════════════════════════════════════════════
+ 4. REQUEST BODY DECODING
+═══════════════════════════════════════════════════════════════════════════════
+
+──────────────────────────────────────────
+ 4a. JSON Body Decoding
+──────────────────────────────────────────
+
+    type CreateUserRequest struct {
+        Name  string `json:"name"`
+        Email string `json:"email"`
+        Age   int    `json:"age"`
+    }
+
+    func createUser(w http.ResponseWriter, r *http.Request) {
+        // 1. Enforce Content-Type
+        if ct := r.Header.Get("Content-Type"); ct != "application/json" {
+            http.Error(w, "expected application/json", http.StatusUnsupportedMediaType)
+            return
+        }
+
+        // 2. Limit body size to prevent abuse (e.g., 1MB)
+        r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+        defer r.Body.Close()
+
+        // 3. Decode
+        dec := json.NewDecoder(r.Body)
+        dec.DisallowUnknownFields()   // strict: reject unknown fields
+
+        var req CreateUserRequest
+        if err := dec.Decode(&req); err != nil {
+            var syntaxErr *json.SyntaxError
+            var unmarshalTypeErr *json.UnmarshalTypeError
+
+            switch {
+            case errors.As(err, &syntaxErr):
+                http.Error(w, fmt.Sprintf("bad JSON at position %d", syntaxErr.Offset), http.StatusBadRequest)
+            case errors.As(err, &unmarshalTypeErr):
+                http.Error(w, fmt.Sprintf("wrong type for field %s", unmarshalTypeErr.Field), http.StatusBadRequest)
+            case errors.Is(err, io.EOF):
+                http.Error(w, "empty body", http.StatusBadRequest)
+            case err.Error() == "http: request body too large":
+                http.Error(w, "body too large", http.StatusRequestEntityTooLarge)
+            default:
+                http.Error(w, "decode error", http.StatusBadRequest)
+            }
+            return
+        }
+
+        // 4. Check for trailing data (e.g., two JSON objects)
+        if dec.More() {
+            http.Error(w, "body must have only one JSON object", http.StatusBadRequest)
+            return
+        }
+
+        // 5. Use req
+        fmt.Fprintf(w, "Created user: %s", req.Name)
+    }
+
+json.NewDecoder vs json.Unmarshal:
+    ┌────────────────────┬──────────────────────────────────────┐
+    │ json.NewDecoder    │ Streams from io.Reader (http.Body)   │
+    │                    │ Memory-efficient for large bodies     │
+    │                    │ Supports DisallowUnknownFields        │
+    ├────────────────────┼──────────────────────────────────────┤
+    │ json.Unmarshal     │ Needs []byte (must read all first)    │
+    │                    │ Simpler for small payloads            │
+    │                    │ Slightly faster for known-size data   │
+    └────────────────────┴──────────────────────────────────────┘
+
+Using json.Unmarshal (alternative):
+
+    body, err := io.ReadAll(r.Body)
+    if err != nil {
+        http.Error(w, "read error", http.StatusInternalServerError)
+        return
+    }
+    defer r.Body.Close()
+
+    var req CreateUserRequest
+    if err := json.Unmarshal(body, &req); err != nil {
+        http.Error(w, "invalid JSON", http.StatusBadRequest)
+        return
+    }
+
+──────────────────────────────────────────
+ 4b. URL-encoded Form Data (application/x-www-form-urlencoded)
+──────────────────────────────────────────
+
+    func loginHandler(w http.ResponseWriter, r *http.Request) {
+        // ParseForm parses both URL query params AND body form data
+        if err := r.ParseForm(); err != nil {
+            http.Error(w, "cannot parse form", http.StatusBadRequest)
+            return
+        }
+
+        username := r.FormValue("username")   // checks body then query
+        password := r.FormValue("password")
+
+        // r.Form      = query + body values
+        // r.PostForm  = only body values (set after ParseForm)
+        // r.PostFormValue("key") = only from body
+
+        fmt.Fprintf(w, "Login: %s", username)
+    }
+
+    // r.FormValue is equivalent to r.Form.Get after ParseForm
+    // r.Form["key"] returns []string for multi-value fields
+
+──────────────────────────────────────────
+ 4c. Multipart Form Data (file uploads)
+──────────────────────────────────────────
+
+    func uploadHandler(w http.ResponseWriter, r *http.Request) {
+        // Limit memory used for in-memory storage (rest goes to temp files)
+        if err := r.ParseMultipartForm(10 << 20); err != nil { // 10 MB
+            http.Error(w, "file too large", http.StatusBadRequest)
+            return
+        }
+        defer r.MultipartForm.RemoveAll() // clean temp files
+
+        // Regular form fields:
+        title := r.FormValue("title")
+
+        // File:
+        file, header, err := r.FormFile("upload")
+        if err != nil {
+            http.Error(w, "no file", http.StatusBadRequest)
+            return
+        }
+        defer file.Close()
+
+        fmt.Printf("File: %s, Size: %d bytes\n", header.Filename, header.Size)
+        fmt.Printf("Content-Type: %s\n", header.Header.Get("Content-Type"))
+
+        // Copy to destination:
+        dst, err := os.Create("/tmp/" + header.Filename)
+        if err != nil {
+            http.Error(w, "cannot save", http.StatusInternalServerError)
+            return
+        }
+        defer dst.Close()
+
+        if _, err := io.Copy(dst, file); err != nil {
+            http.Error(w, "save failed", http.StatusInternalServerError)
+            return
+        }
+
+        fmt.Fprintf(w, "Uploaded: %s (%s)", header.Filename, title)
+    }
+
+    // Multiple files for same field:
+    files := r.MultipartForm.File["uploads"] // []*multipart.FileHeader
+
+──────────────────────────────────────────
+ 4d. Raw Body (non-JSON/form)
+──────────────────────────────────────────
+
+    // For text, binary, XML, etc.
+    func rawBodyHandler(w http.ResponseWriter, r *http.Request) {
+        r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+        defer r.Body.Close()
+
+        body, err := io.ReadAll(r.Body)
+        if err != nil {
+            http.Error(w, "read failed", http.StatusInternalServerError)
+            return
+        }
+
+        // body is []byte — do whatever you need
+        fmt.Printf("Received %d bytes\n", len(body))
+    }
+
+    // Re-read body trick (if you must read it twice):
+    body, _ := io.ReadAll(r.Body)
+    r.Body = io.NopCloser(bytes.NewBuffer(body)) // restore
+    // Now you can read r.Body again OR pass `body` to another decoder
+
+═══════════════════════════════════════════════════════════════════════════════
+ 5. HEADER PARSING
+═══════════════════════════════════════════════════════════════════════════════
+
+    func headerExample(w http.ResponseWriter, r *http.Request) {
+        // Single header (canonical form — case insensitive internally):
+        ct := r.Header.Get("Content-Type")        // "application/json"
+        auth := r.Header.Get("Authorization")     // "Bearer abc123"
+
+        // Multi-value header:
+        accepts := r.Header["Accept"]             // []string
+
+        // Check existence:
+        if _, ok := r.Header["X-Custom-Header"]; ok {
+            // header present
+        }
+
+        // Bearer token extraction:
+        token := strings.TrimPrefix(auth, "Bearer ")
+
+        // Canonical form matters for raw map access:
+        // r.Header["content-type"]   → nil (wrong key)
+        // r.Header["Content-Type"]   → correct
+        // Use r.Header.Get() always — it handles canonicalization
+
+        fmt.Println(ct, token)
+    }
+
+Common headers and their Go access:
+    Content-Type        r.Header.Get("Content-Type")
+    Authorization       r.Header.Get("Authorization")
+    X-Request-ID        r.Header.Get("X-Request-Id")  // note canonical form
+    Accept              r.Header.Get("Accept")
+    User-Agent          r.Header.Get("User-Agent")
+    X-Forwarded-For     r.Header.Get("X-Forwarded-For")
+    Content-Length      r.ContentLength  (int64, -1 if unknown)
+
+═══════════════════════════════════════════════════════════════════════════════
+ 6. BINDING & VALIDATION PATTERNS
+═══════════════════════════════════════════════════════════════════════════════
+
+──────────────────────────────────────────
+ 6a. Centralized Decode + Validate Helper
+──────────────────────────────────────────
+
+    // Generic decode helper
+    func decodeJSON[T any](r *http.Request) (T, error) {
+        var v T
+        r.Body = http.MaxBytesReader(nil, r.Body, 1<<20)
+        dec := json.NewDecoder(r.Body)
+        dec.DisallowUnknownFields()
+        if err := dec.Decode(&v); err != nil {
+            return v, fmt.Errorf("decode: %w", err)
+        }
+        return v, nil
+    }
+
+    // Usage:
+    req, err := decodeJSON[CreateUserRequest](r)
+
+──────────────────────────────────────────
+ 6b. Struct Tags for Validation (go-playground/validator)
+──────────────────────────────────────────
+
+    import "github.com/go-playground/validator/v10"
+
+    type CreateUserRequest struct {
+        Name  string `json:"name"  validate:"required,min=2,max=50"`
+        Email string `json:"email" validate:"required,email"`
+        Age   int    `json:"age"   validate:"gte=0,lte=130"`
+    }
+
+    var validate = validator.New()
+
+    func createUser(w http.ResponseWriter, r *http.Request) {
+        var req CreateUserRequest
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+            http.Error(w, "invalid JSON", http.StatusBadRequest)
+            return
+        }
+
+        if err := validate.Struct(req); err != nil {
+            errs := err.(validator.ValidationErrors)
+            // Build structured error response
+            msgs := make(map[string]string)
+            for _, e := range errs {
+                msgs[e.Field()] = e.Tag()
+            }
+            w.Header().Set("Content-Type", "application/json")
+            w.WriteHeader(http.StatusUnprocessableEntity)
+            json.NewEncoder(w).Encode(msgs)
+            return
+        }
+        // proceed...
+    }
+
+──────────────────────────────────────────
+ 6c. Mixing Path Params + Query + Body
+──────────────────────────────────────────
+
+    // PUT /users/{id}?notify=true  + JSON body
+    r.Put("/users/{id}", func(w http.ResponseWriter, r *http.Request) {
+        // Path param (chi):
+        id := chi.URLParam(r, "id")
+
+        // Query string:
+        notify := r.URL.Query().Get("notify") == "true"
+
+        // Body:
+        var body UpdateUserRequest
+        if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+            http.Error(w, "bad body", http.StatusBadRequest)
+            return
+        }
+
+        fmt.Printf("Update user %s, notify=%v, data=%+v\n", id, notify, body)
+    })
+
+═══════════════════════════════════════════════════════════════════════════════
+ 7. COMMON PITFALLS & BEST PRACTICES
+═══════════════════════════════════════════════════════════════════════════════
+
+PITFALL 1 — Reading body multiple times
+    ❌ Reading r.Body in middleware then again in handler → second read is empty
+    ✅ Buffer the body once and restore:
+       body, _ := io.ReadAll(r.Body)
+       r.Body = io.NopCloser(bytes.NewBuffer(body))
+
+PITFALL 2 — Not closing r.Body
+    ❌ Forgetting defer r.Body.Close() → goroutine/connection leaks
+    ✅ Always: defer r.Body.Close()
+
+PITFALL 3 — No size limit on body
+    ❌ io.ReadAll on unrestricted body → OOM attack vector
+    ✅ r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+
+PITFALL 4 — Trust r.FormValue vs r.PostFormValue
+    ❌ r.FormValue("x") returns query param if body field missing — confusing
+    ✅ Use r.PostFormValue("x") when you strictly want body-only data
+
+PITFALL 5 — JSON streaming and unknown fields
+    ❌ json.Unmarshal silently ignores unknown fields by default
+    ✅ Use dec.DisallowUnknownFields() for strict APIs
+
+PITFALL 6 — Type conversion without validation
+    ❌ strconv.Atoi(r.URL.Query().Get("id")) without error check
+    ✅ Always check error + range bounds
+
+PITFALL 7 — Header case sensitivity
+    ❌ r.Header["content-type"] → nil
+    ✅ r.Header.Get("Content-Type") → handles canonicalization
+
+PITFALL 8 — Forgetting ParseForm before FormValue
+    ❌ r.FormValue works without ParseForm but r.Form map won't be populated
+    ✅ Call r.ParseForm() explicitly when you need r.Form directly
+
+PITFALL 9 — Not cleaning up multipart temp files
+    ❌ r.ParseMultipartForm writes overflow to disk and leaves it
+    ✅ defer r.MultipartForm.RemoveAll()
+
+BEST PRACTICES SUMMARY:
+    • Always set Content-Type: application/json in responses
+    • Use http.MaxBytesReader for all body reads
+    • Validate ALL input — never trust client data
+    • Use DisallowUnknownFields on strict APIs
+    • Centralize decode+validate logic in helpers
+    • Return structured errors (JSON) not plain text
+    • Log request IDs for traceability (X-Request-Id)
+    • Use middleware for common concerns (auth, limits, logging)
+
+═══════════════════════════════════════════════════════════════════════════════
+ 8. JAVA vs GO COMPARISON
+═══════════════════════════════════════════════════════════════════════════════
+
+┌────────────────────────┬───────────────────────────────┬──────────────────────────────────────┐
+│ Concept                │ Java (Spring Boot)             │ Go (stdlib / chi / gorilla)          │
+├────────────────────────┼───────────────────────────────┼──────────────────────────────────────┤
+│ Path params            │ @PathVariable String id        │ chi.URLParam(r, "id")                │
+│                        │                               │ r.PathValue("id") (Go 1.22+)         │
+├────────────────────────┼───────────────────────────────┼──────────────────────────────────────┤
+│ Query params           │ @RequestParam String page      │ r.URL.Query().Get("page")            │
+├────────────────────────┼───────────────────────────────┼──────────────────────────────────────┤
+│ JSON body              │ @RequestBody UserDTO user      │ json.NewDecoder(r.Body).Decode(&req) │
+├────────────────────────┼───────────────────────────────┼──────────────────────────────────────┤
+│ Form data              │ @RequestParam (auto-bound)     │ r.ParseForm(); r.FormValue("key")    │
+├────────────────────────┼───────────────────────────────┼──────────────────────────────────────┤
+│ File upload            │ @RequestParam MultipartFile   │ r.FormFile("field")                  │
+├────────────────────────┼───────────────────────────────┼──────────────────────────────────────┤
+│ Headers                │ @RequestHeader String auth     │ r.Header.Get("Authorization")        │
+├────────────────────────┼───────────────────────────────┼──────────────────────────────────────┤
+│ Validation             │ @Valid + Bean Validation       │ go-playground/validator              │
+├────────────────────────┼───────────────────────────────┼──────────────────────────────────────┤
+│ Body size limit        │ spring.servlet.multipart.*    │ http.MaxBytesReader(w, r.Body, max)  │
+├────────────────────────┼───────────────────────────────┼──────────────────────────────────────┤
+│ Auto-binding           │ Yes (Spring does it all)       │ No — explicit, manual steps          │
+├────────────────────────┼───────────────────────────────┼──────────────────────────────────────┤
+│ Error handling style   │ @ExceptionHandler / AOP        │ Explicit error return + check        │
+└────────────────────────┴───────────────────────────────┴──────────────────────────────────────┘
+
+Key mindset shift Java → Go:
+  • Spring automatically binds, validates, and handles errors via annotations.
+  • Go does NONE of that. Every step is explicit: parse, convert, validate,
+    error-check. This is intentional — clarity over magic.
+  • Go's explicitness makes code easier to trace, profile, and test.
+
+═══════════════════════════════════════════════════════════════════════════════
+ 9. INTERVIEW Q&A — MEDIOR LEVEL
+═══════════════════════════════════════════════════════════════════════════════
+
+Q1. How do you extract a query parameter from a request in Go?
+A:  Use r.URL.Query().Get("paramName"). This parses the URL's query string
+    and returns the first value for the key, or "" if absent. For multi-value
+    keys, use r.URL.Query()["key"] which returns []string.
+
+Q2. What is the difference between r.FormValue and r.PostFormValue?
+A:  r.FormValue looks in both the URL query string AND the request body
+    (for form-encoded bodies). r.PostFormValue looks ONLY in the request body.
+    Use r.PostFormValue when you want to strictly distinguish between
+    URL query params and body form data.
+
+Q3. Why should you always call defer r.Body.Close()?
+A:  r.Body is an io.ReadCloser wrapping a network connection. Not closing it
+    means the underlying TCP connection cannot be reused or released, causing
+    goroutine/connection leaks under load.
+
+Q4. What does http.MaxBytesReader do and why is it important?
+A:  It wraps r.Body to limit the number of bytes that can be read from it.
+    Without it, a malicious client can send a huge body (e.g., 1GB) causing
+    the server to OOM. Returns http.ErrBodyReadAfterClose when limit hit.
+
+Q5. How do you parse path parameters using the standard library in Go 1.22+?
+A:  Register the route with {name} syntax in http.NewServeMux(), then call
+    r.PathValue("name") inside the handler. Before 1.22, there was no native
+    support — developers used gorilla/mux, chi, or manual path splitting.
+
+Q6. What does json.Decoder.DisallowUnknownFields() do?
+A:  It causes the decoder to return an error if the JSON body contains any
+    field that doesn't map to a known struct field. Useful for strict APIs
+    to catch typos or unexpected data from clients.
+
+Q7. How do you read form data from a multipart/form-data request?
+A:  Call r.ParseMultipartForm(maxMemory) first, then use r.FormValue() for
+    text fields and r.FormFile("fieldName") for files. Files exceeding
+    maxMemory are stored in temp files; call r.MultipartForm.RemoveAll()
+    to clean them up.
+
+Q8. What is the difference between json.NewDecoder and json.Unmarshal?
+A:  json.NewDecoder works on an io.Reader directly (streaming), which is more
+    memory-efficient for large bodies — no need to load all bytes into memory.
+    json.Unmarshal works on a []byte slice, requiring you to read the entire
+    body first with io.ReadAll. Decoder also supports More() and extra options
+    like DisallowUnknownFields.
+
+Q9. How do you handle a case where a query param may have multiple values?
+A:  r.URL.Query() returns url.Values (map[string][]string). Access all values
+    for a key with vals := r.URL.Query()["tags"] — this gives []string with
+    all occurrences. r.URL.Query().Get() only returns the first one.
+
+Q10. What happens if you try to read r.Body twice?
+A:   The second read returns empty (io.EOF immediately) because r.Body is a
+     stream backed by the network connection — once consumed, it's gone.
+     To re-read: capture with io.ReadAll, then restore with
+     io.NopCloser(bytes.NewBuffer(body)).
+
+═══════════════════════════════════════════════════════════════════════════════
+10. INTERVIEW Q&A — SENIOR LEVEL
+═══════════════════════════════════════════════════════════════════════════════
+
+Q1. How would you design a middleware that reads the body for logging but
+    still allows handlers to decode it?
+A:  Read the body in middleware with io.ReadAll, log it, then restore:
+        body, _ := io.ReadAll(r.Body)
+        r.Body.Close()
+        // log body
+        r.Body = io.NopCloser(bytes.NewBuffer(body))
+        next.ServeHTTP(w, r)
+    Be careful: this buffers the entire body in memory, so apply a size limit
+    (http.MaxBytesReader) before reading. For high-throughput services, log
+    selectively (sample rate) rather than always, to avoid memory pressure.
+
+Q2. How do you handle unbounded form data or file uploads safely in production?
+A:  Multiple layers:
+    1. http.MaxBytesReader on r.Body before any parse
+    2. r.ParseMultipartForm(maxMemory) — cap in-memory portion
+    3. Validate file type by reading magic bytes, not just header.Filename
+       or Content-Type (both are client-provided and untrusted)
+    4. Stream large files directly to object storage (S3/GCS) instead of
+       buffering in memory — use io.Copy from file to upload writer
+    5. Enforce timeouts (ReadTimeout on http.Server) to prevent slow-loris
+
+Q3. What are the security concerns with parsing request data and how do you
+    address them?
+A:
+    Input size attacks     → http.MaxBytesReader, multipart memory limits
+    Type confusion         → DisallowUnknownFields, strict Content-Type check
+    SQL/command injection  → parameterized queries, never interpolate input
+    Path traversal (files) → filepath.Clean + validate against allowed prefix
+    ReDoS (regex params)   → avoid greedy regex in gorilla patterns
+    Header injection       → use r.Header.Get (handles canonicalization)
+    JSON bomb (deep nesting)→ limit recursion; consider custom decoder
+    SSRF via URLs          → whitelist allowed hosts before any HTTP calls
+    Content-Type sniffing  → always set explicit Content-Type on responses
+
+Q4. How would you implement a generic JSON binding layer with validation
+    suitable for use across many handlers?
+A:  Use generics (Go 1.18+):
+
+    type ValidationError struct {
+        Fields map[string]string `json:"fields"`
+    }
+    func (e *ValidationError) Error() string { return "validation failed" }
+
+    func Bind[T any](r *http.Request, v *validator.Validate) (T, error) {
+        var dst T
+        r.Body = http.MaxBytesReader(nil, r.Body, 1<<20)
+        dec := json.NewDecoder(r.Body)
+        dec.DisallowUnknownFields()
+        if err := dec.Decode(&dst); err != nil {
+            return dst, fmt.Errorf("decode: %w", err)
+        }
+        if err := v.Struct(dst); err != nil {
+            ve := &ValidationError{Fields: make(map[string]string)}
+            for _, e := range err.(validator.ValidationErrors) {
+                ve.Fields[e.Field()] = e.Tag()
+            }
+            return dst, ve
+        }
+        return dst, nil
+    }
+
+    // Handler usage:
+    req, err := Bind[CreateUserRequest](r, validate)
+    if err != nil {
+        var ve *ValidationError
+        if errors.As(err, &ve) {
+            writeJSON(w, http.StatusUnprocessableEntity, ve)
+            return
+        }
+        writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+        return
+    }
+
+Q5. What is the difference between r.URL.RawQuery and r.URL.Query()?
+A:  r.URL.RawQuery is the raw, unescaped query string as received (e.g.,
+    "q=hello+world&page=2"). r.URL.Query() parses it, percent-decodes and
+    +-decodes all keys and values, and returns url.Values. Use RawQuery
+    only when you need the original string (e.g., for proxying/forwarding).
+    For all application-level parsing, use r.URL.Query().
+
+Q6. How would you handle a REST API that needs to support both JSON and
+    form-encoded bodies for the same endpoint?
+A:  Inspect Content-Type and branch:
+
+    func handler(w http.ResponseWriter, r *http.Request) {
+        var req MyRequest
+        ct := r.Header.Get("Content-Type")
+        switch {
+        case strings.HasPrefix(ct, "application/json"):
+            if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+                http.Error(w, "bad JSON", http.StatusBadRequest)
+                return
+            }
+        case strings.HasPrefix(ct, "application/x-www-form-urlencoded"):
+            r.ParseForm()
+            req.Name  = r.PostFormValue("name")
+            req.Email = r.PostFormValue("email")
+        default:
+            http.Error(w, "unsupported content type", http.StatusUnsupportedMediaType)
+            return
+        }
+        // validate req...
+    }
+
+Q7. Describe how chi/gorilla router stores path params and what the
+    performance implications are.
+A:  Both routers store path parameters in the request's context using
+    context.WithValue. Each path match creates a new context wrapping the
+    original with key-value pairs for the extracted parameters. This means:
+    - A context allocation per request with params (small, ~100ns overhead)
+    - Values must be retrieved with the router's specific key type
+    - Storing many params (10+) is not significantly more expensive than 1-2
+    - No global mutable state — safe for concurrent use
+    For chi specifically, it uses its own private key type to avoid collisions
+    with other middleware using the context. gorilla/mux uses its own key too.
+    In performance-critical code, avoid putting large values in context.
+
+Q8. How do you stream a large request body without loading it into memory?
+A:  Use io.Copy to pipe directly from r.Body to a destination:
+
+    func uploadHandler(w http.ResponseWriter, r *http.Request) {
+        r.Body = http.MaxBytesReader(w, r.Body, 500<<20) // 500MB cap
+        defer r.Body.Close()
+
+        // Stream directly to S3 using AWS SDK's PutObject with reader:
+        _, err := s3Client.PutObject(ctx, &s3.PutObjectInput{
+            Bucket:        aws.String("my-bucket"),
+            Key:           aws.String("upload.bin"),
+            Body:          r.Body,            // io.Reader passed directly
+            ContentLength: aws.Int64(r.ContentLength),
+        })
+        if err != nil {
+            http.Error(w, "upload failed", http.StatusInternalServerError)
+            return
+        }
+    }
+    // r.ContentLength is -1 if unknown — handle chunked transfers separately
+
+Q9. What is the impact of calling r.ParseForm() when the request has a
+    JSON body?
+A:  r.ParseForm() will attempt to parse the body as URL-encoded form data.
+    For a JSON body, this will fail silently (or return an error you should
+    check), and the body stream will be consumed/corrupted. After ParseForm,
+    you cannot decode the body as JSON. Always check Content-Type first and
+    choose the appropriate parsing method. This is a common bug when
+    handlers try to support both JSON and form data carelessly.
+
+Q10. How would you unit test a handler that decodes a JSON body?
+A:  Use httptest.NewRecorder and construct an *http.Request with a body:
+
+    func TestCreateUser(t *testing.T) {
+        body := `{"name":"Aditya","email":"a@example.com","age":25}`
+        req := httptest.NewRequest(http.MethodPost, "/users",
+            strings.NewReader(body))
+        req.Header.Set("Content-Type", "application/json")
+        rr := httptest.NewRecorder()
+
+        createUser(rr, req)
+
+        if rr.Code != http.StatusCreated {
+            t.Fatalf("expected 201 got %d: %s", rr.Code, rr.Body.String())
+        }
+        var resp CreateUserResponse
+        json.NewDecoder(rr.Body).Decode(&resp)
+        if resp.Name != "Aditya" {
+            t.Errorf("unexpected name: %s", resp.Name)
+        }
+    }
+
+    // Test bad body:
+    func TestCreateUser_BadJSON(t *testing.T) {
+        req := httptest.NewRequest(http.MethodPost, "/users",
+            strings.NewReader("{bad json"))
+        req.Header.Set("Content-Type", "application/json")
+        rr := httptest.NewRecorder()
+        createUser(rr, req)
+        if rr.Code != http.StatusBadRequest {
+            t.Fatalf("expected 400 got %d", rr.Code)
+        }
+    }
+
+═══════════════════════════════════════════════════════════════════════════════
+ QUICK REFERENCE CHEAT SHEET
+═══════════════════════════════════════════════════════════════════════════════
+
+    Path param (Go 1.22+)    r.PathValue("id")
+    Path param (chi)         chi.URLParam(r, "id")
+    Path param (gorilla)     mux.Vars(r)["id"]
+
+    Query single             r.URL.Query().Get("page")
+    Query all values         r.URL.Query()["tags"]         → []string
+    Query raw string         r.URL.RawQuery
+
+    Form value (any source)  r.FormValue("key")            needs ParseForm
+    Form value (body only)   r.PostFormValue("key")        needs ParseForm
+    Parse form               r.ParseForm()
+    Parse multipart          r.ParseMultipartForm(maxMem)
+    Get file from upload     r.FormFile("field")
+
+    JSON decode (streaming)  json.NewDecoder(r.Body).Decode(&v)
+    JSON decode (bytes)      json.Unmarshal(body, &v)
+    Strict JSON decode       dec.DisallowUnknownFields() before Decode
+    Read all body bytes      io.ReadAll(r.Body)
+    Limit body size          http.MaxBytesReader(w, r.Body, n)
+
+    Header value             r.Header.Get("Content-Type")
+    All header values        r.Header["Accept"]            → []string
+    Content-Length           r.ContentLength               → int64
+
+    Restore body for re-read r.Body = io.NopCloser(bytes.NewBuffer(body))
+    Clean multipart temps    defer r.MultipartForm.RemoveAll()
+
+═══════════════════════════════════════════════════════════════════════════════

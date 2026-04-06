@@ -1,0 +1,616 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang net/http
+════════════════════════════════════════════════════════════════════════════════════
+1. OVERVIEW
+
+---
+
+The net/http package in Go provides HTTP client and server implementations.
+
+Key features:
+
+* Build HTTP servers
+* Create HTTP clients
+* Handle routing (basic)
+* Middleware support (manual)
+* Supports HTTP/1.1 and HTTP/2 (auto-enabled in many cases)
+
+---
+
+2. BASIC HTTP SERVER
+
+---
+
+Example: Simple server
+
+```go
+package main
+
+import (
+	"fmt"
+	"net/http"
+)
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Hello, World!")
+}
+
+func main() {
+	http.HandleFunc("/", handler)
+
+	fmt.Println("Server running on :8080")
+	http.ListenAndServe(":8080", nil)
+}
+```
+
+Key points:
+
+* http.HandleFunc → registers route
+* ResponseWriter → used to write response
+* Request → contains request data
+* ListenAndServe → starts server
+
+---
+
+3. HTTP HANDLER INTERFACE
+
+---
+
+Handler is interface:
+
+```go
+type Handler interface {
+	ServeHTTP(ResponseWriter, *Request)
+}
+```
+
+Custom handler:
+
+```go
+type MyHandler struct{}
+
+func (h MyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("Custom Handler"))
+}
+
+func main() {
+	http.ListenAndServe(":8080", MyHandler{})
+}
+```
+
+---
+
+4. ROUTING (BASIC)
+
+---
+
+Default mux:
+
+```go
+http.HandleFunc("/home", homeHandler)
+http.HandleFunc("/about", aboutHandler)
+```
+
+Custom mux:
+
+```go
+mux := http.NewServeMux()
+mux.HandleFunc("/home", homeHandler)
+
+http.ListenAndServe(":8080", mux)
+```
+
+---
+
+5. REQUEST OBJECT
+
+---
+
+Important fields:
+
+```go
+r.Method        // GET, POST
+r.URL.Path      // /home
+r.Header        // headers
+r.Body          // request body
+r.Form          // parsed form
+r.Context()     // request context
+```
+
+Example:
+
+```go
+func handler(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Method:", r.Method)
+	fmt.Println("Path:", r.URL.Path)
+}
+```
+
+---
+
+6. RESPONSE WRITER
+
+---
+
+Used to send response:
+
+```go
+w.Write([]byte("Hello"))
+```
+
+Set headers:
+
+```go
+w.Header().Set("Content-Type", "application/json")
+```
+
+Set status code:
+
+```go
+w.WriteHeader(http.StatusCreated)
+```
+
+Example:
+
+```go
+func handler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"message":"ok"}`))
+}
+```
+
+---
+
+7. QUERY PARAMETERS
+
+---
+
+```go
+name := r.URL.Query().Get("name")
+```
+
+Example:
+GET /hello?name=aditya
+
+---
+
+8. FORM DATA
+
+---
+
+```go
+r.ParseForm()
+name := r.Form.Get("name")
+```
+
+---
+
+9. JSON HANDLING
+
+---
+
+Decode JSON:
+
+```go
+type User struct {
+	Name string `json:"name"`
+}
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	var u User
+	json.NewDecoder(r.Body).Decode(&u)
+}
+```
+
+Encode JSON:
+
+```go
+json.NewEncoder(w).Encode(u)
+```
+
+---
+
+10. MIDDLEWARE PATTERN
+
+---
+
+Middleware wraps handler:
+
+```go
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("Request:", r.URL.Path)
+		next.ServeHTTP(w, r)
+	})
+}
+```
+
+Usage:
+
+```go
+mux := http.NewServeMux()
+mux.Handle("/", loggingMiddleware(http.HandlerFunc(handler)))
+```
+
+---
+
+11. HTTP CLIENT
+
+---
+
+Basic GET:
+
+```go
+resp, err := http.Get("https://example.com")
+if err != nil {
+	panic(err)
+}
+defer resp.Body.Close()
+```
+
+Custom client:
+
+```go
+client := &http.Client{}
+
+req, _ := http.NewRequest("GET", "https://example.com", nil)
+resp, _ := client.Do(req)
+```
+
+---
+
+12. TIMEOUTS (IMPORTANT)
+
+---
+
+```go
+client := &http.Client{
+	Timeout: 5 * time.Second,
+}
+```
+
+Server timeouts:
+
+```go
+srv := &http.Server{
+	Addr:         ":8080",
+	ReadTimeout:  5 * time.Second,
+	WriteTimeout: 10 * time.Second,
+}
+srv.ListenAndServe()
+```
+
+---
+
+13. CONTEXT USAGE
+
+---
+
+```go
+ctx := r.Context()
+
+select {
+case <-time.After(2 * time.Second):
+	w.Write([]byte("done"))
+case <-ctx.Done():
+	fmt.Println("request cancelled")
+}
+```
+
+---
+
+14. FILE UPLOAD
+
+---
+
+```go
+file, header, err := r.FormFile("file")
+defer file.Close()
+
+fmt.Println(header.Filename)
+```
+
+---
+
+15. FILE DOWNLOAD
+
+---
+
+```go
+http.ServeFile(w, r, "file.txt")
+```
+
+---
+
+16. STATIC FILE SERVER
+
+---
+
+```go
+fs := http.FileServer(http.Dir("./static"))
+http.Handle("/static/", http.StripPrefix("/static/", fs))
+```
+
+---
+
+17. ERROR HANDLING BEST PRACTICE
+
+---
+
+```go
+http.Error(w, "Bad Request", http.StatusBadRequest)
+```
+
+---
+
+18. COMMON STATUS CODES
+
+---
+
+http.StatusOK            = 200
+http.StatusCreated       = 201
+http.StatusBadRequest    = 400
+http.StatusUnauthorized  = 401
+http.StatusNotFound      = 404
+http.StatusInternalServerError = 500
+
+---
+
+# INTERVIEW QUESTIONS (MED → SENIOR)
+
+Q1: Difference between Handle and HandleFunc?
+A:
+
+* Handle → requires http.Handler
+* HandleFunc → takes function, wraps into Handler
+
+---
+
+Q2: Why use custom mux instead of default?
+A:
+
+* Better control
+* Avoid global state
+* Useful for testing and modular design
+
+---
+
+Q3: What is middleware in Go?
+A:
+
+* A wrapper around handler
+* Used for logging, auth, rate limiting
+
+---
+
+Q4: How does Go handle concurrency in HTTP server?
+A:
+
+* Each request runs in its own goroutine automatically
+
+---
+
+Q5: Why use context in HTTP?
+A:
+
+* Cancellation
+* Deadlines
+* Passing request-scoped values
+
+---
+
+Q6: Difference between http.Client and http.Transport?
+A:
+
+* Client → high-level API
+* Transport → low-level (connection pooling, TLS, proxy)
+
+---
+
+Q7: How to prevent memory leaks in HTTP clients?
+A:
+
+* Always close response body:
+  defer resp.Body.Close()
+
+---
+
+Q8: What are server timeouts and why important?
+A:
+
+* Prevent slowloris attacks
+* Avoid resource exhaustion
+
+---
+
+Q9: How to implement graceful shutdown?
+A:
+
+```go
+srv := &http.Server{Addr: ":8080"}
+
+go srv.ListenAndServe()
+
+ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+defer cancel()
+
+srv.Shutdown(ctx)
+```
+
+---
+
+Q10: How to structure production-grade HTTP services?
+A:
+
+* Separate layers (handler → service → repo)
+* Use middleware chain
+* Use custom router (gorilla/mux, chi)
+* Add logging + metrics
+* Add timeouts & context handling
+
+---
+
+Q11: When would you NOT use net/http directly?
+A:
+
+* Complex routing needs
+* Middleware-heavy apps
+* Prefer frameworks like:
+
+  * chi
+  * gin
+  * echo
+
+---
+
+Q12: How does connection pooling work in Go HTTP client?
+A:
+
+* Managed by Transport
+* Reuses TCP connections automatically
+
+---
+
+Q13: What is http.RoundTripper?
+A:
+
+* Interface for executing HTTP requests
+* Used to customize client behavior
+
+---
+
+Q14: How to secure HTTP server?
+A:
+
+* Use TLS (ListenAndServeTLS)
+* Validate inputs
+* Add headers (CORS, security headers)
+* Use timeouts
+
+---
+
+# SUMMARY
+
+* net/http is powerful but minimal
+* Everything is interface-driven
+* Middleware pattern is manual but flexible
+* Concurrency is built-in
+* Production systems require structuring + timeouts + context
+
+
+===============================================================================
+NET/HTTP STANDARD LIBRARY
+===============================================================================
+
+1. CORE CONCEPTS
+-------------------------------------------------------------------------------
+The `net/http` package is the backbone of web development in Go. Unlike many 
+languages that require an external web server (like Apache or Nginx), Go 
+compiles down to a binary that includes its own high-performance server.
+
+Key Interfaces:
+- http.Handler: The primary interface. Requires a ServeHTTP(ResponseWriter, *Request) method.
+- http.ResponseWriter: Used to construct the HTTP response (headers, body, status code).
+- *http.Request: A struct representing the incoming HTTP request.
+
+-------------------------------------------------------------------------------
+2. BASIC SERVER EXAMPLE
+-------------------------------------------------------------------------------
+
+package main
+
+import (
+    "fmt"
+    "net/http"
+)
+
+func helloHandler(w http.ResponseWriter, r *http.Request) {
+    fmt.Fprintf(w, "Hello, you've requested: %s\n", r.URL.Path)
+}
+
+func main() {
+    // Registering a handler function to a route
+    http.HandleFunc("/", helloHandler)
+
+    // Starting the server on port 8080
+    fmt.Println("Server starting on :8080...")
+    if err := http.ListenAndServe(":8080", nil); err != nil {
+        panic(err)
+    }
+}
+
+-------------------------------------------------------------------------------
+3. MIDDLEWARE PATTERN (SENIOR LEVEL)
+-------------------------------------------------------------------------------
+Middleware is simply a function that takes an http.Handler and returns an 
+http.Handler. This allows for wrapping logic like logging, auth, or recovery.
+
+func loggingMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        fmt.Printf("Request: %s %s\n", r.Method, r.URL.Path)
+        next.ServeHTTP(w, r)
+    })
+}
+
+-------------------------------------------------------------------------------
+4. INTERVIEW QUESTIONS & ANSWERS (MID-SENIOR)
+-------------------------------------------------------------------------------
+
+Q1: What is the difference between http.HandleFunc and http.Handle?
+A: 
+- http.Handle takes a string pattern and an object that implements the 
+  http.Handler interface (meaning it has a ServeHTTP method).
+- http.HandleFunc takes a string pattern and a function with the signature 
+  func(ResponseWriter, *Request). Internally, HandleFunc converts the 
+  function into a Handler using the http.HandlerFunc type adapter.
+
+Q2: How do you prevent a Go HTTP server from leaking goroutines?
+A: 
+- For the Client: Always close the response body using `defer resp.Body.Close()`.
+- For the Server: Set explicit timeouts (ReadTimeout, WriteTimeout, IdleTimeout) 
+  on the http.Server struct. Using the default ListenAndServe() is risky in 
+  production because it has no timeouts, potentially allowing slow-loris 
+  attacks to exhaust resources.
+
+Q3: Explain the DefaultServeMux and why you might avoid it in production.
+A: 
+DefaultServeMux is a global variable. Because it is global, any package in 
+your project (including third-party dependencies) can register routes to it. 
+This can lead to security risks or unintended shadowing of routes. For senior 
+devs, it is best practice to create a local `http.NewServeMux()` and inject it 
+into the http.Server.
+
+Q4: How would you handle a graceful shutdown?
+A: 
+You listen for OS termination signals (SIGINT, SIGTERM) using the `os/signal` 
+package. When a signal is received, you call `server.Shutdown(context)`. 
+This stops the server from accepting new requests while allowing active 
+requests to finish within a timeout period.
+
+Q5: How does Go handle concurrent requests in net/http?
+A: 
+The Go HTTP server spawns a new goroutine for every incoming connection. 
+This is why handlers must be thread-safe; if your handler accesses shared 
+global state (like a map or a database pointer), you must use proper 
+synchronization (sync.Mutex) or atomic operations.
+
+-------------------------------------------------------------------------------
+5. SENIOR NOTES & BEST PRACTICES
+-------------------------------------------------------------------------------
+- Context Propagation: Always use r.Context() for cancellation and timeouts. 
+  If a client disconnects, you should stop any heavy processing or DB queries 
+  immediately to save resources.
+- Production Server Config:
+    s := &http.Server{
+        Addr:           ":8080",
+        Handler:        myMux,
+        ReadTimeout:    10 * time.Second,
+        WriteTimeout:   10 * time.Second,
+        MaxHeaderBytes: 1 << 20, // 1MB
+    }
+- Standard Library vs. Frameworks: Go's net/http is powerful enough that 
+  frameworks like Echo or Gin are often "syntactic sugar." For high-scale 
+  systems, many senior devs prefer the standard library plus a lightweight 
+  router like `chi` for better control.
+===============================================================================

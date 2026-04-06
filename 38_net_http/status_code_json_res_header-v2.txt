@@ -1,0 +1,1070 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang RESPONSE WRITING: STATUS CODES, JSON RESPONSES, HEADERS
+════════════════════════════════════════════════════════════════════════════════════
+INDEX
+─────
+ 1. Overview: http.ResponseWriter Interface
+ 2. Status Codes
+ 3. Writing Headers
+ 4. Writing JSON Responses
+ 5. Writing Other Response Types
+ 6. Error Responses — Patterns & Structure
+ 7. Streaming Responses
+ 8. Middleware & Response Interception
+ 9. Common Pitfalls & Best Practices
+10. Java vs Go Comparison
+11. Interview Q&A — Medior Level
+12. Interview Q&A — Senior Level
+
+═══════════════════════════════════════════════════════════════════════════════
+ 1. OVERVIEW: http.ResponseWriter INTERFACE
+═══════════════════════════════════════════════════════════════════════════════
+
+Every HTTP handler in Go receives an http.ResponseWriter:
+
+    type ResponseWriter interface {
+        Header() http.Header      // returns the header map to mutate
+        Write([]byte) (int, error) // writes body; sends 200 if not yet written
+        WriteHeader(statusCode int) // sends status line + headers
+    }
+
+The ORDER matters — this is the most critical rule in response writing:
+
+    1. Set headers first          → w.Header().Set(...)
+    2. Call WriteHeader once      → w.WriteHeader(http.StatusCreated)
+    3. Write body                 → w.Write(data) or json.NewEncoder(w).Encode(v)
+
+Once WriteHeader is called, headers are FROZEN — you cannot change them.
+Once Write is called, WriteHeader(200) is implicitly called if not already done.
+
+Key: Go does NOT buffer responses by default (unlike many frameworks).
+     What you write goes to the wire immediately (or to the OS buffer).
+
+═══════════════════════════════════════════════════════════════════════════════
+ 2. STATUS CODES
+═══════════════════════════════════════════════════════════════════════════════
+
+──────────────────────────────────────────
+ 2a. Using Status Codes
+──────────────────────────────────────────
+
+    // Explicit status + body
+    w.WriteHeader(http.StatusCreated)       // 201
+    w.Write([]byte("resource created"))
+
+    // Status only (no body — e.g. 204)
+    w.WriteHeader(http.StatusNoContent)     // 204
+
+    // http.Error = WriteHeader + plain text body + Content-Type: text/plain
+    http.Error(w, "not found", http.StatusNotFound)     // 404
+    http.Error(w, "bad request", http.StatusBadRequest) // 400
+
+    // Redirect (sets Location header + writes redirect body)
+    http.Redirect(w, r, "/new-location", http.StatusMovedPermanently) // 301
+    http.Redirect(w, r, "/login", http.StatusFound)                   // 302
+    http.Redirect(w, r, "/resource", http.StatusSeeOther)             // 303
+
+──────────────────────────────────────────
+ 2b. Common Status Code Reference
+──────────────────────────────────────────
+
+    // 2xx — Success
+    http.StatusOK                   // 200 — standard success
+    http.StatusCreated              // 201 — resource created (POST)
+    http.StatusAccepted             // 202 — async operation started
+    http.StatusNoContent            // 204 — success, no body (DELETE, PUT)
+    http.StatusPartialContent       // 206 — range request (streaming)
+
+    // 3xx — Redirection
+    http.StatusMovedPermanently     // 301 — permanent redirect
+    http.StatusFound                // 302 — temporary redirect
+    http.StatusSeeOther             // 303 — redirect after POST
+    http.StatusNotModified          // 304 — cached response still valid
+    http.StatusTemporaryRedirect    // 307 — temp redirect, keep method
+    http.StatusPermanentRedirect    // 308 — permanent, keep method
+
+    // 4xx — Client Errors
+    http.StatusBadRequest           // 400 — malformed request
+    http.StatusUnauthorized         // 401 — auth required (not "forbidden")
+    http.StatusForbidden            // 403 — auth ok but access denied
+    http.StatusNotFound             // 404 — resource not found
+    http.StatusMethodNotAllowed     // 405 — wrong HTTP method
+    http.StatusConflict             // 409 — state conflict (duplicate)
+    http.StatusGone                 // 410 — permanently deleted
+    http.StatusUnprocessableEntity  // 422 — validation failed
+    http.StatusTooManyRequests      // 429 — rate limited
+    http.StatusRequestEntityTooLarge // 413 — body too big
+
+    // 5xx — Server Errors
+    http.StatusInternalServerError  // 500 — unhandled error
+    http.StatusNotImplemented       // 501 — endpoint not implemented
+    http.StatusBadGateway           // 502 — upstream failed
+    http.StatusServiceUnavailable   // 503 — server overloaded/down
+    http.StatusGatewayTimeout       // 504 — upstream timeout
+
+Correct use matters:
+    401 Unauthorized  = not authenticated (send WWW-Authenticate header)
+    403 Forbidden     = authenticated but not permitted
+    422 Unprocessable = body parseable but fails validation (preferred over 400)
+    409 Conflict      = e.g. creating a user with an existing email
+
+═══════════════════════════════════════════════════════════════════════════════
+ 3. WRITING HEADERS
+═══════════════════════════════════════════════════════════════════════════════
+
+──────────────────────────────────────────
+ 3a. Setting Response Headers
+──────────────────────────────────────────
+
+    // MUST be set before WriteHeader or Write
+    w.Header().Set("Content-Type", "application/json")
+    w.Header().Set("X-Request-Id", requestID)
+    w.Header().Set("Cache-Control", "no-store")
+
+    // Add (does not replace — appends to existing):
+    w.Header().Add("Vary", "Accept")
+    w.Header().Add("Vary", "Accept-Encoding")
+
+    // Delete a header:
+    w.Header().Del("X-Powered-By")
+
+    // Check if set:
+    if w.Header().Get("Content-Type") == "" {
+        w.Header().Set("Content-Type", "application/json")
+    }
+
+──────────────────────────────────────────
+ 3b. Common Response Headers
+──────────────────────────────────────────
+
+    Content-Type        w.Header().Set("Content-Type", "application/json; charset=utf-8")
+    Content-Length      w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+    Location            w.Header().Set("Location", "/users/42")         // for 201/3xx
+    Cache-Control       w.Header().Set("Cache-Control", "max-age=3600")
+    ETag                w.Header().Set("ETag", `"abc123"`)
+    Last-Modified       w.Header().Set("Last-Modified", time.Now().UTC().Format(http.TimeFormat))
+    X-Request-Id        w.Header().Set("X-Request-Id", uuid.New().String())
+    Retry-After         w.Header().Set("Retry-After", "60")             // for 429/503
+    WWW-Authenticate    w.Header().Set("WWW-Authenticate", `Bearer realm="api"`) // for 401
+    Allow               w.Header().Set("Allow", "GET, POST, OPTIONS")   // for 405
+
+──────────────────────────────────────────
+ 3c. CORS Headers
+──────────────────────────────────────────
+
+    func corsMiddleware(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            w.Header().Set("Access-Control-Allow-Origin", "https://myapp.com")
+            w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+            w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+            w.Header().Set("Access-Control-Max-Age", "86400") // preflight cache
+
+            if r.Method == http.MethodOptions {
+                w.WriteHeader(http.StatusNoContent) // 204 for preflight
+                return
+            }
+            next.ServeHTTP(w, r)
+        })
+    }
+
+──────────────────────────────────────────
+ 3d. Security Headers (production must-have)
+──────────────────────────────────────────
+
+    func securityHeaders(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            w.Header().Set("X-Content-Type-Options", "nosniff")
+            w.Header().Set("X-Frame-Options", "DENY")
+            w.Header().Set("X-XSS-Protection", "1; mode=block")
+            w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+            w.Header().Set("Content-Security-Policy", "default-src 'self'")
+            w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+            next.ServeHTTP(w, r)
+        })
+    }
+
+═══════════════════════════════════════════════════════════════════════════════
+ 4. WRITING JSON RESPONSES
+═══════════════════════════════════════════════════════════════════════════════
+
+──────────────────────────────────────────
+ 4a. Basic JSON Response
+──────────────────────────────────────────
+
+    type UserResponse struct {
+        ID    int    `json:"id"`
+        Name  string `json:"name"`
+        Email string `json:"email"`
+    }
+
+    func getUser(w http.ResponseWriter, r *http.Request) {
+        user := UserResponse{ID: 1, Name: "Aditya", Email: "a@example.com"}
+
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusOK) // optional — Write implies 200
+
+        if err := json.NewEncoder(w).Encode(user); err != nil {
+            // Headers already sent — can't change status now
+            // Log the error; client gets partial/malformed response
+            log.Printf("encode error: %v", err)
+        }
+    }
+    // json.Encoder.Encode appends a newline \n after the JSON
+
+──────────────────────────────────────────
+ 4b. json.NewEncoder vs json.Marshal
+──────────────────────────────────────────
+
+    // Option A: Encoder (streams directly to w — preferred for HTTP)
+    json.NewEncoder(w).Encode(v)
+    // Pros: no intermediate []byte, memory efficient
+    // Cons: appends trailing newline, can't easily get Content-Length
+
+    // Option B: Marshal to []byte first
+    data, err := json.Marshal(v)
+    if err != nil {
+        http.Error(w, "encode error", http.StatusInternalServerError)
+        return
+    }
+    w.Header().Set("Content-Type", "application/json")
+    w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+    w.WriteHeader(http.StatusOK)
+    w.Write(data)
+    // Pros: know Content-Length before writing, easier error handling
+    // Cons: extra allocation for []byte
+
+──────────────────────────────────────────
+ 4c. Reusable JSON Write Helper
+──────────────────────────────────────────
+
+    // Production-grade helper
+    func writeJSON(w http.ResponseWriter, status int, v any) {
+        data, err := json.Marshal(v)
+        if err != nil {
+            // Don't leak internal error details
+            w.Header().Set("Content-Type", "application/json")
+            w.WriteHeader(http.StatusInternalServerError)
+            w.Write([]byte(`{"error":"internal server error"}`))
+            return
+        }
+        w.Header().Set("Content-Type", "application/json; charset=utf-8")
+        w.Header().Set("X-Content-Type-Options", "nosniff")
+        w.WriteHeader(status)
+        w.Write(data)
+    }
+
+    // Usage:
+    writeJSON(w, http.StatusCreated, UserResponse{ID: 42, Name: "Aditya"})
+    writeJSON(w, http.StatusOK, map[string]any{"message": "ok"})
+
+──────────────────────────────────────────
+ 4d. Envelope Pattern (API consistency)
+──────────────────────────────────────════
+
+Common pattern: wrap all responses in a standard envelope.
+
+    type APIResponse[T any] struct {
+        Data    T      `json:"data,omitempty"`
+        Error   string `json:"error,omitempty"`
+        Meta    *Meta  `json:"meta,omitempty"`
+    }
+
+    type Meta struct {
+        Page       int `json:"page"`
+        PerPage    int `json:"per_page"`
+        TotalItems int `json:"total_items"`
+        TotalPages int `json:"total_pages"`
+    }
+
+    // Success with data:
+    writeJSON(w, http.StatusOK, APIResponse[[]User]{
+        Data: users,
+        Meta: &Meta{Page: 1, PerPage: 20, TotalItems: 100, TotalPages: 5},
+    })
+
+    // Error:
+    writeJSON(w, http.StatusNotFound, APIResponse[any]{
+        Error: "user not found",
+    })
+
+──────────────────────────────────────────
+ 4e. JSON Struct Tag Reference
+──────────────────────────────────────────
+
+    type Example struct {
+        ID        int       `json:"id"`                    // renamed
+        Name      string    `json:"name,omitempty"`        // omit if zero value
+        Internal  string    `json:"-"`                     // never serialized
+        CreatedAt time.Time `json:"created_at"`            // time → RFC3339 string
+        Score     float64   `json:"score,omitempty"`       // omit if 0.0
+        Tags      []string  `json:"tags"`                  // null if nil, [] if empty slice
+        Metadata  *Meta     `json:"metadata,omitempty"`    // omit if nil pointer
+    }
+
+    // Useful for nil vs empty slice distinction:
+    Tags: nil           → "tags": null
+    Tags: []string{}    → "tags": []
+    Tags: []string{"a"} → "tags": ["a"]
+
+    // time.Time serializes to RFC3339 by default:
+    // "2024-01-15T10:30:00Z"
+
+    // Custom marshaling: implement json.Marshaler interface:
+    func (e Example) MarshalJSON() ([]byte, error) {
+        // custom logic
+    }
+
+═══════════════════════════════════════════════════════════════════════════════
+ 5. WRITING OTHER RESPONSE TYPES
+═══════════════════════════════════════════════════════════════════════════════
+
+──────────────────────────────────────────
+ 5a. Plain Text
+──────────────────────────────────────────
+
+    w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+    w.WriteHeader(http.StatusOK)
+    fmt.Fprintf(w, "Hello, %s!", name)
+    // OR:
+    io.WriteString(w, "Hello!")
+
+──────────────────────────────────────────
+ 5b. HTML
+──────────────────────────────────────────
+
+    w.Header().Set("Content-Type", "text/html; charset=utf-8")
+    fmt.Fprintf(w, "<h1>Hello %s</h1>", html.EscapeString(name)) // always escape!
+
+──────────────────────────────────────────
+ 5c. Binary / File Download
+──────────────────────────────────────────
+
+    func downloadHandler(w http.ResponseWriter, r *http.Request) {
+        data, _ := os.ReadFile("/path/to/report.pdf")
+
+        w.Header().Set("Content-Type", "application/pdf")
+        w.Header().Set("Content-Disposition", `attachment; filename="report.pdf"`)
+        w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+        w.WriteHeader(http.StatusOK)
+        w.Write(data)
+    }
+
+    // Serve a file efficiently (handles Range, ETag, Last-Modified):
+    http.ServeFile(w, r, "/path/to/file.pdf")
+    // OR serve from embed.FS, os.File, etc.:
+    http.ServeContent(w, r, "report.pdf", modTime, readSeeker)
+
+──────────────────────────────────────────
+ 5d. No Content (204)
+──────────────────────────────────────────
+
+    func deleteHandler(w http.ResponseWriter, r *http.Request) {
+        // ... delete logic ...
+        w.WriteHeader(http.StatusNoContent) // 204 — no body written
+        // DO NOT call w.Write() after 204
+    }
+
+──────────────────────────────────────────
+ 5e. Redirect
+──────────────────────────────────────────
+
+    // After creating resource — 201 with Location header:
+    w.Header().Set("Location", fmt.Sprintf("/users/%d", newUser.ID))
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusCreated)
+    json.NewEncoder(w).Encode(newUser)
+
+    // True redirect:
+    http.Redirect(w, r, "/dashboard", http.StatusSeeOther) // 303
+
+═══════════════════════════════════════════════════════════════════════════════
+ 6. ERROR RESPONSES — PATTERNS & STRUCTURE
+═══════════════════════════════════════════════════════════════════════════════
+
+──────────────────────────────────────────
+ 6a. Simple Error Helper
+──────────────────────────────────────────
+
+    type ErrorResponse struct {
+        Error   string            `json:"error"`
+        Code    string            `json:"code,omitempty"`    // machine-readable
+        Details map[string]string `json:"details,omitempty"` // field errors
+    }
+
+    func writeError(w http.ResponseWriter, status int, msg string) {
+        writeJSON(w, status, ErrorResponse{Error: msg})
+    }
+
+    func writeErrorCode(w http.ResponseWriter, status int, msg, code string) {
+        writeJSON(w, status, ErrorResponse{Error: msg, Code: code})
+    }
+
+    // Usage:
+    writeError(w, http.StatusNotFound, "user not found")
+    writeErrorCode(w, http.StatusTooManyRequests, "slow down", "RATE_LIMITED")
+
+──────────────────────────────────────────
+ 6b. Validation Error Response (422)
+──────────────────────────────────────────
+
+    type ValidationErrorResponse struct {
+        Error   string            `json:"error"`
+        Fields  map[string]string `json:"fields"`
+    }
+
+    func writeValidationError(w http.ResponseWriter, fields map[string]string) {
+        writeJSON(w, http.StatusUnprocessableEntity, ValidationErrorResponse{
+            Error:  "validation failed",
+            Fields: fields,
+        })
+    }
+
+    // Response:
+    // {
+    //   "error": "validation failed",
+    //   "fields": {
+    //     "email": "required",
+    //     "age": "gte"
+    //   }
+    // }
+
+──────────────────────────────────────────
+ 6c. RFC 7807 Problem Details (standard format)
+──────────────────────────────────────────
+
+    // application/problem+json — widely adopted standard
+    type ProblemDetail struct {
+        Type     string `json:"type"`              // URI identifying error type
+        Title    string `json:"title"`             // human-readable summary
+        Status   int    `json:"status"`            // HTTP status code
+        Detail   string `json:"detail,omitempty"` // specific explanation
+        Instance string `json:"instance,omitempty"` // URI of this occurrence
+    }
+
+    func writeProblem(w http.ResponseWriter, p ProblemDetail) {
+        w.Header().Set("Content-Type", "application/problem+json")
+        w.WriteHeader(p.Status)
+        json.NewEncoder(w).Encode(p)
+    }
+
+    // Usage:
+    writeProblem(w, ProblemDetail{
+        Type:   "https://api.myapp.com/errors/not-found",
+        Title:  "Resource Not Found",
+        Status: http.StatusNotFound,
+        Detail: fmt.Sprintf("User with ID %d does not exist", id),
+    })
+
+──────────────────────────────────────────
+ 6d. Centralized Error Handler Pattern
+──────────────────────────────────────────
+
+    // Define app-level error type
+    type AppError struct {
+        Status  int
+        Message string
+        Code    string
+        Err     error // internal cause (never exposed to client)
+    }
+
+    func (e *AppError) Error() string { return e.Message }
+    func (e *AppError) Unwrap() error { return e.Err }
+
+    // Sentinel errors:
+    var (
+        ErrNotFound   = &AppError{Status: 404, Message: "not found",   Code: "NOT_FOUND"}
+        ErrForbidden  = &AppError{Status: 403, Message: "forbidden",   Code: "FORBIDDEN"}
+        ErrBadRequest = &AppError{Status: 400, Message: "bad request", Code: "BAD_REQUEST"}
+    )
+
+    // Handler wrapper that returns error:
+    type HandlerFunc func(w http.ResponseWriter, r *http.Request) error
+
+    func Handle(h HandlerFunc) http.HandlerFunc {
+        return func(w http.ResponseWriter, r *http.Request) {
+            if err := h(w, r); err != nil {
+                var appErr *AppError
+                if errors.As(err, &appErr) {
+                    writeJSON(w, appErr.Status, ErrorResponse{
+                        Error: appErr.Message,
+                        Code:  appErr.Code,
+                    })
+                    return
+                }
+                // Unknown error — don't leak internals
+                log.Printf("unhandled error: %v", err)
+                writeJSON(w, http.StatusInternalServerError,
+                    ErrorResponse{Error: "internal server error"})
+            }
+        }
+    }
+
+    // Handler usage:
+    mux.HandleFunc("/users/{id}", Handle(func(w http.ResponseWriter, r *http.Request) error {
+        user, err := db.GetUser(id)
+        if errors.Is(err, sql.ErrNoRows) {
+            return ErrNotFound
+        }
+        if err != nil {
+            return fmt.Errorf("db.GetUser: %w", err) // wrapped, not AppError → 500
+        }
+        return writeJSON(w, http.StatusOK, user)
+    }))
+
+═══════════════════════════════════════════════════════════════════════════════
+ 7. STREAMING RESPONSES
+═══════════════════════════════════════════════════════════════════════════════
+
+──────────────────────────────────────────
+ 7a. Flushing (chunked transfer)
+──────────────────────────────────────────
+
+    // ResponseWriter may buffer — flush to send data immediately
+    func streamHandler(w http.ResponseWriter, r *http.Request) {
+        flusher, ok := w.(http.Flusher)
+        if !ok {
+            http.Error(w, "streaming not supported", http.StatusInternalServerError)
+            return
+        }
+
+        w.Header().Set("Content-Type", "text/plain")
+        w.Header().Set("Transfer-Encoding", "chunked")
+        w.Header().Set("X-Content-Type-Options", "nosniff")
+
+        for i := 0; i < 5; i++ {
+            fmt.Fprintf(w, "chunk %d\n", i)
+            flusher.Flush() // send chunk to client immediately
+            time.Sleep(500 * time.Millisecond)
+        }
+    }
+
+──────────────────────────────────────────
+ 7b. Server-Sent Events (SSE)
+──────────────────────────────────────────
+
+    func sseHandler(w http.ResponseWriter, r *http.Request) {
+        flusher, ok := w.(http.Flusher)
+        if !ok {
+            http.Error(w, "SSE not supported", http.StatusInternalServerError)
+            return
+        }
+
+        w.Header().Set("Content-Type", "text/event-stream")
+        w.Header().Set("Cache-Control", "no-cache")
+        w.Header().Set("Connection", "keep-alive")
+        w.Header().Set("Access-Control-Allow-Origin", "*")
+
+        ctx := r.Context()
+        eventCh := make(chan string)
+
+        // Simulate events in background
+        go func() {
+            for i := 0; i < 10; i++ {
+                select {
+                case <-ctx.Done():
+                    return
+                case eventCh <- fmt.Sprintf("event %d", i):
+                    time.Sleep(1 * time.Second)
+                }
+            }
+            close(eventCh)
+        }()
+
+        for {
+            select {
+            case <-ctx.Done():
+                return // client disconnected
+            case msg, ok := <-eventCh:
+                if !ok {
+                    return
+                }
+                fmt.Fprintf(w, "data: %s\n\n", msg) // SSE format
+                flusher.Flush()
+            }
+        }
+    }
+
+──────────────────────────────────────────
+ 7c. Streaming Large File / JSON Array
+──────────────────────────────────────────
+
+    // Stream JSON array without loading all records into memory:
+    func streamUsers(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusOK)
+
+        enc := json.NewEncoder(w)
+        flusher, _ := w.(http.Flusher)
+
+        io.WriteString(w, "[")
+        first := true
+
+        rows, _ := db.QueryContext(r.Context(), "SELECT id, name FROM users")
+        defer rows.Close()
+
+        for rows.Next() {
+            var u User
+            rows.Scan(&u.ID, &u.Name)
+
+            if !first {
+                io.WriteString(w, ",")
+            }
+            enc.Encode(u)
+            if flusher != nil {
+                flusher.Flush()
+            }
+            first = false
+        }
+        io.WriteString(w, "]")
+    }
+
+═══════════════════════════════════════════════════════════════════════════════
+ 8. MIDDLEWARE & RESPONSE INTERCEPTION
+═══════════════════════════════════════════════════════════════════════════════
+
+──────────────────────────────────────────
+ 8a. responseWriter Wrapper (capture status code)
+──────────────────────────────────────────
+
+    // http.ResponseWriter doesn't expose status code after WriteHeader
+    // Wrap it to capture the code for logging/metrics
+
+    type responseRecorder struct {
+        http.ResponseWriter
+        statusCode  int
+        wroteHeader bool
+        bytes       int
+    }
+
+    func newResponseRecorder(w http.ResponseWriter) *responseRecorder {
+        return &responseRecorder{ResponseWriter: w, statusCode: http.StatusOK}
+    }
+
+    func (r *responseRecorder) WriteHeader(code int) {
+        if !r.wroteHeader {
+            r.statusCode = code
+            r.wroteHeader = true
+            r.ResponseWriter.WriteHeader(code)
+        }
+    }
+
+    func (r *responseRecorder) Write(b []byte) (int, error) {
+        if !r.wroteHeader {
+            r.WriteHeader(http.StatusOK)
+        }
+        n, err := r.ResponseWriter.Write(b)
+        r.bytes += n
+        return n, err
+    }
+
+    // Logging middleware using wrapper:
+    func loggingMiddleware(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            start := time.Now()
+            rec := newResponseRecorder(w)
+            next.ServeHTTP(rec, r)
+            log.Printf("%s %s → %d (%d bytes) in %v",
+                r.Method, r.URL.Path, rec.statusCode, rec.bytes, time.Since(start))
+        })
+    }
+
+──────────────────────────────────────────
+ 8b. Checking if ResponseWriter supports interfaces
+──────────────────────────────────────────
+
+    // ResponseWriter may optionally implement:
+    _, ok := w.(http.Flusher)       // Flush() — streaming
+    _, ok  = w.(http.Hijacker)      // Hijack() — WebSocket upgrade
+    _, ok  = w.(io.ReaderFrom)      // ReadFrom() — zero-copy file serving
+    _, ok  = w.(http.CloseNotifier) // deprecated — use r.Context().Done()
+
+    // IMPORTANT: When wrapping ResponseWriter in middleware,
+    // your wrapper must forward these interfaces or they break:
+
+    type flusherWrapper struct {
+        http.ResponseWriter
+    }
+
+    func (fw *flusherWrapper) Flush() {
+        if f, ok := fw.ResponseWriter.(http.Flusher); ok {
+            f.Flush()
+        }
+    }
+
+═══════════════════════════════════════════════════════════════════════════════
+ 9. COMMON PITFALLS & BEST PRACTICES
+═══════════════════════════════════════════════════════════════════════════════
+
+PITFALL 1 — Writing headers after Write/WriteHeader
+    ❌ w.Write(body); w.Header().Set("Content-Type", "application/json")
+    ✅ Set ALL headers before WriteHeader or Write — once body starts, headers frozen
+    Symptom: "superfluous response.WriteHeader call" in server logs
+
+PITFALL 2 — Calling WriteHeader twice
+    ❌ w.WriteHeader(200); w.WriteHeader(201)
+    ✅ WriteHeader is called once. Wrap with a guard (see responseRecorder pattern)
+    Symptom: "superfluous response.WriteHeader call" warning log
+
+PITFALL 3 — Not returning after writing an error
+    ❌ http.Error(w, "not found", 404)
+       doMoreWork() // still executes! may write again
+    ✅ http.Error(w, "not found", 404); return
+    This is the #1 bug in Go handlers — always return after error writes
+
+PITFALL 4 — Exposing internal errors to clients
+    ❌ http.Error(w, err.Error(), 500) // leaks stack traces, DB errors, paths
+    ✅ log.Printf("internal: %v", err)
+       http.Error(w, "internal server error", 500)
+
+PITFALL 5 — Forgetting Content-Type header
+    ❌ json.NewEncoder(w).Encode(v) // no Content-Type set
+    ✅ w.Header().Set("Content-Type", "application/json; charset=utf-8")
+    Browsers/clients may misinterpret the body without Content-Type
+
+PITFALL 6 — Error after headers sent (streaming context)
+    ❌ Trying to send a 500 status after already writing 200 + partial body
+    ✅ In streaming, check/validate early, before writing any output.
+       If error occurs mid-stream, you can only truncate/stop writing —
+       status code is already committed.
+
+PITFALL 7 — json.Encoder trailing newline misunderstood
+    json.NewEncoder(w).Encode(v) appends '\n' after JSON.
+    This is harmless for most clients but use json.Marshal + w.Write
+    if you need precise byte output.
+
+PITFALL 8 — Not setting Content-Length (when you can)
+    Without Content-Length, Go uses chunked transfer encoding.
+    Set it when you have []byte to allow persistent connection reuse more efficiently.
+
+PITFALL 9 — Wrapping ResponseWriter breaks interface assertions
+    If middleware wraps w in a plain struct, http.Flusher type assertion fails.
+    Streaming handlers that flush will silently stop working.
+    ✅ Always forward optional interfaces in wrappers.
+
+PITFALL 10 — 200 OK for created resources
+    ❌ Return 200 for POST that creates a resource
+    ✅ Return 201 Created with Location header pointing to new resource
+
+BEST PRACTICES:
+    • Always set Content-Type explicitly
+    • Use 201 + Location for resource creation
+    • Use 204 for successful deletes/updates with no body
+    • Never leak internal error details (DB errors, file paths, stack traces)
+    • Use structured JSON errors consistently (not plain text)
+    • Use a writeJSON helper across all handlers for consistency
+    • Wrap ResponseWriter in middleware to capture status code for logging
+    • Use context cancellation to detect client disconnect in streaming
+    • Set security headers in middleware (X-Content-Type-Options, etc.)
+    • Forward optional interfaces (Flusher, Hijacker) in ResponseWriter wrappers
+
+═══════════════════════════════════════════════════════════════════════════════
+10. JAVA vs GO COMPARISON
+═══════════════════════════════════════════════════════════════════════════════
+
+┌──────────────────────────┬───────────────────────────────────┬─────────────────────────────────────────┐
+│ Concept                  │ Java (Spring Boot)                │ Go (stdlib)                             │
+├──────────────────────────┼───────────────────────────────────┼─────────────────────────────────────────┤
+│ Set status code          │ return ResponseEntity.status(201) │ w.WriteHeader(http.StatusCreated)        │
+│                          │ @ResponseStatus(HttpStatus.OK)    │                                         │
+├──────────────────────────┼───────────────────────────────────┼─────────────────────────────────────────┤
+│ Return JSON body         │ return ResponseEntity.ok(obj)     │ json.NewEncoder(w).Encode(obj)           │
+│                          │ (Jackson auto-serializes)         │ (manual, explicit)                      │
+├──────────────────────────┼───────────────────────────────────┼─────────────────────────────────────────┤
+│ Set response header      │ response.addHeader("k", "v")      │ w.Header().Set("k", "v")                │
+├──────────────────────────┼───────────────────────────────────┼─────────────────────────────────────────┤
+│ Error response           │ @ExceptionHandler + @ControllerAdvice │ Custom writeError helper + return    │
+├──────────────────────────┼───────────────────────────────────┼─────────────────────────────────────────┤
+│ Content negotiation      │ Automatic (Accept header)         │ Manual — check Accept, branch           │
+├──────────────────────────┼───────────────────────────────────┼─────────────────────────────────────────┤
+│ Stream response          │ StreamingResponseBody             │ http.Flusher + manual flush loop        │
+├──────────────────────────┼───────────────────────────────────┼─────────────────────────────────────────┤
+│ Redirect                 │ return "redirect:/url"            │ http.Redirect(w, r, url, code)          │
+├──────────────────────────┼───────────────────────────────────┼─────────────────────────────────────────┤
+│ No content (204)         │ ResponseEntity.noContent().build()│ w.WriteHeader(http.StatusNoContent)     │
+├──────────────────────────┼───────────────────────────────────┼─────────────────────────────────────────┤
+│ File download            │ ResponseEntity<Resource>          │ http.ServeFile / http.ServeContent      │
+├──────────────────────────┼───────────────────────────────────┼─────────────────────────────────────────┤
+│ Global error handler     │ @ControllerAdvice class           │ Middleware-level Handle() wrapper        │
+├──────────────────────────┼───────────────────────────────────┼─────────────────────────────────────────┤
+│ Capture status in logs   │ Filter with HttpServletResponse   │ Wrap w in responseRecorder struct       │
+└──────────────────────────┴───────────────────────────────────┴─────────────────────────────────────────┘
+
+Key mindset shift:
+  • Spring handles serialization, status mapping, error translation automatically.
+  • In Go you control every byte. No magic — headers, status, and body
+    are all your responsibility, in the right order.
+  • This is a feature: behavior is predictable, debuggable, testable.
+
+═══════════════════════════════════════════════════════════════════════════════
+11. INTERVIEW Q&A — MEDIOR LEVEL
+═══════════════════════════════════════════════════════════════════════════════
+
+Q1. What is the correct order of operations when writing an HTTP response in Go?
+A:  1) Set headers via w.Header().Set(...)
+    2) Call w.WriteHeader(statusCode) — sends status line + all headers
+    3) Write body via w.Write(data) or json.NewEncoder(w).Encode(v)
+    Once WriteHeader is called, all header mutations are ignored.
+    Once Write is called, WriteHeader(200) is implicitly called if not done.
+
+Q2. What happens if you call w.WriteHeader() more than once?
+A:  Only the first call takes effect. The second call is a no-op and logs
+    a "superfluous response.WriteHeader call" warning to the server error log.
+    This is a common bug — always guard with a wroteHeader bool in wrappers.
+
+Q3. What is the difference between http.Error and manually setting status + body?
+A:  http.Error(w, msg, code) is a convenience function that sets
+    Content-Type to "text/plain; charset=utf-8", X-Content-Type-Options to
+    "nosniff", calls WriteHeader(code), then writes the message string.
+    It's fine for simple errors but not for JSON APIs — use a custom
+    writeJSON helper for structured error responses.
+
+Q4. How do you send a 201 Created response with a Location header in Go?
+A:  Set the Location header before calling WriteHeader:
+        w.Header().Set("Location", "/users/42")
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusCreated)
+        json.NewEncoder(w).Encode(newUser)
+
+Q5. How do you write a 204 No Content response?
+A:  w.WriteHeader(http.StatusNoContent)
+    Do NOT call w.Write() — 204 must have no body. Writing after 204 may
+    cause protocol errors or confuse clients.
+
+Q6. Why should you always return after writing an error response in a handler?
+A:  Because handler execution continues after http.Error or writeJSON.
+    Any subsequent code may try to write again (causing WriteHeader twice),
+    perform unnecessary work, or cause a panic. Always write error and return:
+        http.Error(w, "not found", http.StatusNotFound)
+        return
+
+Q7. What does json.NewEncoder(w).Encode(v) append to the output?
+A:  It appends a newline character ('\n') after the JSON. Most JSON clients
+    handle this fine. If you need exact byte output (e.g., for Content-Length
+    calculation or exact byte comparison in tests), use json.Marshal to get
+    a []byte and write it manually.
+
+Q8. How do you serve a file download in Go?
+A:  Use http.ServeFile(w, r, path) for files from disk — it handles
+    range requests, ETags, Last-Modified, and Content-Type detection.
+    For controlled downloads with a specific filename:
+        w.Header().Set("Content-Disposition", `attachment; filename="report.pdf"`)
+        http.ServeFile(w, r, "/path/to/report.pdf")
+
+Q9. How do you set CORS headers in Go?
+A:  In a middleware that wraps your router:
+        w.Header().Set("Access-Control-Allow-Origin", "https://myapp.com")
+        w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+    Handle OPTIONS preflight by returning 204 without calling next handler.
+
+Q10. What is the difference between 401 and 403 status codes and when do you use each?
+A:  401 Unauthorized: The request lacks authentication credentials or they are
+    invalid. The client should authenticate (send a token/login).
+    Must include WWW-Authenticate header per spec.
+    403 Forbidden: The request is authenticated (we know who you are) but the
+    user is not permitted to access the resource. No amount of re-authenticating
+    will help.
+
+═══════════════════════════════════════════════════════════════════════════════
+12. INTERVIEW Q&A — SENIOR LEVEL
+═══════════════════════════════════════════════════════════════════════════════
+
+Q1. How do you capture the response status code in a logging middleware when
+    http.ResponseWriter doesn't expose it after writing?
+A:  Wrap http.ResponseWriter in a custom struct that intercepts WriteHeader:
+
+    type recorder struct {
+        http.ResponseWriter
+        status int
+        wrote  bool
+    }
+    func (r *recorder) WriteHeader(code int) {
+        if !r.wrote { r.status = code; r.wrote = true }
+        r.ResponseWriter.WriteHeader(code)
+    }
+    func (r *recorder) Write(b []byte) (int, error) {
+        if !r.wrote { r.WriteHeader(200) }
+        return r.ResponseWriter.Write(b)
+    }
+
+    Then use recorder.status in the middleware after next.ServeHTTP returns.
+    Be careful: the wrapper must also forward http.Flusher, http.Hijacker, etc.
+    by implementing those interfaces and delegating — otherwise SSE, WebSocket,
+    and streaming handlers break silently.
+
+Q2. How do you handle the case where an error occurs mid-stream after the
+    response status (200) has already been sent?
+A:  Once WriteHeader(200) is called (or implied by the first Write), you cannot
+    change the status code. Your options:
+    1. Truncate — stop writing and close the connection. Client sees incomplete
+       response (may detect via Content-Length mismatch or JSON parse error).
+    2. Signal in-band — define a protocol where the last object in the stream
+       may be an error object: {"error": "upstream failed"}.
+    3. Prevent — validate all preconditions BEFORE writing any output.
+       For DB queries: count/verify data exists first, buffer if small enough.
+    Best practice: defer all writes until data is ready; stream only when
+    the source is reliable (DB cursor, file, etc.).
+
+Q3. Describe how you would design a consistent API error response system
+    across a large Go service with many handlers.
+A:  Three-layer approach:
+    Layer 1 — AppError type:
+        Define a typed error with Status, Code, Message, and an internal Err.
+        Sentinel errors for common cases (ErrNotFound, ErrForbidden, etc.).
+        Domain errors wrap AppError: return &AppError{Status:409, Code:"DUPLICATE_EMAIL"}.
+
+    Layer 2 — Handler wrapper:
+        type HandlerFn func(w http.ResponseWriter, r *http.Request) error
+        func Handle(h HandlerFn) http.HandlerFunc — catches returned errors,
+        type-asserts to AppError for structured response, logs unknown errors,
+        returns 500 with safe message for unknowns.
+
+    Layer 3 — Consistent response shape:
+        {"error": "...", "code": "...", "request_id": "...", "details": {...}}
+        request_id from context (set by request ID middleware) aids debugging.
+        details for validation errors (per-field messages).
+
+    Benefits: handlers never call http.Error directly, error serialization
+    logic lives in one place, easy to add observability (metrics per code).
+
+Q4. What are the implications of not setting Content-Length in HTTP/1.1 responses?
+A:  Without Content-Length, Go uses chunked transfer encoding (Transfer-Encoding:
+    chunked), which means the response is sent in chunks with size prefixes.
+    Implications:
+    - Client cannot show a progress bar (doesn't know total size)
+    - Proxy servers must buffer to compute Content-Length if needed downstream
+    - Connection cannot be reused until all chunks are received and final
+      zero-length chunk is sent (vs. with Content-Length, reuse is immediate)
+    - For large streaming responses, chunked is correct and expected
+    Set Content-Length when you have the data as []byte before writing —
+    use json.Marshal → set header → write bytes pattern.
+
+Q5. How would you implement response caching with ETags in Go?
+A:  ETags allow conditional requests — client sends If-None-Match, server
+    returns 304 if resource unchanged (saves bandwidth):
+
+    func cachedHandler(w http.ResponseWriter, r *http.Request) {
+        data := fetchData()
+        // Compute ETag (hash of content):
+        hash := fmt.Sprintf(`"%x"`, md5.Sum(data))
+
+        // Check conditional request:
+        if r.Header.Get("If-None-Match") == hash {
+            w.WriteHeader(http.StatusNotModified) // 304, no body
+            return
+        }
+
+        w.Header().Set("ETag", hash)
+        w.Header().Set("Cache-Control", "public, max-age=300")
+        w.Header().Set("Content-Type", "application/json")
+        w.Write(data)
+    }
+    // http.ServeContent handles ETags and Last-Modified automatically.
+    // For APIs, implement manually as above or use a caching middleware.
+
+Q6. How do you detect that a client has disconnected mid-response (e.g., during
+    streaming) and stop processing?
+A:  Use r.Context().Done():
+
+    func streamHandler(w http.ResponseWriter, r *http.Request) {
+        ctx := r.Context()
+        flusher := w.(http.Flusher)
+
+        for data := range dataSource {
+            select {
+            case <-ctx.Done():
+                log.Println("client disconnected, stopping stream")
+                return
+            default:
+                fmt.Fprintf(w, "data: %s\n\n", data)
+                flusher.Flush()
+            }
+        }
+    }
+
+    r.Context() is cancelled when the client closes the connection, the server
+    times out, or the parent context is cancelled. This is the correct pattern
+    since http.CloseNotifier is deprecated. Checking ctx.Done() in a select
+    avoids blocking and allows clean shutdown of goroutines/resources.
+
+Q7. What are the trade-offs between returning errors from handlers vs. calling
+    http.Error inside handlers?
+A:  Calling http.Error inside:
+    - Simpler, no framework needed
+    - Error handling scattered across handlers
+    - Easy to forget "return" after error
+    - Hard to ensure consistent error shape
+    - Difficult to add cross-cutting concerns (logging, metrics)
+
+    Returning error (Handle wrapper pattern):
+    - Centralized error-to-response mapping
+    - Consistent JSON error format guaranteed
+    - Forces handlers to be pure functions (easier to test)
+    - Metrics/logging in one place
+    - Requires discipline in team (everyone uses Handle)
+    - Slightly more setup upfront
+
+    At scale (many handlers, many developers), the return-error pattern
+    is significantly more maintainable. It mirrors how frameworks like
+    Echo (echo.HandlerFunc returns error) work.
+
+Q8. How does http.ServeContent differ from http.ServeFile, and when would
+    you use each?
+A:  http.ServeFile(w, r, name):
+    - Takes a file path string, opens the file itself
+    - Handles directory listings (can be security risk)
+    - Redirects if path contains ".." (path cleaning)
+    - Good for serving static files from known disk paths
+
+    http.ServeContent(w, r, name, modTime, content):
+    - Takes an io.ReadSeeker (any source: embed.FS, bytes.Reader, S3 stream)
+    - No directory listing, no path manipulation
+    - Full control over content source
+    - Use when serving from non-disk sources (embedded files, object storage,
+      generated content, in-memory data)
+    Both handle: Range requests (partial content/resumable downloads),
+    ETags, Last-Modified, Content-Type detection, HEAD requests, 304 Not Modified.
+
+═══════════════════════════════════════════════════════════════════════════════
+ QUICK REFERENCE CHEAT SHEET
+═══════════════════════════════════════════════════════════════════════════════
+
+HEADER ORDER (STRICT):
+    w.Header().Set(...)    → FIRST
+    w.WriteHeader(code)    → SECOND  (once only)
+    w.Write(body)          → THIRD
+
+SETTING HEADERS:
+    w.Header().Set("k", "v")           replace
+    w.Header().Add("k", "v")           append
+    w.Header().Del("k")                remove
+    w.Header().Get("k")                read
+
+COMMON PATTERNS:
+    JSON 200      w.Header().Set("Content-Type","application/json"); json.NewEncoder(w).Encode(v)
+    JSON 201      w.Header().Set("Location","/res/1"); w.WriteHeader(201); json.NewEncoder(w).Encode(v)
+    JSON error    writeJSON(w, code, ErrorResponse{Error: "msg"})
+    Plain error   http.Error(w, "msg", code); return   // always return!
+    No content    w.WriteHeader(http.StatusNoContent)
+    Redirect      http.Redirect(w, r, url, http.StatusSeeOther)
+    File serve    http.ServeFile(w, r, path)
+    Flush chunk   w.(http.Flusher).Flush()
+
+STATUS CODE CHEAT SHEET:
+    200 OK                  success, has body
+    201 Created             POST success, new resource + Location header
+    204 No Content          DELETE / PUT success, no body
+    304 Not Modified        conditional GET, cached
+    400 Bad Request         malformed syntax
+    401 Unauthorized        not authenticated
+    403 Forbidden           authenticated, not permitted
+    404 Not Found           resource absent
+    405 Method Not Allowed  wrong HTTP verb
+    409 Conflict            state conflict (e.g. duplicate)
+    413 Payload Too Large   body exceeds limit
+    422 Unprocessable       valid syntax, fails validation
+    429 Too Many Requests   rate limited (+ Retry-After header)
+    500 Internal Error      unhandled server error
+    503 Service Unavailable overloaded / maintenance
+
+═══════════════════════════════════════════════════════════════════════════════

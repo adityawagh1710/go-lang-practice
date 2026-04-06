@@ -1,0 +1,769 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang Build Tags, GOOS, GOARCH & Cross-Compilation
+════════════════════════════════════════════════════════════════════════════════════
+INDEX
+-----
+  [01] What Are Build Tags?
+  [02] Build Tag Syntax (Old vs New)
+  [03] Common Built-in Constraints
+  [04] Custom/User-Defined Build Tags
+  [05] File-Name Conventions for OS/Arch
+  [06] Cross-Compilation: GOOS & GOARCH
+  [07] Supported GOOS / GOARCH Combinations
+  [08] Cross-Compilation Examples
+  [09] Build Tag + Cross-Compilation Together
+  [10] CGO and Cross-Compilation
+  [11] Inspecting Build Constraints
+  [12] Internal Build Tag Tricks
+  [13] Java Comparison
+  [14] Interview Q&A  (Medior -> Senior)
+
+================================================================================
+[01] WHAT ARE BUILD TAGS?
+================================================================================
+
+Build tags (also called "build constraints") let you tell the Go toolchain
+WHEN to include a source file in a build.
+
+  - They are evaluated at compile time, not at runtime.
+  - A file is included only if its constraints evaluate to TRUE.
+  - Can depend on: OS, CPU architecture, Go version, custom tags,
+    compiler (gc / gccgo), CGO enabled/disabled.
+
+Use cases:
+  - Platform-specific code (Windows vs Linux socket handling)
+  - Debug / test-only code
+  - Feature flags baked at build time
+  - Excluding files from certain Go versions
+  - Providing stub implementations on unsupported platforms
+
+
+================================================================================
+[02] BUILD TAG SYNTAX (OLD vs NEW)
+================================================================================
+
+----------------------------------------------------------------------
+  NEW SYNTAX  (Go 1.17+)   <-- USE THIS
+----------------------------------------------------------------------
+
+Place at the TOP of the file, before the package declaration.
+Must be followed by a blank line.
+
+  //go:build <expression>
+
+Expression uses boolean operators:
+  &&   AND
+  ||   OR
+  !    NOT
+  ()   grouping
+
+EXAMPLES:
+
+  //go:build linux
+  // Only compiled on Linux
+
+  //go:build linux || darwin
+  // Compiled on Linux OR macOS
+
+  //go:build linux && amd64
+  // Compiled only on Linux + 64-bit x86
+
+  //go:build !windows
+  // Compiled on every OS except Windows
+
+  //go:build (linux || darwin) && !386
+  // Linux or Mac, but NOT 32-bit x86
+
+  //go:build go1.21
+  // Only included for Go 1.21 and above
+
+----------------------------------------------------------------------
+  OLD SYNTAX  (Go 1.16 and below)   <-- LEGACY, still recognized
+----------------------------------------------------------------------
+
+  // +build linux
+  // +build linux darwin
+  // +build !windows
+
+Old rules:
+  - Multiple tags on the SAME line  = AND
+  - Multiple +build lines           = OR between lines
+  - A leading ! negates
+  - Comma-separated values on a line = OR
+
+EXAMPLE - old way to say "linux AND (386 OR amd64)":
+  // +build linux
+  // +build 386 amd64
+
+SAME THING in new syntax:
+  //go:build linux && (386 || amd64)
+
+----------------------------------------------------------------------
+  MIGRATION
+----------------------------------------------------------------------
+
+From Go 1.17 onward, both forms are accepted.
+`gofmt` automatically adds the new //go:build line alongside an old +build line.
+`go vet` warns if they are out of sync.
+
+Best practice: write //go:build only; let gofmt manage the rest if needed.
+
+
+================================================================================
+[03] COMMON BUILT-IN CONSTRAINTS
+================================================================================
+
+OPERATING SYSTEM (GOOS):
+  linux, darwin, windows, freebsd, openbsd, netbsd, dragonfly,
+  plan9, solaris, illumos, android, ios, js, wasip1, aix, hurd
+
+ARCHITECTURE (GOARCH):
+  amd64, arm64, 386, arm, mips, mips64, ppc64, s390x,
+  riscv64, loong64, wasm
+
+COMPILER:
+  gc         (the standard Go compiler - go tool compile)
+  gccgo      (GCC-based Go compiler)
+
+CGO:
+  cgo        (CGO is enabled for this build)
+
+GO VERSION (minimum version gate):
+  go1.17     (file included only if toolchain >= 1.17)
+  go1.21
+  go1.22
+  etc.
+
+SPECIAL:
+  ignore     (ALWAYS excludes the file — great for scratch code)
+
+EXAMPLE — always-ignored scratch file:
+  //go:build ignore
+
+  package main
+  // This file is never compiled.
+
+
+================================================================================
+[04] CUSTOM / USER-DEFINED BUILD TAGS
+================================================================================
+
+You can define any tag name you like and pass it at build time with -tags.
+
+FILE: feature_experimental.go
+  //go:build experimental
+
+  package mypackage
+
+  func ExperimentalFeature() string {
+      return "experimental mode ON"
+  }
+
+FILE: feature_experimental_stub.go
+  //go:build !experimental
+
+  package mypackage
+
+  func ExperimentalFeature() string {
+      return "not available in this build"
+  }
+
+BUILD COMMANDS:
+  go build ./...                    // ExperimentalFeature returns "not available"
+  go build -tags experimental ./... // ExperimentalFeature returns "experimental mode ON"
+  go test -tags experimental ./...  // tests run with experimental code included
+
+Multiple custom tags:
+  go build -tags "experimental debuglog" ./...
+
+  //go:build experimental && debuglog
+  // only compiled when BOTH tags are present
+
+
+================================================================================
+[05] FILE-NAME CONVENTIONS FOR OS/ARCH
+================================================================================
+
+Go automatically applies build constraints based on file names ALONE.
+No build tag needed inside the file.
+
+PATTERN:
+  *_GOOS.go
+  *_GOARCH.go
+  *_GOOS_GOARCH.go
+
+EXAMPLES:
+  net_linux.go         -> only on Linux
+  net_darwin.go        -> only on macOS
+  net_windows.go       -> only on Windows
+  net_linux_amd64.go   -> only on Linux + amd64
+  signal_unix.go       -> "unix" is a synthetic tag (linux, darwin, etc.)
+
+RULES:
+  - The suffix must match a valid GOOS or GOARCH value.
+  - Only the LAST two underscore-separated segments are checked.
+  - "unix" is a special tag (matches all Unix-like OS).
+  - Test files also obey: foo_linux_test.go is only compiled on Linux.
+
+CAUTION:
+  utils_test.go        -> test file (no OS constraint here)
+  utils_string.go      -> "string" is not a GOOS, so NO constraint applied
+  utils_linux.go       -> Linux only
+  utils_linux_amd64.go -> Linux + amd64 only
+
+
+================================================================================
+[06] CROSS-COMPILATION: GOOS & GOARCH
+================================================================================
+
+Go has BUILT-IN cross-compilation. You can build a binary for any
+supported platform FROM any platform without installing a separate
+compiler or toolchain (as long as CGO is not involved).
+
+Key env vars:
+  GOOS    = Target operating system
+  GOARCH  = Target CPU architecture
+
+Usage (syntax):
+  GOOS=<os> GOARCH=<arch> go build -o <output> .
+
+On Windows (cmd):
+  set GOOS=linux
+  set GOARCH=amd64
+  go build -o myapp-linux .
+
+On Windows (PowerShell):
+  $env:GOOS="linux"; $env:GOARCH="amd64"; go build -o myapp-linux .
+
+These env vars override the HOST platform for the duration of the build.
+The resulting binary runs on the TARGET, not the host.
+
+Other useful env vars:
+  GOARM      = ARM version for arm (5, 6, 7 — default 7)
+  GOMIPS     = MIPS variant (hardfloat, softfloat)
+  GOAMD64    = amd64 micro-architecture (v1, v2, v3, v4 — default v1)
+  CGO_ENABLED= 0 to disable CGO (required for most cross-compilation)
+
+
+================================================================================
+[07] SUPPORTED GOOS / GOARCH COMBINATIONS
+================================================================================
+
+Run `go tool dist list` to print every valid GOOS/GOARCH pair.
+
+COMMON ONES:
+
+  GOOS        GOARCH      Notes
+  ----------  ----------  ----------------------------------------
+  linux       amd64       Most common server target
+  linux       arm64       AWS Graviton, Raspberry Pi 4 (64-bit)
+  linux       arm         Raspberry Pi (32-bit), IoT
+  linux       386         Legacy 32-bit Linux
+  linux       mips        MIPS embedded (routers, etc.)
+  darwin      amd64       Intel Mac
+  darwin      arm64       Apple Silicon (M1/M2/M3)
+  windows     amd64       64-bit Windows
+  windows     386         32-bit Windows
+  windows     arm64       Windows on ARM (Surface Pro X, etc.)
+  freebsd     amd64
+  openbsd     amd64
+  js          wasm        WebAssembly (browser)
+  wasip1      wasm        WASI (server-side WASM)
+  android     arm64       Android mobile
+  ios         arm64       iOS (via gomobile)
+  plan9       amd64
+
+
+================================================================================
+[08] CROSS-COMPILATION EXAMPLES
+================================================================================
+
+----------------------------------------------------------------------
+  Build a Linux binary from macOS or Windows
+----------------------------------------------------------------------
+
+  CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o myapp-linux-amd64 .
+
+  CGO_ENABLED=0 is important — without it, the build may fail if CGO
+  is needed and a Linux cross-compiler isn't installed.
+
+----------------------------------------------------------------------
+  Build a Windows .exe from Linux/macOS
+----------------------------------------------------------------------
+
+  GOOS=windows GOARCH=amd64 go build -o myapp.exe .
+
+  Note: no CGO_ENABLED needed if your code doesn't use CGO.
+
+----------------------------------------------------------------------
+  Build for ARM (e.g., Raspberry Pi 32-bit, ARMv6)
+----------------------------------------------------------------------
+
+  GOOS=linux GOARCH=arm GOARM=6 go build -o myapp-arm .
+
+----------------------------------------------------------------------
+  Build for Apple Silicon from Intel Mac
+----------------------------------------------------------------------
+
+  GOOS=darwin GOARCH=arm64 go build -o myapp-arm64 .
+
+----------------------------------------------------------------------
+  Build a universal macOS binary (amd64 + arm64)
+----------------------------------------------------------------------
+
+  GOOS=darwin GOARCH=amd64 go build -o myapp-amd64 .
+  GOOS=darwin GOARCH=arm64 go build -o myapp-arm64 .
+  lipo -create -output myapp-universal myapp-amd64 myapp-arm64
+
+  (lipo is an Apple tool, not Go — available on macOS)
+
+----------------------------------------------------------------------
+  Build for WebAssembly
+----------------------------------------------------------------------
+
+  GOOS=js GOARCH=wasm go build -o main.wasm .
+  # Also copy wasm_exec.js from your GOROOT for the browser glue code
+  cp $(go env GOROOT)/misc/wasm/wasm_exec.js .
+
+----------------------------------------------------------------------
+  Makefile for multi-platform builds
+----------------------------------------------------------------------
+
+  BINARY=myapp
+  VERSION=1.0.0
+
+  build-all:
+      GOOS=linux   GOARCH=amd64  go build -o dist/$(BINARY)-linux-amd64  .
+      GOOS=linux   GOARCH=arm64  go build -o dist/$(BINARY)-linux-arm64  .
+      GOOS=darwin  GOARCH=amd64  go build -o dist/$(BINARY)-darwin-amd64 .
+      GOOS=darwin  GOARCH=arm64  go build -o dist/$(BINARY)-darwin-arm64 .
+      GOOS=windows GOARCH=amd64  go build -o dist/$(BINARY)-windows-amd64.exe .
+
+
+================================================================================
+[09] BUILD TAG + CROSS-COMPILATION TOGETHER
+================================================================================
+
+Combining build tags and cross-compilation is the standard Go pattern
+for platform-specific implementations.
+
+EXAMPLE: Platform-specific file descriptor handling
+
+  // fd_unix.go
+  //go:build linux || darwin || freebsd
+
+  package net
+
+  func closeSocket(fd int) error {
+      // Unix-style close using syscall
+      return syscall.Close(fd)
+  }
+
+  // fd_windows.go
+  //go:build windows
+
+  package net
+
+  func closeSocket(fd int) error {
+      // Windows-style close using WinAPI
+      return syscall.Closesocket(syscall.Handle(fd))
+  }
+
+When you run:
+  GOOS=windows GOARCH=amd64 go build .
+
+  -> fd_windows.go is compiled, fd_unix.go is excluded.
+
+EXAMPLE: Stub for unsupported platforms
+
+  // signal_supported.go
+  //go:build linux || darwin
+
+  package signals
+
+  func ListenForSignal() { /* real implementation */ }
+
+  // signal_stub.go
+  //go:build !linux && !darwin
+
+  package signals
+
+  func ListenForSignal() {
+      panic("signals not supported on this platform")
+  }
+
+
+EXAMPLE: Feature flag + platform
+
+  //go:build linux && experimental
+
+  package perf
+
+  // Only compiled on Linux when -tags experimental is passed
+  func EnableEBPFTracing() { ... }
+
+
+================================================================================
+[10] CGO AND CROSS-COMPILATION
+================================================================================
+
+CGO lets Go call C code. It adds complexity to cross-compilation.
+
+PROBLEM:
+  CGO requires a C cross-compiler for the TARGET platform.
+  If you're on Linux and want to build for Windows with CGO, you need
+  a MinGW (or similar) cross-compiler installed.
+
+SIMPLEST SOLUTION — disable CGO:
+  CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build .
+
+  This produces a pure-Go binary with no C dependencies.
+  Works for 90% of Go programs.
+
+WHEN CGO IS NEEDED (e.g., sqlite3, librdkafka, OS-level crypto):
+  - Use a Docker cross-compilation environment.
+  - Use tools like `goreleaser` or `xgo` (cross-compilation tool).
+  - Set CC (C compiler) env var to a cross-compiler:
+
+  CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 \
+  GOOS=linux GOARCH=arm64 \
+  go build -o myapp-linux-arm64 .
+
+CGO-RELATED BUILD TAGS:
+  //go:build cgo    (only compiled when CGO is enabled)
+  //go:build !cgo   (only compiled when CGO is disabled)
+
+  Example:
+    // hashlib_cgo.go
+    //go:build cgo
+
+    // uses fast C crypto implementation
+
+    // hashlib_pure.go
+    //go:build !cgo
+
+    // uses pure Go crypto fallback
+
+
+================================================================================
+[11] INSPECTING BUILD CONSTRAINTS
+================================================================================
+
+----------------------------------------------------------------------
+  go list — see which files are included for a given platform
+----------------------------------------------------------------------
+
+  go list -f '{{.GoFiles}}' .
+  GOOS=windows go list -f '{{.GoFiles}}' .
+
+  // Shows exactly which .go files are compiled for the given GOOS.
+
+----------------------------------------------------------------------
+  go env — check current environment
+----------------------------------------------------------------------
+
+  go env GOOS
+  go env GOARCH
+  go env CGO_ENABLED
+
+----------------------------------------------------------------------
+  go build -v — verbose output (shows packages being compiled)
+----------------------------------------------------------------------
+
+  GOOS=linux GOARCH=arm64 go build -v ./...
+
+----------------------------------------------------------------------
+  go tool dist list — all valid GOOS/GOARCH pairs
+----------------------------------------------------------------------
+
+  go tool dist list
+  go tool dist list | grep linux
+
+----------------------------------------------------------------------
+  go vet — catch mismatched old/new build tag syntax
+----------------------------------------------------------------------
+
+  go vet ./...
+
+
+================================================================================
+[12] INTERNAL BUILD TAG TRICKS
+================================================================================
+
+----------------------------------------------------------------------
+  Exclude a file from ALL builds (scratch / codegen input)
+----------------------------------------------------------------------
+
+  //go:build ignore
+
+  package main
+
+  // This file is used as a template or is work-in-progress.
+  // Run manually: go run gen.go
+
+----------------------------------------------------------------------
+  Generate code only on specific platforms
+----------------------------------------------------------------------
+
+  //go:build linux && go1.21
+  // Only included in builds where Go >= 1.21 AND platform is Linux
+
+----------------------------------------------------------------------
+  Test helpers compiled only during tests
+----------------------------------------------------------------------
+
+  //go:build testonly
+
+  // then run tests with:
+  // go test -tags testonly ./...
+
+----------------------------------------------------------------------
+  Integration test tags (common convention)
+----------------------------------------------------------------------
+
+  //go:build integration
+
+  package mypackage_test
+
+  // run with: go test -tags integration ./...
+
+----------------------------------------------------------------------
+  Using runtime detection vs. build-time constraints
+----------------------------------------------------------------------
+
+  Build-time (preferred for platform code):
+    //go:build linux
+    func getPID() int { return syscall.Getpid() }
+
+  Runtime (for optional behavior within same binary):
+    import "runtime"
+    if runtime.GOOS == "linux" { ... }
+
+  Prefer build tags when the code literally cannot compile on other platforms.
+  Prefer runtime checks for optional behavioral differences.
+
+
+================================================================================
+[13] JAVA COMPARISON
+================================================================================
+
+  Concept                   | Java                              | Go
+  --------------------------|-----------------------------------|----------------------------
+  Platform abstraction      | JVM (write once, run anywhere)    | Cross-compile per target
+  Conditional compilation   | No native support                 | Build tags (//go:build)
+  Feature flags             | System properties, env vars       | -tags at build time
+  Platform-specific code    | JNA / JNI, runtime checks         | OS-tagged files, file name
+  Producing platform binary | JAR runs on any JVM               | Native binary per platform
+  C interop                 | JNI (complex)                     | CGO (simpler but same cross-compile issue)
+  Target detection at build | Maven profiles, Gradle conditions | GOOS/GOARCH env vars
+  Docker multi-arch         | One image (JVM inside)            | Multi-stage build per arch
+
+  Key mental shift for Java developers:
+    - In Java, you ship ONE artifact (.jar/.war) and the JVM handles the OS.
+    - In Go, you produce SEPARATE native binaries per platform.
+    - Build tags replace conditional compilation hacks like
+      `if (System.getProperty("os.name").startsWith("Windows"))` —
+      in Go you simply DON'T COMPILE the wrong file at all.
+
+
+================================================================================
+[14] INTERVIEW Q&A — MEDIOR → SENIOR LEVEL
+================================================================================
+
+------------------------------------------------------------------------
+Q1. What is a build tag and why would you use one?
+------------------------------------------------------------------------
+A:  A build tag is a compiler directive (//go:build <expr>) placed at the
+    top of a .go file that controls whether the file is included in a
+    build. You use them to provide platform-specific implementations
+    (e.g., different syscall wrappers for Linux vs Windows), to gate
+    experimental features behind a custom tag, or to exclude code from
+    specific Go versions. They are evaluated entirely at compile time —
+    zero runtime overhead.
+
+------------------------------------------------------------------------
+Q2. What is the difference between the old +build syntax and the new
+    //go:build syntax?
+------------------------------------------------------------------------
+A:  The old `// +build` syntax used separate lines for OR logic and
+    space-separation for AND, which was confusing and error-prone.
+    Go 1.17 introduced `//go:build` with standard boolean expressions
+    (&& || ! and parentheses), which is much more readable.
+    Both syntaxes are still recognized; `gofmt` will auto-add the new
+    form alongside old ones. Only //go:build is needed for new code.
+
+    Old: // +build linux,amd64      means linux AND amd64
+    New: //go:build linux && amd64
+
+    Old (OR): // +build linux darwin
+    New:      //go:build linux || darwin
+
+------------------------------------------------------------------------
+Q3. How does Go cross-compilation work without installing another
+    compiler?
+------------------------------------------------------------------------
+A:  Go ships with all platform support built into the standard toolchain.
+    It uses GOOS and GOARCH environment variables to instruct the Go
+    compiler to emit machine code for the target platform rather than
+    the host. As long as CGO is disabled (CGO_ENABLED=0), no external
+    C toolchain is needed. The Go compiler itself generates the correct
+    object files and links a static binary for the target.
+
+    Example:
+      CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o app-linux-arm64 .
+
+------------------------------------------------------------------------
+Q4. Why does CGO complicate cross-compilation?
+------------------------------------------------------------------------
+A:  CGO allows Go to call C code. When CGO is active, the Go toolchain
+    delegates C compilation to the system's C compiler (gcc/clang). For
+    cross-compilation, that C compiler must be a CROSS-COMPILER capable
+    of emitting code for the target platform. If you're on an Intel Mac
+    and want to cross-compile for Linux ARM64 with CGO, you need
+    `aarch64-linux-gnu-gcc` installed. This adds significant toolchain
+    complexity. The common solution is CGO_ENABLED=0 (pure Go) or using
+    a Docker-based cross-compilation environment (like goreleaser's
+    Docker builders or the `xgo` tool).
+
+------------------------------------------------------------------------
+Q5. What is the //go:build ignore tag used for?
+------------------------------------------------------------------------
+A:  It permanently excludes a file from ALL builds. It is commonly used
+    for:
+      - Code generation driver files (go generate runs them via `go run`)
+      - Scratch / experimental code that shouldn't compile accidentally
+      - Template files used as input to generators
+    Example:
+      //go:build ignore
+      package main
+      // go run gen.go -- called explicitly, never in go build
+
+------------------------------------------------------------------------
+Q6. How do file naming conventions work as implicit build constraints?
+------------------------------------------------------------------------
+A:  Go inspects the filename itself for GOOS/GOARCH suffixes, no tags
+    needed inside the file. The pattern is *_GOOS.go, *_GOARCH.go,
+    or *_GOOS_GOARCH.go.
+      signal_linux.go      -> only compiled on Linux
+      signal_darwin.go     -> only compiled on macOS
+      net_linux_amd64.go   -> only on Linux + amd64
+    Only the LAST two underscore segments are checked against known
+    GOOS/GOARCH values. A file named utils_string.go has no constraint
+    because "string" is not a valid GOOS or GOARCH.
+
+------------------------------------------------------------------------
+Q7. How would you structure platform-specific code for a CLI tool that
+    needs different system calls on Linux vs Windows?
+------------------------------------------------------------------------
+A:  The idiomatic Go approach:
+
+    syscalls_linux.go:
+      //go:build linux
+      package myapp
+      func getProcessID() int { return syscall.Getpid() }
+
+    syscalls_windows.go:
+      //go:build windows
+      package myapp
+      func getProcessID() int {
+          return int(windows.GetCurrentProcessId())
+      }
+
+    syscalls_stub.go:
+      //go:build !linux && !windows
+      package myapp
+      func getProcessID() int { return -1 } // unsupported
+
+    Each file provides the same function signature — the build system
+    picks the right one based on GOOS. The calling code has no
+    awareness of the platform difference.
+
+------------------------------------------------------------------------
+Q8. How do you verify which files are included in a build for a given
+    platform without actually building it?
+------------------------------------------------------------------------
+A:  Use `go list`:
+      GOOS=windows GOARCH=amd64 go list -f '{{.GoFiles}}' .
+    This prints the list of .go files that would be compiled for
+    Windows amd64 without actually building. Useful for auditing
+    platform coverage in CI or debugging why a file is excluded.
+
+------------------------------------------------------------------------
+Q9. (Senior) How would you set up a CI/CD pipeline to release
+    multi-platform Go binaries?
+------------------------------------------------------------------------
+A:  Common approaches:
+
+    1. Native cross-compilation in one job (no CGO):
+         - Single runner (Linux amd64)
+         - Loop over GOOS/GOARCH pairs
+         - CGO_ENABLED=0 go build -o dist/$BINARY-$GOOS-$GOARCH$EXT .
+         - Fast, simple, no Docker needed
+
+    2. goreleaser:
+         - YAML config defines all targets
+         - Handles naming, checksums, GitHub Releases, Docker images
+         - Supports CGO via Docker-based cross-compilers
+         - Industry standard for open-source Go projects
+
+    3. Matrix jobs (with CGO):
+         - GitHub Actions matrix: {os: [ubuntu, macos, windows]}
+         - Each runner compiles natively → no cross-compiler needed
+         - More resource intensive, longer CI time
+
+    The right choice depends on whether CGO is needed. Pure Go? Use
+    goreleaser or a simple cross-compile script. CGO? Use matrix
+    runners or Docker cross-compile environments.
+
+------------------------------------------------------------------------
+Q10. (Senior) What is GOAMD64 and why does it matter for performance?
+------------------------------------------------------------------------
+A:  GOAMD64 controls which x86-64 micro-architecture level the compiler
+    targets (v1 through v4, defaulting to v1). Higher levels allow the
+    compiler to emit AVX, AVX2, AVX-512, and other newer instructions:
+
+      v1: baseline x86-64 (runs everywhere)
+      v2: SSE4, POPCNT  (most CPUs from ~2009+)
+      v3: AVX, AVX2     (Intel Haswell 2013+, AMD Zen 2015+)
+      v4: AVX-512       (Intel Skylake-X+, some AMD)
+
+    Building with GOAMD64=v3:
+      GOAMD64=v3 go build .
+
+    Useful when you control the deployment environment (e.g., building
+    for a specific AWS instance type). Running a v3 binary on a v1 CPU
+    causes an illegal instruction crash. For distribution you use v1.
+    For performance-sensitive internal services on known hardware,
+    v3 or v4 can give measurable throughput gains in compute-heavy code.
+
+------------------------------------------------------------------------
+Q11. (Senior) When would you use a runtime GOOS check instead of a
+     build tag?
+------------------------------------------------------------------------
+A:  Use a BUILD TAG when:
+      - The code literally cannot compile on other platforms
+        (e.g., calls Linux-only syscalls)
+      - You want zero binary bloat — dead code from other platforms
+        is not compiled at all
+
+    Use a RUNTIME check when:
+      - The same code compiles on all platforms but should behave
+        differently (e.g., choosing a temp directory path)
+      - The difference is cosmetic / behavioral, not structural
+      - You're writing a library and want a single binary that
+        adapts at runtime
+
+    Example runtime check:
+      import "runtime"
+      func tempDir() string {
+          if runtime.GOOS == "windows" {
+              return os.Getenv("TEMP")
+          }
+          return "/tmp"
+      }
+
+    In practice: syscall-level differences -> build tags;
+    behavioral preferences -> runtime checks.
+
+
+================================================================================

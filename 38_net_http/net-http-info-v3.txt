@@ -1,0 +1,1343 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang net/http
+════════════════════════════════════════════════════════════════════════════════════
+TABLE OF CONTENTS
+-----------------
+[01] Package Overview & Architecture
+[02] HTTP Server Basics
+[03] ServeMux & Routing
+[04] Handler Interface & HandlerFunc
+[05] Request Object Deep Dive
+[06] ResponseWriter Deep Dive
+[07] HTTP Client Basics
+[08] HTTP Client Advanced (timeouts, transport, retries)
+[09] Middleware Pattern
+[10] Context Integration (context.Context)
+[11] File Server & Static Assets
+[12] TLS / HTTPS
+[13] HTTP/2
+[14] Streaming Requests & Responses
+[15] Cookies & Sessions
+[16] Form Handling & Multipart
+[17] JSON over HTTP (REST patterns)
+[18] Server-Sent Events (SSE)
+[19] WebSocket (upgrade pattern)
+[20] Testing net/http Code
+[21] Common Pitfalls & Best Practices
+[22] Java vs Go HTTP Comparison
+[23] Interview Q&A — Medior Level
+[24] Interview Q&A — Senior / Experienced Level
+
+================================================================================
+[01] PACKAGE OVERVIEW & ARCHITECTURE
+================================================================================
+
+net/http is Go's built-in HTTP library. It is production-grade, ships with
+the standard library, and powers a large fraction of Go servers in production.
+
+KEY DESIGN PHILOSOPHY:
+  - Everything is built around the Handler interface (one method: ServeHTTP)
+  - The server is concurrent by default — each request runs in its own goroutine
+  - net/http uses the standard library's net package underneath (TCP layer)
+  - No framework needed for most use cases — the stdlib is enough
+
+CORE TYPES:
+  http.Handler          interface { ServeHTTP(ResponseWriter, *Request) }
+  http.HandlerFunc      func(ResponseWriter, *Request) — implements Handler
+  http.ServeMux         default multiplexer/router
+  http.Server           configurable HTTP server struct
+  http.Client           HTTP client struct
+  http.Request          incoming/outgoing HTTP request
+  http.ResponseWriter   interface for writing HTTP responses
+  http.Transport        low-level HTTP connection management
+
+IMPORT:
+  import "net/http"
+
+================================================================================
+[02] HTTP SERVER BASICS
+================================================================================
+
+--- Minimal HTTP server ---
+
+package main
+
+import (
+    "fmt"
+    "net/http"
+    "log"
+)
+
+func helloHandler(w http.ResponseWriter, r *http.Request) {
+    fmt.Fprintln(w, "Hello, World!")
+}
+
+func main() {
+    http.HandleFunc("/hello", helloHandler)
+    log.Fatal(http.ListenAndServe(":8080", nil))
+}
+
+// NOTE: nil as second arg uses http.DefaultServeMux
+
+--- Using a configured http.Server (PREFERRED in production) ---
+
+server := &http.Server{
+    Addr:         ":8080",
+    Handler:      myMux,           // your router
+    ReadTimeout:  5 * time.Second,
+    WriteTimeout: 10 * time.Second,
+    IdleTimeout:  120 * time.Second,
+    MaxHeaderBytes: 1 << 20,       // 1 MB
+}
+log.Fatal(server.ListenAndServe())
+
+WHY NOT USE http.ListenAndServe() DIRECTLY IN PRODUCTION?
+  - It uses zero timeouts → vulnerable to slow-loris attacks
+  - No control over MaxHeaderBytes
+  - Can't add TLS config
+  - Can't do graceful shutdown
+
+--- Graceful Shutdown (Go 1.8+) ---
+
+server := &http.Server{Addr: ":8080", Handler: mux}
+
+go func() {
+    if err := server.ListenAndServe(); err != http.ErrServerClosed {
+        log.Fatalf("server error: %v", err)
+    }
+}()
+
+// wait for signal
+quit := make(chan os.Signal, 1)
+signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+<-quit
+
+ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+defer cancel()
+if err := server.Shutdown(ctx); err != nil {
+    log.Fatalf("forced shutdown: %v", err)
+}
+log.Println("server exited cleanly")
+
+================================================================================
+[03] SERVEMUX & ROUTING
+================================================================================
+
+http.ServeMux is the built-in router. It matches URL paths to handlers.
+
+MATCHING RULES (important to memorize):
+  - Exact match: "/foo" matches ONLY "/foo"
+  - Subtree match: "/foo/" matches "/foo/", "/foo/bar", "/foo/bar/baz"
+  - Longer patterns win over shorter ones
+  - "/" is a catch-all if nothing else matches (subtree pattern)
+
+--- Example ---
+
+mux := http.NewServeMux()
+mux.HandleFunc("/", rootHandler)
+mux.HandleFunc("/api/users", usersHandler)    // exact
+mux.HandleFunc("/api/users/", usersSubHandler) // subtree — matches /api/users/123
+
+// Attach to server
+server := &http.Server{Addr: ":8080", Handler: mux}
+
+--- Host-based routing ---
+
+mux.Handle("api.example.com/", apiHandler)
+mux.Handle("www.example.com/", webHandler)
+
+NOTE: Go 1.22 enhanced ServeMux significantly:
+  - Method-based routing: mux.HandleFunc("GET /api/users", handler)
+  - Path parameters:       mux.HandleFunc("/users/{id}", handler)
+    Accessed via:          r.PathValue("id")
+
+--- Go 1.22+ patterns ---
+
+mux := http.NewServeMux()
+mux.HandleFunc("GET /users/{id}", func(w http.ResponseWriter, r *http.Request) {
+    id := r.PathValue("id")
+    fmt.Fprintf(w, "User ID: %s", id)
+})
+
+// Method + host + path all supported in one pattern string
+mux.HandleFunc("POST api.example.com/v1/items", handleCreateItem)
+
+THIRD-PARTY ROUTERS (common in industry):
+  - chi      : lightweight, idiomatic, middleware support
+  - gorilla/mux : feature-rich, regex support (now in maintenance mode)
+  - httprouter  : very fast, zero allocation routing
+  - echo / gin  : full frameworks
+
+================================================================================
+[04] HANDLER INTERFACE & HANDLERFUNC
+================================================================================
+
+The Handler interface is the single most important abstraction in net/http.
+
+type Handler interface {
+    ServeHTTP(ResponseWriter, *Request)
+}
+
+Any type implementing ServeHTTP is a Handler — structs, closures, anything.
+
+--- Implementing Handler on a struct (good for carrying dependencies) ---
+
+type UserHandler struct {
+    db     *sql.DB
+    logger *slog.Logger
+}
+
+func (h *UserHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+    // has access to h.db, h.logger
+    users, err := h.db.Query("SELECT * FROM users")
+    if err != nil {
+        http.Error(w, "db error", http.StatusInternalServerError)
+        return
+    }
+    _ = users
+    w.WriteHeader(http.StatusOK)
+}
+
+mux.Handle("/users", &UserHandler{db: db, logger: logger})
+
+--- HandlerFunc: adapts a plain function to the Handler interface ---
+
+type HandlerFunc func(ResponseWriter, *Request)
+
+func (f HandlerFunc) ServeHTTP(w ResponseWriter, r *Request) {
+    f(w, r)
+}
+
+// Usage
+mux.Handle("/ping", http.HandlerFunc(pingFn))
+// or shorthand:
+mux.HandleFunc("/ping", pingFn)
+
+--- Why this matters ---
+The HandlerFunc adapter is the same pattern as http.Handler itself.
+Middleware chains work because every middleware wraps a Handler and
+returns a new Handler — same interface all the way down.
+
+================================================================================
+[05] REQUEST OBJECT DEEP DIVE
+================================================================================
+
+type Request struct {
+    Method     string          // "GET", "POST", "PUT", etc.
+    URL        *url.URL        // parsed URL
+    Proto      string          // "HTTP/1.1"
+    Header     Header          // map[string][]string
+    Body       io.ReadCloser   // request body — MUST be closed
+    Host       string
+    Form       url.Values      // populated after ParseForm()
+    PostForm   url.Values      // only POST, PUT, PATCH body values
+    MultipartForm *multipart.Form
+    Trailer    Header
+    RemoteAddr string          // "IP:port"
+    TLS        *tls.ConnectionState
+    ctx        context.Context // via r.Context()
+}
+
+--- Reading query params ---
+
+// URL: /search?q=golang&page=2
+q := r.URL.Query().Get("q")       // "golang"
+page := r.URL.Query().Get("page") // "2"
+
+// All values for a key (e.g., ?tag=go&tag=http)
+tags := r.URL.Query()["tag"] // []string{"go", "http"}
+
+--- Reading headers ---
+
+contentType := r.Header.Get("Content-Type")
+authHeader  := r.Header.Get("Authorization")
+
+--- Reading the body ---
+
+// ALWAYS close body
+defer r.Body.Close()
+
+// Read all at once (small bodies)
+body, err := io.ReadAll(r.Body)
+
+// Limit body size to prevent abuse
+r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
+defer r.Body.Close()
+
+--- Path value (Go 1.22+) ---
+
+// Route: /users/{id}
+id := r.PathValue("id")
+
+--- Context ---
+
+ctx := r.Context()
+userID := ctx.Value(userIDKey)
+
+--- RemoteAddr --- 
+
+// r.RemoteAddr is "IP:port"
+// If behind a proxy, read X-Forwarded-For or X-Real-IP headers
+// Be careful: these can be spoofed
+
+================================================================================
+[06] RESPONSEWRITER DEEP DIVE
+================================================================================
+
+type ResponseWriter interface {
+    Header() http.Header     // get/set response headers
+    Write([]byte) (int, error) // write body
+    WriteHeader(statusCode int) // set status code (call BEFORE Write)
+}
+
+IMPORTANT ORDERING RULE:
+  1. Set headers via w.Header().Set(...)   ← must come first
+  2. Call w.WriteHeader(statusCode)        ← sends headers to client
+  3. Call w.Write(body)                   ← sends body
+
+Once WriteHeader or Write is called, headers are locked. Calling
+w.Header().Set() after that has NO effect.
+
+--- Common patterns ---
+
+// OK response with JSON
+w.Header().Set("Content-Type", "application/json")
+w.WriteHeader(http.StatusOK)  // optional — Write() implies 200
+json.NewEncoder(w).Encode(data)
+
+// Error response
+http.Error(w, "not found", http.StatusNotFound)
+// http.Error sets Content-Type: text/plain and calls WriteHeader internally
+
+// Redirect
+http.Redirect(w, r, "/new-path", http.StatusMovedPermanently)
+
+// No content
+w.WriteHeader(http.StatusNoContent)
+
+--- Checking if ResponseWriter supports optional interfaces ---
+
+// Flushing (for SSE, streaming)
+if flusher, ok := w.(http.Flusher); ok {
+    flusher.Flush()
+}
+
+// Hijacking (for WebSocket upgrade)
+if hijacker, ok := w.(http.Hijacker); ok {
+    conn, rw, err := hijacker.Hijack()
+    _ = conn; _ = rw; _ = err
+}
+
+================================================================================
+[07] HTTP CLIENT BASICS
+================================================================================
+
+--- Never use http.DefaultClient in production ---
+
+http.DefaultClient has no timeouts. A slow server will hang your goroutine
+indefinitely. Always create your own client.
+
+--- Creating a safe client ---
+
+client := &http.Client{
+    Timeout: 10 * time.Second, // total request timeout
+}
+
+--- GET ---
+
+resp, err := client.Get("https://api.example.com/data")
+if err != nil {
+    return err
+}
+defer resp.Body.Close() // ALWAYS close
+
+body, err := io.ReadAll(resp.Body)
+if err != nil {
+    return err
+}
+fmt.Println(string(body))
+
+--- POST with JSON body ---
+
+payload := map[string]string{"name": "Aditya"}
+data, _ := json.Marshal(payload)
+
+resp, err := client.Post(
+    "https://api.example.com/users",
+    "application/json",
+    bytes.NewReader(data),
+)
+if err != nil {
+    return err
+}
+defer resp.Body.Close()
+
+--- Custom request (DELETE, PUT, headers, etc.) ---
+
+req, err := http.NewRequestWithContext(ctx, "DELETE",
+    "https://api.example.com/users/42", nil)
+if err != nil {
+    return err
+}
+req.Header.Set("Authorization", "Bearer "+token)
+req.Header.Set("X-Request-ID", requestID)
+
+resp, err := client.Do(req)
+if err != nil {
+    return err
+}
+defer resp.Body.Close()
+
+if resp.StatusCode != http.StatusNoContent {
+    return fmt.Errorf("unexpected status: %d", resp.StatusCode)
+}
+
+--- ALWAYS check status code manually ---
+
+// http.Client does NOT return errors for 4xx/5xx.
+// err != nil only for network/timeout failures.
+if resp.StatusCode >= 400 {
+    body, _ := io.ReadAll(resp.Body)
+    return fmt.Errorf("API error %d: %s", resp.StatusCode, body)
+}
+
+================================================================================
+[08] HTTP CLIENT ADVANCED
+================================================================================
+
+--- Transport: the heart of the client ---
+
+transport := &http.Transport{
+    MaxIdleConns:          100,
+    MaxIdleConnsPerHost:   10,
+    IdleConnTimeout:       90 * time.Second,
+    TLSHandshakeTimeout:   10 * time.Second,
+    ExpectContinueTimeout: 1 * time.Second,
+    DisableKeepAlives:     false, // keep-alive is good — reuse connections
+    DialContext: (&net.Dialer{
+        Timeout:   30 * time.Second,
+        KeepAlive: 30 * time.Second,
+    }).DialContext,
+}
+
+client := &http.Client{
+    Timeout:   10 * time.Second,
+    Transport: transport,
+}
+
+TRANSPORT TIP:
+  - Transport manages connection pooling.
+  - NEVER close a client between requests — reuse it.
+  - If you create a new client per request, you lose connection reuse.
+  - Transport is safe for concurrent use.
+
+--- Timeout anatomy ---
+
+  DialContext timeout   → TCP connection establishment
+  TLSHandshakeTimeout   → TLS negotiation
+  ResponseHeaderTimeout → waiting for first response byte (not on http.Client)
+  http.Client.Timeout   → total: dial + TLS + send + read all body
+
+  // Add ResponseHeaderTimeout to transport for finer control:
+  transport.ResponseHeaderTimeout = 5 * time.Second
+
+--- Retry with exponential backoff (manual) ---
+
+func doWithRetry(client *http.Client, req *http.Request, maxRetries int) (*http.Response, error) {
+    var resp *http.Response
+    var err error
+    for i := 0; i < maxRetries; i++ {
+        // Clone request — body can only be read once
+        cloned := req.Clone(req.Context())
+        resp, err = client.Do(cloned)
+        if err == nil && resp.StatusCode < 500 {
+            return resp, nil
+        }
+        if resp != nil {
+            resp.Body.Close()
+        }
+        backoff := time.Duration(math.Pow(2, float64(i))) * 100 * time.Millisecond
+        time.Sleep(backoff)
+    }
+    return resp, err
+}
+
+--- Custom RoundTripper (middleware for client) ---
+
+type LoggingTransport struct {
+    Base http.RoundTripper
+}
+
+func (t *LoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+    start := time.Now()
+    resp, err := t.Base.RoundTrip(req)
+    log.Printf("%s %s → %d (%v)", req.Method, req.URL, resp.StatusCode, time.Since(start))
+    return resp, err
+}
+
+client := &http.Client{
+    Transport: &LoggingTransport{Base: http.DefaultTransport},
+}
+
+--- Inject auth token via RoundTripper ---
+
+type AuthTransport struct {
+    Token string
+    Base  http.RoundTripper
+}
+
+func (t *AuthTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+    req = req.Clone(req.Context())
+    req.Header.Set("Authorization", "Bearer "+t.Token)
+    return t.Base.RoundTrip(req)
+}
+
+================================================================================
+[09] MIDDLEWARE PATTERN
+================================================================================
+
+Middleware in Go: a function that accepts a Handler and returns a Handler.
+
+type Middleware func(http.Handler) http.Handler
+
+--- Logging middleware ---
+
+func LoggingMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        start := time.Now()
+        // wrap ResponseWriter to capture status
+        lrw := &loggingResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+        next.ServeHTTP(lrw, r)
+        log.Printf("%s %s %d %v", r.Method, r.URL.Path, lrw.statusCode, time.Since(start))
+    })
+}
+
+type loggingResponseWriter struct {
+    http.ResponseWriter
+    statusCode int
+}
+
+func (lrw *loggingResponseWriter) WriteHeader(code int) {
+    lrw.statusCode = code
+    lrw.ResponseWriter.WriteHeader(code)
+}
+
+--- Auth middleware ---
+
+func AuthMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        token := r.Header.Get("Authorization")
+        if !isValidToken(token) {
+            http.Error(w, "unauthorized", http.StatusUnauthorized)
+            return // don't call next
+        }
+        next.ServeHTTP(w, r)
+    })
+}
+
+--- Chaining middleware ---
+
+// Apply order: outermost runs first
+handler := LoggingMiddleware(AuthMiddleware(myHandler))
+
+// Or with a helper:
+func Chain(h http.Handler, middlewares ...Middleware) http.Handler {
+    for i := len(middlewares) - 1; i >= 0; i-- {
+        h = middlewares[i](h)
+    }
+    return h
+}
+
+// Usage:
+finalHandler := Chain(myHandler, LoggingMiddleware, AuthMiddleware, RateLimitMiddleware)
+
+--- Panic recovery middleware ---
+
+func RecoveryMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        defer func() {
+            if rec := recover(); rec != nil {
+                log.Printf("panic recovered: %v\n%s", rec, debug.Stack())
+                http.Error(w, "internal server error", http.StatusInternalServerError)
+            }
+        }()
+        next.ServeHTTP(w, r)
+    })
+}
+
+================================================================================
+[10] CONTEXT INTEGRATION
+================================================================================
+
+Every request carries a context.Context. Use it for:
+  - Cancellation (client disconnect)
+  - Deadlines / timeouts
+  - Passing request-scoped values (user ID, request ID, trace ID)
+
+--- Reading from context in handler ---
+
+func myHandler(w http.ResponseWriter, r *http.Request) {
+    ctx := r.Context()
+
+    // Check if client disconnected
+    select {
+    case <-ctx.Done():
+        log.Println("client disconnected")
+        return
+    default:
+    }
+
+    // Pass to DB or service call
+    rows, err := db.QueryContext(ctx, "SELECT * FROM orders WHERE user_id = $1", userID)
+    _ = rows; _ = err
+}
+
+--- Storing values in context (middleware pattern) ---
+
+type contextKey string
+const userIDKey contextKey = "userID"
+
+// Middleware sets value
+func AuthMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        userID := extractUserID(r)
+        ctx := context.WithValue(r.Context(), userIDKey, userID)
+        next.ServeHTTP(w, r.WithContext(ctx))
+    })
+}
+
+// Handler reads value
+func profileHandler(w http.ResponseWriter, r *http.Request) {
+    userID, ok := r.Context().Value(userIDKey).(string)
+    if !ok {
+        http.Error(w, "missing user", http.StatusUnauthorized)
+        return
+    }
+    fmt.Fprintf(w, "Profile of %s", userID)
+}
+
+BEST PRACTICES:
+  - Use unexported typed keys (contextKey type) to avoid collisions
+  - Only store request-scoped values, not database connections or loggers
+  - Propagate ctx to all downstream calls (DB, HTTP, RPC)
+
+================================================================================
+[11] FILE SERVER & STATIC ASSETS
+================================================================================
+
+--- Serve a directory ---
+
+// Serve everything under ./static/ at /static/
+mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
+
+// Serve a single file
+mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+    http.ServeFile(w, r, "./static/favicon.ico")
+})
+
+--- Embed files (Go 1.16+) ---
+
+import "embed"
+
+//go:embed static
+var staticFiles embed.FS
+
+mux.Handle("/static/", http.StripPrefix("/static/",
+    http.FileServer(http.FS(staticFiles))))
+
+NOTE: http.FileServer automatically handles:
+  - ETags and Last-Modified headers
+  - Range requests (partial content)
+  - Directory listings (disable by adding an index.html or wrapping)
+  - Content-Type detection
+
+================================================================================
+[12] TLS / HTTPS
+================================================================================
+
+--- Basic TLS server ---
+
+server := &http.Server{
+    Addr:    ":443",
+    Handler: mux,
+}
+log.Fatal(server.ListenAndServeTLS("cert.pem", "key.pem"))
+
+--- Custom TLS config ---
+
+tlsConfig := &tls.Config{
+    MinVersion:               tls.VersionTLS12,
+    PreferServerCipherSuites: true,
+    CurvePreferences: []tls.CurveID{
+        tls.CurveP256,
+        tls.X25519,
+    },
+}
+
+server := &http.Server{
+    Addr:      ":443",
+    Handler:   mux,
+    TLSConfig: tlsConfig,
+}
+log.Fatal(server.ListenAndServeTLS("cert.pem", "key.pem"))
+
+--- Redirect HTTP to HTTPS ---
+
+go func() {
+    h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        target := "https://" + r.Host + r.URL.RequestURI()
+        http.Redirect(w, r, target, http.StatusMovedPermanently)
+    })
+    log.Fatal(http.ListenAndServe(":80", h))
+}()
+
+--- TLS client (skip verify — dev only, NEVER production) ---
+
+client := &http.Client{
+    Transport: &http.Transport{
+        TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // DEV ONLY
+    },
+}
+
+================================================================================
+[13] HTTP/2
+================================================================================
+
+Go's net/http automatically negotiates HTTP/2 when:
+  1. You use ListenAndServeTLS (TLS is required for HTTP/2 in browsers)
+  2. The client supports it via ALPN negotiation
+
+--- Enable HTTP/2 explicitly ---
+
+import "golang.org/x/net/http2"
+
+server := &http.Server{Addr: ":443", Handler: mux}
+http2.ConfigureServer(server, &http2.Server{})
+log.Fatal(server.ListenAndServeTLS("cert.pem", "key.pem"))
+
+--- HTTP/2 client ---
+
+client := &http.Client{
+    Transport: &http2.Transport{},
+}
+
+HTTP/2 BENEFITS:
+  - Multiplexing: multiple requests over single TCP connection
+  - Header compression (HPACK)
+  - Server push (Push promises)
+  - Binary framing (more efficient than text-based HTTP/1.1)
+
+================================================================================
+[14] STREAMING REQUESTS & RESPONSES
+================================================================================
+
+--- Stream response to client (chunked transfer) ---
+
+func streamHandler(w http.ResponseWriter, r *http.Request) {
+    flusher, ok := w.(http.Flusher)
+    if !ok {
+        http.Error(w, "streaming not supported", http.StatusInternalServerError)
+        return
+    }
+
+    w.Header().Set("Transfer-Encoding", "chunked")
+    w.Header().Set("Content-Type", "text/plain")
+
+    for i := 0; i < 5; i++ {
+        fmt.Fprintf(w, "chunk %d\n", i)
+        flusher.Flush() // push chunk to client immediately
+        time.Sleep(1 * time.Second)
+    }
+}
+
+--- Stream large file upload (don't buffer in memory) ---
+
+func uploadHandler(w http.ResponseWriter, r *http.Request) {
+    r.Body = http.MaxBytesReader(w, r.Body, 100<<20) // 100 MB limit
+    defer r.Body.Close()
+
+    f, err := os.Create("/tmp/upload")
+    if err != nil {
+        http.Error(w, "cannot create file", http.StatusInternalServerError)
+        return
+    }
+    defer f.Close()
+
+    // Stream directly from request body to disk — no full memory load
+    if _, err = io.Copy(f, r.Body); err != nil {
+        http.Error(w, "write error", http.StatusInternalServerError)
+        return
+    }
+    w.WriteHeader(http.StatusCreated)
+}
+
+================================================================================
+[15] COOKIES & SESSIONS
+================================================================================
+
+--- Set cookie ---
+
+http.SetCookie(w, &http.Cookie{
+    Name:     "session_id",
+    Value:    sessionToken,
+    Path:     "/",
+    HttpOnly: true,              // not accessible via JS (XSS protection)
+    Secure:   true,              // only over HTTPS
+    SameSite: http.SameSiteLaxMode,
+    MaxAge:   86400,             // 1 day in seconds
+})
+
+--- Read cookie ---
+
+cookie, err := r.Cookie("session_id")
+if err != nil {
+    // http.ErrNoCookie if not found
+    http.Error(w, "no session", http.StatusUnauthorized)
+    return
+}
+sessionToken := cookie.Value
+
+--- Delete cookie ---
+
+http.SetCookie(w, &http.Cookie{
+    Name:    "session_id",
+    Value:   "",
+    Path:    "/",
+    MaxAge:  -1, // tells browser to delete it
+    Expires: time.Unix(0, 0),
+})
+
+================================================================================
+[16] FORM HANDLING & MULTIPART
+================================================================================
+
+--- Parse URL-encoded form (application/x-www-form-urlencoded) ---
+
+func formHandler(w http.ResponseWriter, r *http.Request) {
+    if err := r.ParseForm(); err != nil {
+        http.Error(w, "bad form", http.StatusBadRequest)
+        return
+    }
+    name := r.FormValue("name")    // checks URL query AND POST body
+    email := r.PostFormValue("email") // POST body only
+    fmt.Fprintf(w, "Name: %s, Email: %s", name, email)
+}
+
+--- Parse multipart form (file upload) ---
+
+func fileUploadHandler(w http.ResponseWriter, r *http.Request) {
+    // 32 MB in memory, rest goes to disk
+    if err := r.ParseMultipartForm(32 << 20); err != nil {
+        http.Error(w, "parse error", http.StatusBadRequest)
+        return
+    }
+
+    file, header, err := r.FormFile("upload")
+    if err != nil {
+        http.Error(w, "no file", http.StatusBadRequest)
+        return
+    }
+    defer file.Close()
+
+    log.Printf("Received file: %s (%d bytes)", header.Filename, header.Size)
+
+    dst, err := os.Create("/tmp/" + header.Filename)
+    if err != nil {
+        http.Error(w, "cannot save", http.StatusInternalServerError)
+        return
+    }
+    defer dst.Close()
+    io.Copy(dst, file)
+
+    w.WriteHeader(http.StatusCreated)
+}
+
+================================================================================
+[17] JSON OVER HTTP (REST PATTERNS)
+================================================================================
+
+--- Decode JSON request body ---
+
+type CreateUserReq struct {
+    Name  string `json:"name"`
+    Email string `json:"email"`
+}
+
+func createUserHandler(w http.ResponseWriter, r *http.Request) {
+    if r.Header.Get("Content-Type") != "application/json" {
+        http.Error(w, "expected application/json", http.StatusUnsupportedMediaType)
+        return
+    }
+
+    r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+    defer r.Body.Close()
+
+    dec := json.NewDecoder(r.Body)
+    dec.DisallowUnknownFields() // strict parsing
+
+    var req CreateUserReq
+    if err := dec.Decode(&req); err != nil {
+        http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
+        return
+    }
+
+    // process req...
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusCreated)
+    json.NewEncoder(w).Encode(map[string]string{"id": "new-user-id"})
+}
+
+--- Encode JSON response helper ---
+
+func writeJSON(w http.ResponseWriter, status int, v any) {
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(status)
+    if err := json.NewEncoder(w).Encode(v); err != nil {
+        log.Printf("writeJSON encode error: %v", err)
+    }
+}
+
+--- Error response structure ---
+
+type APIError struct {
+    Code    int    `json:"code"`
+    Message string `json:"message"`
+}
+
+func writeError(w http.ResponseWriter, status int, msg string) {
+    writeJSON(w, status, APIError{Code: status, Message: msg})
+}
+
+================================================================================
+[18] SERVER-SENT EVENTS (SSE)
+================================================================================
+
+SSE: server pushes events to the browser over a long-lived HTTP connection.
+Simpler than WebSocket — unidirectional (server → client).
+
+func sseHandler(w http.ResponseWriter, r *http.Request) {
+    flusher, ok := w.(http.Flusher)
+    if !ok {
+        http.Error(w, "SSE not supported", http.StatusInternalServerError)
+        return
+    }
+
+    w.Header().Set("Content-Type", "text/event-stream")
+    w.Header().Set("Cache-Control", "no-cache")
+    w.Header().Set("Connection", "keep-alive")
+
+    ctx := r.Context()
+    ticker := time.NewTicker(1 * time.Second)
+    defer ticker.Stop()
+
+    for {
+        select {
+        case <-ctx.Done():
+            // client disconnected
+            return
+        case t := <-ticker.C:
+            fmt.Fprintf(w, "data: %s\n\n", t.Format(time.RFC3339))
+            flusher.Flush()
+        }
+    }
+}
+
+SSE FORMAT:
+  data: <payload>\n\n      — basic event
+  event: <type>\n          — named event
+  id: <id>\n               — event ID (client can reconnect from this ID)
+  retry: <ms>\n            — reconnect delay
+
+================================================================================
+[19] WEBSOCKET (UPGRADE PATTERN)
+================================================================================
+
+net/http handles the HTTP upgrade to WebSocket.
+Use golang.org/x/net/websocket or gorilla/websocket for production.
+
+--- Manual upgrade (illustrative) ---
+
+func wsHandler(w http.ResponseWriter, r *http.Request) {
+    if r.Header.Get("Upgrade") != "websocket" {
+        http.Error(w, "not a websocket handshake", http.StatusBadRequest)
+        return
+    }
+    hijacker, ok := w.(http.Hijacker)
+    if !ok {
+        http.Error(w, "hijacking not supported", http.StatusInternalServerError)
+        return
+    }
+    conn, _, err := hijacker.Hijack()
+    if err != nil {
+        return
+    }
+    defer conn.Close()
+    // Now conn is a raw TCP connection — handle WebSocket framing manually
+}
+
+--- Using gorilla/websocket (recommended) ---
+
+import "github.com/gorilla/websocket"
+
+var upgrader = websocket.Upgrader{
+    ReadBufferSize:  1024,
+    WriteBufferSize: 1024,
+    CheckOrigin: func(r *http.Request) bool {
+        return true // validate origin in production
+    },
+}
+
+func wsHandler(w http.ResponseWriter, r *http.Request) {
+    conn, err := upgrader.Upgrade(w, r, nil)
+    if err != nil {
+        log.Println("upgrade failed:", err)
+        return
+    }
+    defer conn.Close()
+
+    for {
+        msgType, msg, err := conn.ReadMessage()
+        if err != nil {
+            break
+        }
+        if err := conn.WriteMessage(msgType, msg); err != nil { // echo
+            break
+        }
+    }
+}
+
+================================================================================
+[20] TESTING NET/HTTP CODE
+================================================================================
+
+--- httptest.NewRecorder — test handlers without a real server ---
+
+func TestHelloHandler(t *testing.T) {
+    req := httptest.NewRequest("GET", "/hello", nil)
+    rr  := httptest.NewRecorder()
+
+    helloHandler(rr, req)
+
+    if rr.Code != http.StatusOK {
+        t.Errorf("expected 200, got %d", rr.Code)
+    }
+    if body := rr.Body.String(); body != "Hello, World!\n" {
+        t.Errorf("unexpected body: %q", body)
+    }
+}
+
+--- httptest.NewServer — real HTTP server for integration tests ---
+
+func TestUserAPI(t *testing.T) {
+    mux := http.NewServeMux()
+    mux.HandleFunc("/users", createUserHandler)
+
+    ts := httptest.NewServer(mux)
+    defer ts.Close()
+
+    resp, err := http.Post(ts.URL+"/users", "application/json",
+        strings.NewReader(`{"name":"Aditya","email":"a@example.com"}`))
+    if err != nil {
+        t.Fatal(err)
+    }
+    defer resp.Body.Close()
+
+    if resp.StatusCode != http.StatusCreated {
+        t.Errorf("expected 201, got %d", resp.StatusCode)
+    }
+}
+
+--- Testing with TLS ---
+
+ts := httptest.NewTLSServer(mux)
+defer ts.Close()
+
+client := ts.Client() // pre-configured to trust the test cert
+resp, err := client.Get(ts.URL + "/secure")
+
+--- Table-driven handler tests ---
+
+tests := []struct {
+    name       string
+    method     string
+    path       string
+    body       string
+    wantStatus int
+}{
+    {"valid POST", "POST", "/users", `{"name":"Ada"}`, 201},
+    {"missing name", "POST", "/users", `{}`, 400},
+    {"wrong method", "GET", "/users", "", 405},
+}
+
+for _, tt := range tests {
+    t.Run(tt.name, func(t *testing.T) {
+        req := httptest.NewRequest(tt.method, tt.path, strings.NewReader(tt.body))
+        req.Header.Set("Content-Type", "application/json")
+        rr := httptest.NewRecorder()
+        mux.ServeHTTP(rr, req)
+        if rr.Code != tt.wantStatus {
+            t.Errorf("got %d, want %d", rr.Code, tt.wantStatus)
+        }
+    })
+}
+
+================================================================================
+[21] COMMON PITFALLS & BEST PRACTICES
+================================================================================
+
+[PITFALL 1] Not closing response body
+  → ALWAYS: defer resp.Body.Close() immediately after err check
+  → Even on non-200 responses — body still needs to be drained and closed
+
+[PITFALL 2] Writing headers after Write()
+  → Once Write() is called, headers are sent. Set headers FIRST.
+  → Common mistake: setting Content-Type after Encode(). Always set it before.
+
+[PITFALL 3] Using http.DefaultClient / http.DefaultServeMux in production
+  → DefaultClient has no timeouts — hangs on slow servers
+  → DefaultServeMux is global state — any package can register handlers on it
+
+[PITFALL 4] Ignoring 4xx/5xx status codes from client
+  → http.Client only returns error on network failure
+  → Always check resp.StatusCode explicitly
+
+[PITFALL 5] Not limiting request body size
+  → r.Body is unlimited by default — use http.MaxBytesReader()
+
+[PITFALL 6] Context key collisions
+  → Using plain string as context key: context.WithValue(ctx, "userID", ...)
+  → Another package using same string key causes collision
+  → FIX: use unexported typed keys: type contextKey string
+
+[PITFALL 7] Starting a new http.Client per request
+  → You lose connection pooling → massive performance degradation
+  → Create one client and reuse it (it's goroutine-safe)
+
+[PITFALL 8] Not calling next.ServeHTTP() in middleware
+  → If you forget to call next, the handler never runs. Always check control flow.
+
+[PITFALL 9] Race conditions in shared handler state
+  → Handler structs accessed concurrently — use sync.Mutex or sync/atomic for mutable state
+
+[PITFALL 10] Forgetting to drain the response body before closing
+  → If body is not fully read, the connection can't be reused
+  → Even on errors: io.Copy(io.Discard, resp.Body) before Close()
+
+BEST PRACTICES CHECKLIST:
+  ✓ Use a configured http.Server with timeouts
+  ✓ Use http.MaxBytesReader for all uploaded/body content
+  ✓ Always defer resp.Body.Close() right after error check
+  ✓ Check resp.StatusCode after every client call
+  ✓ Use context propagation for all IO calls
+  ✓ Use httptest for unit and integration tests
+  ✓ Implement graceful shutdown
+  ✓ Use structured logging with request IDs
+  ✓ Set Content-Type header explicitly
+  ✓ Use panic recovery middleware in production
+
+================================================================================
+[22] JAVA vs GO HTTP COMPARISON
+================================================================================
+
+CONCEPT                    JAVA (Spring)                GO (net/http)
+---------------------------------------------------------------------------
+HTTP Server setup          @SpringBootApplication        http.Server{} struct
+                           + @RestController             + http.ListenAndServe
+
+Route definition           @GetMapping("/users")         mux.HandleFunc("GET /users", fn)
+                           @PostMapping(...)             (Go 1.22+ syntax)
+
+Request object             HttpServletRequest            *http.Request
+                           (injected by Spring)          (passed as arg)
+
+Response writing           ResponseEntity<T>             w http.ResponseWriter
+                           return ResponseEntity.ok(...)  + w.WriteHeader() + w.Write()
+
+Body parsing               @RequestBody User user        json.NewDecoder(r.Body).Decode(&user)
+                           (auto-deserialized)           (manual, explicit)
+
+Middleware / Filters        @Component + Filter           func(http.Handler) http.Handler
+
+Dependency injection        @Autowired / @Bean            Constructor injection into struct
+
+Thread model               Thread-per-request            Goroutine-per-request
+                           (thread pool, ~200 threads)   (millions of goroutines possible)
+
+Timeouts                   server.connection-timeout      http.Server{ReadTimeout, WriteTimeout}
+                           (Spring application.properties)
+
+Testing                    MockMvc / WebTestClient        httptest.NewRecorder / httptest.NewServer
+
+HTTP client                RestTemplate / WebClient       http.Client{}
+                           (Spring's)                    (standard library)
+
+TLS                        SSL config in Spring           server.ListenAndServeTLS()
+                           application.properties
+
+WebSocket                  @ServerEndpoint (JSR-356)      gorilla/websocket + Hijacker
+
+Session management         HttpSession (server-side)      Cookies + custom session store
+
+Exception handling         @ExceptionHandler              Explicit error returns + http.Error()
+                           @ControllerAdvice              (no global exception handler)
+
+Key mindset difference:
+  Java Spring  = lots of magic, annotations, auto-configuration
+  Go net/http  = explicit, composable, no hidden behavior
+
+================================================================================
+[23] INTERVIEW Q&A — MEDIOR LEVEL
+================================================================================
+
+Q1: What is the Handler interface in Go's net/http?
+A: The Handler interface has a single method: ServeHTTP(ResponseWriter, *Request).
+   Any type implementing this method can be used as an HTTP handler. It's the
+   fundamental abstraction that allows middleware chaining, custom handlers, and
+   the HandlerFunc adapter pattern.
+
+Q2: What's the difference between http.Handle and http.HandleFunc?
+A: http.HandleFunc accepts a plain function with signature func(ResponseWriter, *Request)
+   and wraps it in http.HandlerFunc (which implements Handler).
+   http.Handle accepts a type that already implements the Handler interface.
+   Both register on DefaultServeMux.
+
+Q3: Why should you avoid http.DefaultClient in production?
+A: DefaultClient has no timeouts set. A slow or unresponsive server will block
+   the goroutine indefinitely, leading to goroutine leak and eventual memory
+   exhaustion. Always use a client with Timeout set and configure Transport.
+
+Q4: Does http.Client return an error for HTTP 4xx/5xx responses?
+A: No. http.Client only returns a non-nil error for network-level failures
+   (connection refused, DNS failure, timeout). For 4xx/5xx, err is nil and you
+   must check resp.StatusCode explicitly.
+
+Q5: What is the correct order of operations on ResponseWriter?
+A: 1. Set headers with w.Header().Set(...)
+   2. Call w.WriteHeader(statusCode) to send headers
+   3. Write body with w.Write(data) or via an encoder
+   Once WriteHeader or Write is called, headers are finalized and locked.
+
+Q6: What does http.StripPrefix do and when would you use it?
+A: StripPrefix removes a prefix from the request URL before passing it to the
+   next handler. Common use: serving static files.
+   mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
+   Without StripPrefix, FileServer would look for files at ./static/static/...
+
+Q7: What is http.MaxBytesReader and why use it?
+A: It wraps r.Body with a limit. Once the limit is exceeded, further reads return
+   an error. This prevents DoS attacks where a client sends an unbounded body.
+   Use it in every handler that reads r.Body.
+
+Q8: How do you write middleware in Go?
+A: A middleware is a function that takes an http.Handler and returns an http.Handler.
+   Inside, it calls next.ServeHTTP(w, r) to continue the chain, optionally modifying
+   the request, response, or short-circuiting execution.
+
+Q9: What is httptest.NewRecorder used for?
+A: It implements http.ResponseWriter and records the response (status code, headers,
+   body) written by a handler. It enables unit testing of handlers without starting
+   a real server.
+
+Q10: What is the ServeMux matching priority when two patterns overlap?
+A: Longer (more specific) patterns always take priority over shorter ones.
+   A subtree pattern (/foo/) matches anything under /foo/.
+   An exact pattern (/foo) only matches /foo exactly.
+
+================================================================================
+[24] INTERVIEW Q&A — SENIOR / EXPERIENCED LEVEL
+================================================================================
+
+Q1: Explain the net/http server's concurrency model.
+A: The server calls http.Server.Serve() which runs an accept loop. For each
+   accepted TCP connection, it spawns a goroutine. Within each connection goroutine,
+   the request is read, the matching handler is invoked (again in that goroutine),
+   and the response is written. HTTP/1.1 keep-alive allows multiple sequential
+   requests over one connection. HTTP/2 allows concurrent request streams over
+   one connection via multiplexing. The concurrency model means handlers must be
+   goroutine-safe — any shared state needs synchronization.
+
+Q2: How does http.Transport manage connection pooling and when can it go wrong?
+A: Transport maintains a pool of idle connections per host. After a response is
+   received, the connection is returned to the pool only if the response body has
+   been fully read and closed. If you close the body without reading it, the
+   connection is closed instead of pooled. If you don't close the body at all, the
+   connection leaks. Creating a new http.Client per request bypasses pooling entirely,
+   which causes a new TCP (and TLS) connection for every request — extremely expensive.
+
+Q3: How would you implement graceful shutdown and what are the edge cases?
+A: server.Shutdown(ctx) stops accepting new connections and waits for in-flight
+   requests to complete within the context deadline. Edge cases:
+   - Long-running SSE or WebSocket connections won't complete until they finish
+     naturally or the context deadline passes (then they get killed).
+   - Use server.RegisterOnShutdown to register cleanup functions for long-lived connections.
+   - Ensure SIGTERM/SIGINT are trapped with signal.Notify.
+   - Log http.ErrServerClosed as a normal shutdown signal, not an error.
+
+Q4: What is a RoundTripper and how would you use it?
+A: RoundTripper is an interface with RoundTrip(*Request) (*Response, error).
+   http.Transport implements it. You can wrap Transport to intercept all outbound
+   requests without changing call sites — useful for: injecting auth headers,
+   logging, metrics, circuit breaking, retry logic, or mocking in tests.
+   Key contract: RoundTrip must not modify the request, not follow redirects
+   (the Client handles those), and must return a non-nil Response when err is nil.
+
+Q5: How do you prevent slow-loris attacks and request timeout abuse?
+A: Configure on http.Server:
+   - ReadTimeout: max time to read full request including body
+   - ReadHeaderTimeout: max time to read just the headers (stops slow-loris)
+   - WriteTimeout: max time to write the full response
+   - IdleTimeout: max time between requests on a keep-alive connection
+   Also: use http.MaxBytesReader to cap body size, deploy a reverse proxy
+   (nginx/envoy) as the first line of defense.
+
+Q6: How does context propagation work between an HTTP handler and downstream services?
+A: r.Context() returns the request context, which is cancelled when the client
+   disconnects. Pass this context to all downstream IO: db.QueryContext(ctx, ...),
+   http.NewRequestWithContext(ctx, ...), etc. This ensures that if the client
+   disconnects, all downstream work is also cancelled, releasing resources.
+   Middleware can augment the context with values using context.WithValue and
+   r.WithContext(newCtx) — r.WithContext returns a shallow copy of the request
+   with the new context, it does not mutate the original.
+
+Q7: What are the differences between SSE and WebSocket for real-time features?
+A: SSE: HTTP-based, server-to-client only, unidirectional. Uses chunked transfer.
+   Automatically reconnects in browsers. Simple to implement with net/http.
+   Works through HTTP/2 efficiently. Good for: live feeds, notifications, dashboards.
+   WebSocket: full-duplex, bidirectional. Requires protocol upgrade (HTTP → WS).
+   Higher complexity. Better for: chat, gaming, collaborative editing.
+   SSE is often overlooked but sufficient for many "real-time" use cases.
+
+Q8: How would you test middleware that modifies context values?
+A: Use httptest.NewRequest to create a request, httptest.NewRecorder as the
+   ResponseWriter, then create a test handler that asserts the context contains
+   the expected value. Wrap the test handler with the middleware under test and
+   call ServeHTTP directly. No real server needed.
+
+   Example:
+   var capturedUserID string
+   innerHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+       capturedUserID = r.Context().Value(userIDKey).(string)
+   })
+   wrapped := AuthMiddleware(innerHandler)
+   req := httptest.NewRequest("GET", "/", nil)
+   req.Header.Set("Authorization", "Bearer valid-token")
+   rr := httptest.NewRecorder()
+   wrapped.ServeHTTP(rr, req)
+   assert.Equal(t, "expected-user-id", capturedUserID)
+
+Q9: How would you design a rate limiter middleware?
+A: Use a token bucket or sliding window algorithm. For per-IP limiting,
+   maintain a map[string]*rate.Limiter (using golang.org/x/time/rate).
+   Protect the map with sync.Mutex or use sync.Map. In middleware, extract
+   the client IP, get or create their limiter, and call limiter.Allow().
+   If false, respond 429 Too Many Requests. Clean up stale limiters with a
+   background goroutine using time.AfterFunc or a LRU cache.
+
+Q10: What happens when you call w.Write() without calling w.WriteHeader() first?
+A: Go implicitly calls w.WriteHeader(http.StatusOK) — i.e., status 200 — on
+   the first call to w.Write(). This means you cannot set a different status code
+   after calling w.Write(). The superfluous call to WriteHeader after Write will
+   produce the log message "http: superfluous response.WriteHeader call".
+   Always WriteHeader before Write if you need a non-200 status.
+
+================================================================================

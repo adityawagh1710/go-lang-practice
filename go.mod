@@ -41,6 +41,7 @@ require (
 require (
 	github.com/fatih/color v1.19.0
 	github.com/google/uuid v1.6.0 // indirect
+	github.com/gorilla/mux v1.8.1
 	github.com/spf13/cobra v1.10.2
 	github.com/urfave/cli/v2 v2.27.7
 )

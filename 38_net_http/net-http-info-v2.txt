@@ -1,0 +1,275 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang net/http
+════════════════════════════════════════════════════════════════════════════════════
+1. OVERVIEW
+===========
+- net/http provides complete HTTP client and server in the Go standard library.
+- Supports HTTP/1.1 and HTTP/2 (built-in, automatic on HTTPS).
+- No external dependencies required.
+- Used by millions of Go projects worldwide.
+- Two main parts:
+    - Server: http.Server, ServeMux, Handler, ResponseWriter
+    - Client: http.Client, Transport, Request, Response
+- Sub-packages: cookiejar, httptest, httptrace, httputil, pprof, cgi, fcgi.
+
+Recent Important Features (Go 1.22+):
+- ServeMux now supports HTTP methods and named wildcards: "GET /users/{id}"
+- r.PathValue("id") to extract wildcard values
+- CrossOriginProtection (Go 1.25)
+- ClientConn and SetStateHook (Go 1.26)
+- HTTP2Config for fine-grained HTTP/2 control
+
+2. CORE SERVER COMPONENTS
+=========================
+http.Server struct - Important fields for production:
+- Addr string
+- Handler Handler
+- ReadTimeout, ReadHeaderTimeout, WriteTimeout, IdleTimeout time.Duration
+- MaxHeaderBytes int
+- TLSConfig *tls.Config
+- ErrorLog *log.Logger
+- ConnState func(net.Conn, ConnState)
+- BaseContext, ConnContext
+
+Handler interface:
+    type Handler interface {
+        ServeHTTP(w ResponseWriter, r *Request)
+    }
+
+HandlerFunc:
+    Converts plain function into Handler.
+
+ServeMux (Request Multiplexer):
+- DefaultServeMux is a global instance (avoid in production).
+- Use http.NewServeMux() for isolated mux (recommended).
+- Pattern matching: longest match wins.
+- Automatic trailing slash redirection and URL sanitization.
+- Go 1.22+: Supports method-specific patterns and wildcards.
+- Register with: http.Handle() or http.HandleFunc()
+
+ResponseWriter:
+- Header() http.Header
+- Write([]byte) (int, error)
+- WriteHeader(statusCode int)
+- Content-Type auto-detected on first Write if not set.
+- Helpers: http.Error, http.NotFound, http.Redirect, http.ServeContent
+
+3. CORE CLIENT COMPONENTS
+=========================
+http.Client:
+- Transport RoundTripper
+- Timeout time.Duration
+- Jar http.CookieJar
+- CheckRedirect func
+
+http.Transport (very important):
+- Controls connection pooling and dialing.
+- Key fields: MaxIdleConns, MaxIdleConnsPerHost (default 2), MaxConnsPerHost,
+  IdleConnTimeout, DisableKeepAlives, ForceAttemptHTTP2, TLSClientConfig, DialContext
+
+Request & Response:
+- Always use NewRequestWithContext
+- Always close resp.Body with defer resp.Body.Close()
+
+4. IMPORTANT FUNCTIONS & CONSTANTS
+==================================
+Server:
+- ListenAndServe, ListenAndServeTLS, Serve, ServeTLS
+- Shutdown(ctx), Close()
+
+Client:
+- Get, Post, PostForm, Head, Do
+- NewRequest, NewRequestWithContext
+
+Constants:
+- MethodGet, MethodPost, MethodPut, MethodDelete, etc.
+- StatusOK, StatusNotFound, StatusInternalServerError, etc.
+- StatusText(code)
+
+Utilities:
+- SetCookie, DetectContentType, MaxBytesReader, TimeoutHandler, StripPrefix, FileServer
+
+5. CODE EXAMPLES
+================
+
+5.1 Basic Server
+----------------
+package main
+import (
+    "fmt"
+    "net/http"
+)
+
+func hello(w http.ResponseWriter, r *http.Request) {
+    fmt.Fprintf(w, "Hello from Go net/http!")
+}
+
+func main() {
+    http.HandleFunc("/hello", hello)
+    http.ListenAndServe(":8080", nil)
+}
+
+5.2 Production-ready Server with Timeouts
+-----------------------------------------
+package main
+import (
+    "log"
+    "net/http"
+    "time"
+)
+
+func main() {
+    mux := http.NewServeMux()
+    mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusOK)
+        w.Write([]byte(`{"status":"ok"}`))
+    })
+
+    srv := &http.Server{
+        Addr:              ":8080",
+        Handler:           mux,
+        ReadTimeout:       5 * time.Second,
+        ReadHeaderTimeout: 2 * time.Second,
+        WriteTimeout:      10 * time.Second,
+        IdleTimeout:       60 * time.Second,
+        MaxHeaderBytes:    1 << 20, // 1MB
+    }
+    log.Fatal(srv.ListenAndServe())
+}
+
+5.3 Static File Server
+----------------------
+mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./public"))))
+
+5.4 JSON Response Example
+-------------------------
+type Response struct {
+    Message string `json:"message"`
+}
+
+func jsonHandler(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(Response{Message: "hello"})
+}
+
+5.5 Client with Context and Timeout
+-----------------------------------
+ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+defer cancel()
+
+req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.example.com/data", nil)
+if err != nil { ... }
+
+resp, err := http.DefaultClient.Do(req)
+if err != nil { ... }
+defer resp.Body.Close()
+
+5.6 Middleware Example
+----------------------
+func loggingMiddleware(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        start := time.Now()
+        next.ServeHTTP(w, r)
+        log.Printf("%s %s took %v", r.Method, r.URL.Path, time.Since(start))
+    })
+}
+// Usage: srv.Handler = loggingMiddleware(mux)
+
+5.7 Graceful Shutdown (Production Standard)
+-------------------------------------------
+package main
+import (
+    "context"
+    "log"
+    "net/http"
+    "os"
+    "os/signal"
+    "syscall"
+    "time"
+)
+
+func main() {
+    mux := http.NewServeMux()
+    // ... register handlers
+
+    srv := &http.Server{
+        Addr:    ":8080",
+        Handler: mux,
+        // timeouts recommended
+    }
+
+    go func() {
+        if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+            log.Fatal(err)
+        }
+    }()
+
+    quit := make(chan os.Signal, 1)
+    signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+    <-quit
+
+    log.Println("Shutting down server...")
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    defer cancel()
+
+    if err := srv.Shutdown(ctx); err != nil {
+        log.Fatal("Server forced to shutdown:", err)
+    }
+    log.Println("Server exited gracefully")
+}
+
+6. BEST PRACTICES (Mid → Senior Level)
+======================================
+- Always create custom *http.Server with proper timeouts (never rely on defaults).
+- Never use DefaultServeMux in production (global state is dangerous).
+- Always close response body on client side.
+- Use context.Context everywhere (NewRequestWithContext, r.Context()).
+- Implement graceful shutdown using Shutdown() + signal handling.
+- Set ReadHeaderTimeout separately to protect against slow header attacks.
+- Tune http.Transport for connection pooling in high-throughput services.
+- Use http.MaxBytesReader for upload size limits.
+- Set security headers (HSTS, CSP, X-Content-Type-Options, etc.).
+- Use CrossOriginProtection (Go 1.25+).
+- Enable pprof in non-production for profiling.
+- Prefer struct-based handlers for dependency injection.
+- Avoid blocking operations in ServeHTTP (offload to goroutines carefully).
+
+7. INTERVIEW QUESTIONS & ANSWERS (Mid to Senior)
+================================================
+
+Q1 (Mid): What is the difference between http.Handle and http.HandleFunc?
+A: Handle registers a Handler (type with ServeHTTP method). HandleFunc registers a plain function and automatically converts it using HandlerFunc.
+
+Q2 (Mid): How does ServeMux decide which handler to call?
+A: It chooses the longest matching pattern. Go 1.22+ added support for HTTP methods and wildcards like "GET /users/{id}".
+
+Q3 (Mid-Senior): Why must you set timeouts on http.Server?
+A: To prevent resource exhaustion attacks (Slowloris) and stuck connections. ReadHeaderTimeout is especially important for header flood protection.
+
+Q4 (Senior): Explain graceful shutdown in net/http.
+A: Use srv.Shutdown(ctx) which stops accepting new connections and waits for existing ones to finish. Combine with os/signal for SIGTERM. Do not use Close() in production as it abruptly drops connections.
+
+Q5 (Senior): How does http.Client handle connection reuse?
+A: Through http.Transport which maintains a pool of idle connections (MaxIdleConnsPerHost defaults to 2). Reuse the same Client instance instead of creating new ones per request.
+
+Q6 (Senior): How do you properly handle request cancellation in a handler?
+A: Use r.Context() and monitor ctx.Done() in long-running operations or goroutines. Shutdown automatically cancels contexts.
+
+Q7 (Senior): What is ResponseController and when is Hijack() used?
+A: ResponseController (Go 1.20+) allows setting deadlines and hijacking after handler starts. Hijack() gives raw TCP connection (used for WebSocket, SSE). Not supported on HTTP/2.
+
+Q8 (Senior): How is HTTP/2 handled in net/http?
+A: Automatically enabled for HTTPS. Use HTTP2Config for advanced tuning (MaxConcurrentStreams, etc.). ForceAttemptHTTP2 for HTTP/1.1 servers.
+
+Q9 (Senior): Common pitfalls when using http.Post with large bodies?
+A: Must use NewRequestWithContext for cancellation support. Always close body. Do not create new Client per request. Watch memory usage with large bodies.
+
+Q10 (Senior): How would you implement rate limiting using only stdlib?
+A: Implement a token bucket with sync.Mutex and time.Ticker, or use a simple semaphore pattern. For distributed systems, combine with external store (though pure stdlib is in-memory only).
+
+Q11 (Senior): Why avoid global variables in HTTP handlers? How to inject dependencies?
+A: Globals make unit testing difficult and can cause race conditions. Solution: Create handler structs that hold dependencies (db, logger, etc.) and implement ServeHTTP, or use middleware/closures.
+
+============================================================
+Recommendation: Master stdlib before adopting third-party routers (chi, gorilla/mux, etc.).

@@ -1,0 +1,291 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang Build Tags, GOOS, GOARCH & Cross-Compilation
+════════════════════════════════════════════════════════════════════════════════════
+--------------------------------
+1. BUILD TAGS (Build Constraints)
+--------------------------------
+
+Definition:
+Build tags are conditions that tell the Go compiler when a file should be included or excluded during build.
+
+Used for:
+- OS-specific code
+- Architecture-specific code
+- Feature flags (debug, prod, etc.)
+- Optional dependencies
+
+--------------------------------
+SYNTAX
+--------------------------------
+
+Old syntax (deprecated but still seen):
+// +build linux darwin
+
+New syntax (Go 1.17+ recommended):
+//go:build linux || darwin
+
+IMPORTANT:
+- Must be at the top of file
+- Followed by a blank line
+
+--------------------------------
+EXAMPLE 1: OS-SPECIFIC FILES
+--------------------------------
+
+file: file_linux.go
+
+//go:build linux
+
+package main
+
+func getOS() string {
+    return "Linux"
+}
+
+--------------------------------
+
+file: file_windows.go
+
+//go:build windows
+
+package main
+
+func getOS() string {
+    return "Windows"
+}
+
+--------------------------------
+
+main.go
+
+package main
+
+import "fmt"
+
+func main() {
+    fmt.Println(getOS())
+}
+
+--------------------------------
+EXPLANATION:
+Only one file gets compiled depending on OS.
+
+--------------------------------
+EXAMPLE 2: CUSTOM BUILD TAG
+--------------------------------
+
+file: debug.go
+
+//go:build debug
+
+package main
+
+import "fmt"
+
+func debugLog() {
+    fmt.Println("Debug mode ON")
+}
+
+--------------------------------
+
+file: release.go
+
+//go:build !debug
+
+package main
+
+func debugLog() {
+    // no-op
+}
+
+--------------------------------
+
+Build commands:
+
+go build -tags=debug
+go build            (default = release)
+
+--------------------------------
+MULTIPLE CONDITIONS
+--------------------------------
+
+//go:build linux && amd64
+
+Meaning:
+- Only build on Linux AND amd64 architecture
+
+--------------------------------
+2. CROSS-COMPILATION
+--------------------------------
+
+Definition:
+Building a binary for a different OS/Architecture than current system.
+
+--------------------------------
+KEY ENV VARIABLES
+--------------------------------
+
+GOOS   → Target OS
+GOARCH → Target architecture
+
+--------------------------------
+COMMON VALUES
+--------------------------------
+
+GOOS:
+- linux
+- windows
+- darwin (macOS)
+
+GOARCH:
+- amd64 (64-bit)
+- 386   (32-bit)
+- arm
+- arm64
+
+--------------------------------
+EXAMPLE 1: BUILD FOR WINDOWS
+--------------------------------
+
+GOOS=windows GOARCH=amd64 go build -o app.exe
+
+--------------------------------
+EXAMPLE 2: BUILD FOR LINUX
+--------------------------------
+
+GOOS=linux GOARCH=amd64 go build -o app
+
+--------------------------------
+EXAMPLE 3: BUILD FOR MAC
+--------------------------------
+
+GOOS=darwin GOARCH=arm64 go build -o app
+
+--------------------------------
+CHECK CURRENT ENV
+--------------------------------
+
+go env GOOS
+go env GOARCH
+
+--------------------------------
+DISABLE CGO (IMPORTANT)
+--------------------------------
+
+For static binaries:
+
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build
+
+--------------------------------
+3. REAL-WORLD USE CASES
+--------------------------------
+
+1. Platform-specific system calls
+2. CLI tools distributed across OS
+3. Performance tuning per architecture
+4. Debug vs production builds
+5. Hardware-specific optimizations
+
+--------------------------------
+4. BUILD TAGS + CROSS COMPILATION TOGETHER
+--------------------------------
+
+Example:
+
+//go:build linux && debug
+
+Build:
+
+GOOS=linux GOARCH=amd64 go build -tags=debug
+
+--------------------------------
+5. FILE NAMING SHORTCUT
+--------------------------------
+
+Instead of tags, Go also supports naming:
+
+file_linux.go
+file_windows.go
+file_amd64.go
+
+Go automatically detects them.
+
+--------------------------------
+6. INTERVIEW QUESTIONS (MID → SENIOR)
+--------------------------------
+
+Q1: Difference between build tags and file naming?
+A:
+- Build tags → flexible conditions (custom logic)
+- File naming → automatic, simpler, less flexible
+
+--------------------------------
+
+Q2: When would you prefer build tags over runtime checks?
+A:
+- When you want to exclude code at compile time
+- Reduce binary size
+- Avoid unnecessary dependencies
+
+--------------------------------
+
+Q3: Why use CGO_ENABLED=0 in cross compilation?
+A:
+- Avoid dependency on system C libraries
+- Produce static binaries
+- Easier deployment in containers
+
+--------------------------------
+
+Q4: Can Go cross-compile by default?
+A:
+Yes, Go supports cross-compilation out of the box (except when CGO is required)
+
+--------------------------------
+
+Q5: What happens if multiple files match build constraints?
+A:
+- All matching files are compiled together
+- Conflicts (duplicate symbols) will cause errors
+
+--------------------------------
+
+Q6: How do you manage feature flags in Go builds?
+A:
+- Use custom build tags like:
+  //go:build enterprise
+- Build with:
+  go build -tags=enterprise
+
+--------------------------------
+
+Q7: What are pitfalls of build tags?
+A:
+- Hard to track logic across files
+- Can create hidden behavior differences
+- Poor tooling visibility
+
+--------------------------------
+
+Q8: How do you debug build-tag-specific issues?
+A:
+- Print active tags
+- Use go build -x
+- Explicitly control tags during build
+
+--------------------------------
+
+Q9: Can build tags affect dependencies?
+A:
+Yes. Files with imports are excluded/included based on tags, affecting dependency graph.
+
+--------------------------------
+
+Q10: Best practices?
+A:
+- Prefer file naming for OS-specific logic
+- Use build tags for feature flags
+- Keep logic minimal inside tagged files
+- Document all custom tags
+
+--------------------------------
