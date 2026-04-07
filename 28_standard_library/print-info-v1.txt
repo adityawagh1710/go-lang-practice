@@ -1,0 +1,769 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📘 Golang Standard Library Sprintf, Fprintf, Errorf + Format Verbs %v %+v %#v
+════════════════════════════════════════════════════════════════════════════════════
+INDEX
+-----
+  [1] Package Overview
+  [2] Core Functions: Sprintf, Fprintf, Errorf
+  [3] Format Verbs: %v, %+v, %#v
+  [4] Other Essential Verbs (context)
+  [5] Annotated Code Examples
+  [6] Java vs Go Comparison Table
+  [7] Common Pitfalls
+  [8] Interview Questions & Answers (Medior)
+  [9] Interview Questions & Answers (Senior)
+
+================================================================================
+[1] PACKAGE OVERVIEW
+================================================================================
+
+Package: "fmt"
+Import:  import "fmt"
+
+The fmt package implements formatted I/O using format strings similar to C's
+printf/scanf, but with Go-specific extensions.
+
+Three families of functions:
+  - Print*   → writes to stdout
+  - Sprint*  → returns a string
+  - Fprint*  → writes to an io.Writer
+
+Each family: base / -f (formatted) / -ln (newline appended)
+
+  Println / Sprintf / Fprintf
+  Printf  / Sprintln / Fprintln
+  Print   / Sprint   / Fprint
+
+Special: Errorf — returns an error value with a formatted message.
+
+================================================================================
+[2] CORE FUNCTIONS: Sprintf, Fprintf, Errorf
+================================================================================
+
+------------------------------------------------------------------------
+2.1  fmt.Sprintf(format string, a ...any) string
+------------------------------------------------------------------------
+
+  Returns a formatted string. Does NOT write anywhere.
+  Use when you need a string result to store, pass, or embed elsewhere.
+
+  Signature:
+    func Sprintf(format string, a ...any) string
+
+  Example:
+    name := "Aditya"
+    age  := 28
+    s := fmt.Sprintf("Name: %s, Age: %d", name, age)
+    // s == "Name: Aditya, Age: 28"
+
+  Key points:
+    - Analogous to String.format() in Java
+    - Returns string — caller decides what to do with it
+    - Zero allocations concern: each call allocates a new string
+    - Prefer strings.Builder for repeated concatenation in hot paths
+
+------------------------------------------------------------------------
+2.2  fmt.Fprintf(w io.Writer, format string, a ...any) (n int, err error)
+------------------------------------------------------------------------
+
+  Writes formatted output to any io.Writer.
+  Returns bytes written and any write error.
+
+  Signature:
+    func Fprintf(w io.Writer, format string, a ...any) (n int, err error)
+
+  Common io.Writer targets:
+    - os.Stdout / os.Stderr       → terminal output
+    - os.File                     → file output
+    - bytes.Buffer / strings.Builder → in-memory buffer
+    - http.ResponseWriter         → HTTP response body
+    - net.Conn                    → network connection
+    - log.Writer()                → logger output
+
+  Example — writing to stderr:
+    fmt.Fprintf(os.Stderr, "error: %v\n", err)
+
+  Example — writing to HTTP response:
+    func handler(w http.ResponseWriter, r *http.Request) {
+        fmt.Fprintf(w, "Hello, %s!", r.URL.Query().Get("name"))
+    }
+
+  Example — writing to a buffer:
+    var buf bytes.Buffer
+    fmt.Fprintf(&buf, "count=%d", 42)
+    s := buf.String() // "count=42"
+
+  Key points:
+    - io.Writer is the abstraction — same code works for files, network, HTTP
+    - Always check the returned error in production code
+    - fmt.Printf is just fmt.Fprintf(os.Stdout, ...)
+
+------------------------------------------------------------------------
+2.3  fmt.Errorf(format string, a ...any) error
+------------------------------------------------------------------------
+
+  Creates a new error value with a formatted message.
+
+  Signature:
+    func Errorf(format string, a ...any) error
+
+  Basic usage:
+    err := fmt.Errorf("invalid port: %d", port)
+
+  Error wrapping with %w (Go 1.13+):
+    err := fmt.Errorf("openFile: %w", originalErr)
+
+  Unwrapping:
+    errors.Is(err, targetErr)   // checks chain
+    errors.As(err, &target)     // extracts type from chain
+    errors.Unwrap(err)          // one level up
+
+  Key points:
+    - %w is the ONLY verb that wraps an error for unwrapping
+    - %v just embeds the error message as a plain string — no wrapping
+    - Only ONE %w allowed per Errorf call (Go 1.20+ allows multiple %w)
+    - Prefer sentinel errors + %w over raw strings for testable error chains
+    - Alternative: custom error types (implement Error() string)
+
+  Wrapping vs embedding:
+    fmt.Errorf("load: %w", err)  // wraps → errors.Is/As work
+    fmt.Errorf("load: %v", err)  // embeds string only → NOT unwrappable
+
+================================================================================
+[3] FORMAT VERBS: %v, %+v, %#v
+================================================================================
+
+These three verbs all print values in different levels of detail.
+They form a "verbosity ladder" — each adds more structural information.
+
+------------------------------------------------------------------------
+3.1  %v — Default Format (value only)
+------------------------------------------------------------------------
+
+  The "just show me the value" verb.
+  Uses the type's natural/idiomatic representation.
+
+  Behavior per type:
+    bool        → true / false
+    int/float   → decimal number
+    string      → raw string (no quotes)
+    pointer     → 0xc000018030 (hex address)
+    struct      → {field1 field2 ...}   ← NO field names
+    slice       → [elem1 elem2 ...]
+    map         → map[key1:val1 key2:val2]
+    chan        → 0xc000044060
+    func        → func address
+    error       → the .Error() string
+    fmt.Stringer→ calls .String() method
+
+  Example:
+    type Point struct{ X, Y int }
+    p := Point{3, 7}
+    fmt.Printf("%v\n", p)   // {3 7}
+
+  Use when:
+    - Writing log messages for human consumption
+    - Printing errors: fmt.Printf("err: %v\n", err)
+    - General-purpose printing where structure is implied by context
+
+------------------------------------------------------------------------
+3.2  %+v — Struct with Field Names
+------------------------------------------------------------------------
+
+  Same as %v but for structs it ADDS field names.
+  For non-struct types, behaves identically to %v.
+
+  Example:
+    type Point struct{ X, Y int }
+    p := Point{3, 7}
+    fmt.Printf("%+v\n", p)   // {X:3 Y:7}
+
+  Example with nested struct:
+    type Rect struct {
+        Origin Point
+        Size   Point
+    }
+    r := Rect{Point{0,0}, Point{10,5}}
+    fmt.Printf("%+v\n", r)   // {Origin:{X:0 Y:0} Size:{X:10 Y:5}}
+
+  Use when:
+    - Debugging struct values — need to know which field is which
+    - Logging request/response bodies in a readable way
+    - Tracing data flow through a pipeline
+
+------------------------------------------------------------------------
+3.3  %#v — Go Syntax Representation
+------------------------------------------------------------------------
+
+  Prints the value as valid Go syntax — copy-pasteable code.
+  Includes package-qualified type name for structs.
+
+  Example:
+    type Point struct{ X, Y int }
+    p := Point{3, 7}
+    fmt.Printf("%#v\n", p)   // main.Point{X:3, Y:7}
+
+  More examples:
+    s := []int{1, 2, 3}
+    fmt.Printf("%#v\n", s)   // []int{1, 2, 3}
+
+    m := map[string]int{"a": 1}
+    fmt.Printf("%#v\n", m)   // map[string]int{"a":1}
+
+    var ptr *int
+    fmt.Printf("%#v\n", ptr) // (*int)(nil)
+
+    str := "hello"
+    fmt.Printf("%#v\n", str) // "hello"  ← quoted string
+
+  Use when:
+    - Debugging: reproducing exact values in test cases
+    - Writing test fixtures or golden files
+    - Generating code or config snippets programmatically
+    - Logging complex nested structures for later analysis
+
+------------------------------------------------------------------------
+3.4  Side-by-Side Comparison
+------------------------------------------------------------------------
+
+  Given:
+    type User struct {
+        Name string
+        Age  int
+    }
+    u := User{"Aditya", 28}
+
+  Verb    Output
+  ------  --------------------------------------------------
+  %v      {Aditya 28}
+  %+v     {Name:Aditya Age:28}
+  %#v     main.User{Name:"Aditya", Age:28}
+
+  Rule of thumb:
+    %v   → production logs / user-facing messages
+    %+v  → debug logs / tracing struct flow
+    %#v  → test output / code generation / deep debugging
+
+================================================================================
+[4] OTHER ESSENTIAL VERBS (Context Reference)
+================================================================================
+
+  Verb   Meaning
+  -----  -------------------------------------------------------
+  %s     String or []byte as raw string
+  %q     Double-quoted string (Go syntax, escapes special chars)
+  %d     Integer in decimal
+  %b     Integer in binary
+  %o     Integer in octal
+  %x     Integer in lowercase hex
+  %X     Integer in uppercase hex
+  %f     Floating point, no exponent (e.g. 3.14)
+  %e     Scientific notation lowercase (3.14e+00)
+  %g     Shortest representation: %e for large, %f for small
+  %t     Boolean (true/false)
+  %p     Pointer address in hex (0x...)
+  %T     Type name of the value (e.g. main.User, []int)
+  %c     Character (rune as Unicode code point)
+  %U     Unicode format: U+0041
+  %%     Literal percent sign
+
+  Width and precision:
+    %10d    right-align integer in 10-char field
+    %-10d   left-align integer in 10-char field
+    %010d   zero-pad integer to 10 chars
+    %.2f    float with 2 decimal places
+    %8.2f   float in 8-char field, 2 decimal places
+    %*d     width taken from argument: fmt.Sprintf("%*d", 10, 42)
+
+================================================================================
+[5] ANNOTATED CODE EXAMPLES
+================================================================================
+
+------------------------------------------------------------------------
+Example 1: Sprintf — building strings
+------------------------------------------------------------------------
+
+package main
+
+import "fmt"
+
+func main() {
+    // Basic value formatting
+    pi := 3.14159
+    s  := fmt.Sprintf("Pi is approximately %.2f", pi)
+    fmt.Println(s) // Pi is approximately 3.14
+
+    // Struct formatting ladder
+    type Server struct {
+        Host string
+        Port int
+    }
+    srv := Server{"localhost", 8080}
+
+    fmt.Sprintf("%v",  srv) // {localhost 8080}
+    fmt.Sprintf("%+v", srv) // {Host:localhost Port:8080}
+    fmt.Sprintf("%#v", srv) // main.Server{Host:"localhost", Port:8080}
+
+    // Type inspection
+    fmt.Sprintf("%T", srv)  // main.Server
+    fmt.Sprintf("%T", 42)   // int
+    fmt.Sprintf("%T", pi)   // float64
+}
+
+------------------------------------------------------------------------
+Example 2: Fprintf — writing to different targets
+------------------------------------------------------------------------
+
+package main
+
+import (
+    "bytes"
+    "fmt"
+    "os"
+)
+
+func main() {
+    // Write to stderr (common for errors/warnings)
+    fmt.Fprintf(os.Stderr, "WARNING: retry attempt %d\n", 3)
+
+    // Write to a buffer (testing, composing responses)
+    var buf bytes.Buffer
+    for i := 1; i <= 3; i++ {
+        fmt.Fprintf(&buf, "item %d\n", i)
+    }
+    fmt.Print(buf.String())
+    // item 1
+    // item 2
+    // item 3
+
+    // Write to a file
+    f, _ := os.Create("/tmp/out.txt")
+    defer f.Close()
+    n, err := fmt.Fprintf(f, "written at attempt %d\n", 1)
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "write failed after %d bytes: %v\n", n, err)
+    }
+}
+
+------------------------------------------------------------------------
+Example 3: Errorf — wrapping error chains
+------------------------------------------------------------------------
+
+package main
+
+import (
+    "errors"
+    "fmt"
+    "strconv"
+)
+
+// Sentinel error — can be used in errors.Is checks
+var ErrInvalidInput = errors.New("invalid input")
+
+func parsePort(s string) (int, error) {
+    port, err := strconv.Atoi(s)
+    if err != nil {
+        // Wrap: preserves original err in the chain
+        return 0, fmt.Errorf("parsePort(%q): %w", s, ErrInvalidInput)
+    }
+    if port < 1 || port > 65535 {
+        return 0, fmt.Errorf("parsePort: port %d out of range [1-65535]: %w", port, ErrInvalidInput)
+    }
+    return port, nil
+}
+
+func main() {
+    _, err := parsePort("abc")
+    if err != nil {
+        fmt.Println(err)
+        // parsePort("abc"): invalid input
+
+        // Check the chain
+        fmt.Println(errors.Is(err, ErrInvalidInput)) // true
+
+        // Unwrap one level
+        fmt.Println(errors.Unwrap(err)) // invalid input
+    }
+}
+
+------------------------------------------------------------------------
+Example 4: %v %+v %#v with pointer, nil, interface
+------------------------------------------------------------------------
+
+package main
+
+import "fmt"
+
+type Config struct {
+    Debug   bool
+    Workers int
+    Tags    []string
+}
+
+func main() {
+    cfg := &Config{
+        Debug:   true,
+        Workers: 4,
+        Tags:    []string{"prod", "v2"},
+    }
+
+    fmt.Printf("%v\n",  cfg) // &{true 4 [prod v2]}
+    fmt.Printf("%+v\n", cfg) // &{Debug:true Workers:4 Tags:[prod v2]}
+    fmt.Printf("%#v\n", cfg) // &main.Config{Debug:true, Workers:4, Tags:[]string{"prod", "v2"}}
+
+    // nil pointer
+    var p *Config
+    fmt.Printf("%v\n",  p)  // <nil>
+    fmt.Printf("%#v\n", p)  // (*main.Config)(nil)
+
+    // nil interface
+    var err error
+    fmt.Printf("%v\n",  err) // <nil>
+    fmt.Printf("%#v\n", err) // <nil>
+}
+
+------------------------------------------------------------------------
+Example 5: Implementing fmt.Stringer and fmt.GoStringer
+------------------------------------------------------------------------
+
+package main
+
+import "fmt"
+
+type Direction int
+
+const (
+    North Direction = iota
+    South
+    East
+    West
+)
+
+// Stringer — controls %v and %s output
+func (d Direction) String() string {
+    return [...]string{"North", "South", "East", "West"}[d]
+}
+
+// GoStringer — controls %#v output
+func (d Direction) GoString() string {
+    return fmt.Sprintf("Direction(%d/*%s*/)", int(d), d.String())
+}
+
+func main() {
+    d := North
+    fmt.Printf("%v\n",  d) // North         ← uses String()
+    fmt.Printf("%s\n",  d) // North         ← uses String()
+    fmt.Printf("%#v\n", d) // Direction(0/*North*/)  ← uses GoString()
+    fmt.Printf("%d\n",  d) // 0             ← bypasses String()
+}
+
+------------------------------------------------------------------------
+Example 6: Errorf with multiple %w (Go 1.20+)
+------------------------------------------------------------------------
+
+package main
+
+import (
+    "errors"
+    "fmt"
+)
+
+var (
+    ErrNotFound   = errors.New("not found")
+    ErrPermission = errors.New("permission denied")
+)
+
+func fetchResource(id int) error {
+    // Go 1.20+: multiple %w in one Errorf
+    return fmt.Errorf("fetchResource(%d): %w; %w", id, ErrNotFound, ErrPermission)
+}
+
+func main() {
+    err := fetchResource(42)
+    fmt.Println(errors.Is(err, ErrNotFound))   // true
+    fmt.Println(errors.Is(err, ErrPermission)) // true
+}
+
+================================================================================
+[6] JAVA vs GO COMPARISON TABLE
+================================================================================
+
+  Java                                  Go Equivalent
+  ------------------------------------  ----------------------------------------
+  String.format("Hello %s", name)       fmt.Sprintf("Hello %s", name)
+  System.out.printf("val=%d\n", x)      fmt.Printf("val=%d\n", x)
+  PrintWriter.printf(w, "x=%d", x)      fmt.Fprintf(w, "x=%d", x)
+  new RuntimeException("msg: " + e)     fmt.Errorf("msg: %w", e)
+  e.getMessage()                         err.Error()
+  Throwable.getCause()                   errors.Unwrap(err)
+  instanceof check on exception          errors.As(err, &target)
+  Objects.equals(e, target)             errors.Is(err, target)
+  toString() override                    func (t T) String() string    [Stringer]
+  %s in String.format                    %v or %s
+  no direct equivalent                   %#v  (Go syntax repr)
+  no direct equivalent                   %+v  (struct with field names)
+  %h (hashCode hex) in String.format     %p   (pointer address)
+  System.err.println(msg)               fmt.Fprintln(os.Stderr, msg)
+  StringWriter + PrintWriter             bytes.Buffer + fmt.Fprintf
+
+================================================================================
+[7] COMMON PITFALLS
+================================================================================
+
+1. Using %v instead of %w in Errorf
+   WRONG:  fmt.Errorf("load: %v", err)   // embeds string, NOT unwrappable
+   RIGHT:  fmt.Errorf("load: %w", err)   // wraps, errors.Is/As work
+
+2. Ignoring Fprintf return values in production
+   WRONG:  fmt.Fprintf(w, data)
+   RIGHT:  if _, err := fmt.Fprintf(w, data); err != nil { handle(err) }
+
+3. Using %+v on non-struct types expecting extra info
+   %+v has NO extra effect on int, string, slice, map — only structs.
+
+4. Printing a nil error with %v → shows <nil>, not an empty string
+   Check for nil explicitly before formatting.
+
+5. Infinite recursion in String() method
+   If String() calls fmt.Sprintf("%v", t) and t implements Stringer,
+   fmt will call String() again → stack overflow.
+   FIX: use %+v or access fields directly in String().
+
+   WRONG:
+     func (u User) String() string { return fmt.Sprintf("%v", u) } // LOOP
+
+   RIGHT:
+     func (u User) String() string { return fmt.Sprintf("{%s %d}", u.Name, u.Age) }
+
+6. Sprintf in tight loops — allocates a new string each call.
+   Use strings.Builder + fmt.Fprintf(&builder, ...) for repeated building.
+
+7. %#v on unexported fields — they ARE printed (unlike reflection).
+   %#v uses the fmt package's internal reflect access — prints all fields.
+
+8. Multiple %w before Go 1.20 — compile-time OK but runtime panics on
+   some versions. Ensure Go 1.20+ if using multiple %w.
+
+================================================================================
+[8] INTERVIEW QUESTIONS & ANSWERS — MEDIOR LEVEL
+================================================================================
+
+Q1: What is the difference between fmt.Sprintf and fmt.Printf?
+
+A:  fmt.Printf writes the formatted string directly to os.Stdout and
+    returns (n int, err error).
+    fmt.Sprintf does NOT write anywhere — it returns the formatted string
+    to the caller. Use Sprintf when you need the string for further
+    processing (logging, HTTP response, building a struct field, etc.).
+    Think of Printf as Fprintf(os.Stdout, ...).
+
+----
+
+Q2: What is %v, and how does it differ from %+v and %#v?
+
+A:  All three use the "default" formatting family but with increasing detail:
+
+    %v   → default format. For structs: {field1 field2} — no names.
+    %+v  → for structs adds field names: {Name:Aditya Age:28}. Same as %v
+           for all other types.
+    %#v  → Go-syntax representation. Struct becomes main.User{Name:"Aditya",
+           Age:28}. Strings get quotes. Slices/maps show their type.
+           Calls GoString() if the type implements fmt.GoStringer.
+
+    Use %v for logs, %+v for debug, %#v for test output or reproducing
+    values as code.
+
+----
+
+Q3: What does fmt.Errorf("...: %w", err) do differently from %v?
+
+A:  %w wraps the original error — the resulting error implements the
+    Unwrap() method, so errors.Is and errors.As can traverse the chain.
+    %v just formats err.Error() as a plain string — the chain is broken,
+    you cannot inspect the original error programmatically.
+    Rule: use %w when callers might need to check error identity/type;
+    use %v (or %s) only when you're losing context on purpose.
+
+----
+
+Q4: What does fmt.Fprintf return and when should you check it?
+
+A:  It returns (n int, err error) — bytes written and any write error.
+    For stdout/stderr in CLI tools, ignoring it is usually fine.
+    For HTTP handlers, files, and network connections, ALWAYS check err.
+    A partial write (n < expected) with a nil err is theoretically possible
+    for some writers, so checking both n and err in critical paths is good.
+
+----
+
+Q5: How does fmt.Fprintf let you write the same formatting code for files,
+    HTTP responses, and network connections?
+
+A:  All of them implement io.Writer (the single-method interface:
+    Write(p []byte) (n int, err error)). fmt.Fprintf accepts any io.Writer,
+    so the same Fprintf call works for os.File, http.ResponseWriter, net.Conn,
+    bytes.Buffer, etc. This is Go's interface-based polymorphism at work.
+
+----
+
+Q6: How do you implement custom %v formatting for your type?
+
+A:  Implement the fmt.Stringer interface:
+      func (t MyType) String() string { return "..." }
+    fmt uses String() for %v and %s. For %#v implement fmt.GoStringer:
+      func (t MyType) GoString() string { return "..." }
+    Both are optional — fmt falls back to reflection if not implemented.
+
+----
+
+Q7: What happens if you pass the wrong number of arguments to Sprintf?
+
+A:  Go's fmt package does NOT panic. Extra arguments are appended with
+    a %!(EXTRA ...) annotation. Missing arguments produce %!verb(MISSING).
+    Example:
+      fmt.Sprintf("%d %d", 1)      → "1 %!d(MISSING)"
+      fmt.Sprintf("%d", 1, 2)      → "1%!(EXTRA int=2)"
+    Tools like go vet catch these at compile/vet time.
+
+================================================================================
+[9] INTERVIEW QUESTIONS & ANSWERS — SENIOR LEVEL
+================================================================================
+
+Q1: Describe the error wrapping model introduced in Go 1.13 and how Errorf
+    fits into it. What changed in Go 1.20?
+
+A:  Go 1.13 introduced a formal wrapping convention:
+    - An error can implement Unwrap() error to expose its cause.
+    - fmt.Errorf with %w creates a *fmt.wrapError that stores the original
+      and exposes it via Unwrap().
+    - errors.Is traverses the Unwrap chain using == or Is(error) bool.
+    - errors.As traverses the chain looking for a matching type.
+
+    Before 1.13, libraries used ad-hoc wrapping (github.com/pkg/errors).
+    Go 1.13 standardized it in the stdlib.
+
+    Go 1.20 extended Errorf to support MULTIPLE %w verbs in a single call,
+    producing a *fmt.wrapErrors (plural) that implements Unwrap() []error.
+    errors.Is and errors.As both handle the multi-error case by checking
+    all branches. This allows expressing "both of these errors occurred"
+    in a single wrapped value.
+
+----
+
+Q2: What are the performance implications of using fmt.Sprintf heavily in
+    hot paths, and how would you address them?
+
+A:  fmt.Sprintf uses reflection internally and allocates a new string on
+    every call. In hot paths (tight loops, per-request processing at high
+    QPS) this creates GC pressure.
+
+    Alternatives in order of efficiency:
+    1. strings.Builder + fmt.Fprintf(&b, ...) — single allocation for the
+       buffer, reusable with b.Reset().
+    2. sync.Pool of *bytes.Buffer — pool and reuse buffers across goroutines.
+    3. strconv functions (Itoa, AppendInt, etc.) — zero-allocation integer/
+       float formatting without reflection.
+    4. Pre-build format strings once; template them at startup.
+    5. For structured logging use zerolog or zap — designed for zero/low
+       alloc logging without fmt.
+
+    Benchmark first with pprof — fmt is rarely the actual bottleneck unless
+    you're at >100k ops/sec.
+
+----
+
+Q3: How does fmt determine which format to use when no explicit verb is given
+    (e.g., fmt.Println)? Walk through the resolution order.
+
+A:  For %v (and Println which uses default formats), fmt resolves in this order:
+    1. Does the value implement fmt.Formatter? → call Format(f State, verb rune).
+       Full custom control over all verbs.
+    2. Is the verb %v or %s? Does it implement fmt.GoStringer (%#v) or
+       fmt.Stringer (%v/%s)? → call GoString() or String().
+    3. Fall through to reflection-based formatting:
+       - Structs: iterate exported+unexported fields via reflect.
+       - Slices/arrays: iterate elements.
+       - Maps: iterate key-value pairs (sorted by key for determinism since Go 1.12).
+       - Pointers: dereference and recurse (prefix &).
+
+    Implementing fmt.Formatter gives you the most control — you can handle
+    ALL verbs (%d, %x, %q, etc.) with custom logic.
+
+----
+
+Q4: A colleague wraps every error with %w at every layer of a 10-layer call
+    stack. What problems can arise and how do you recommend handling it?
+
+A:  Problems:
+    - Error messages become deeply nested: "A: B: C: D: ... : original"
+      which is hard to read in logs.
+    - errors.Is/As must traverse a long chain — minor performance cost but
+      more importantly it makes the API brittle: callers deep-couple to
+      sentinel errors defined in low-level packages.
+    - If an internal implementation detail (e.g., a specific fs error)
+      leaks through the entire chain, changing internals becomes a breaking
+      change for callers.
+
+    Recommendations:
+    - Wrap at package boundaries, not at every function call.
+    - Use sentinel/typed errors at your package's public API surface only.
+    - At a service boundary (HTTP handler, gRPC endpoint), log the full
+      chain, then return a generic error code to the caller.
+    - Consider error types (struct implementing error) over chains when
+      you need structured fields (request ID, status code, etc.).
+    - Use %w when the caller NEEDS to check the cause; use %v (log and
+      return a new error) when it doesn't.
+
+----
+
+Q5: Explain fmt.Formatter interface and when you would implement it vs
+    implementing Stringer.
+
+A:  fmt.Stringer:
+      func (t T) String() string
+    Controls only %v and %s. Simple, covers 90% of cases.
+
+    fmt.Formatter:
+      func (t T) Format(f fmt.State, verb rune)
+    fmt.State exposes Width(), Precision(), Flag('#', '+', '-', ' ', '0').
+    Called for EVERY verb — you handle %v, %d, %x, etc. differently.
+
+    Use Formatter when:
+    - You need %+v and %#v to produce different outputs than default.
+    - Your type has meaningful %d, %x, %b representations (e.g., bitmask).
+    - You need width/precision-aware formatting (e.g., a Duration type
+      that formats as "3h04m" with full control over padding).
+
+    Example skeleton:
+      func (m MyMask) Format(f fmt.State, verb rune) {
+          switch verb {
+          case 'b': fmt.Fprintf(f, "%b", uint64(m))
+          case 'x': fmt.Fprintf(f, "%x", uint64(m))
+          case 'v':
+              if f.Flag('#') { fmt.Fprintf(f, "MyMask(0x%x)", uint64(m)) }
+              else           { fmt.Fprintf(f, "%b", uint64(m)) }
+          default:  fmt.Fprintf(f, "%%!%c(MyMask=%d)", verb, uint64(m))
+          }
+      }
+
+----
+
+Q6: How does go vet help with fmt calls and what are its limitations?
+
+A:  go vet runs the "printf" analyzer which:
+    - Checks verb/argument type alignment (%d with string → warning).
+    - Detects missing or extra arguments.
+    - Validates %w is only used in Errorf-like functions.
+    - Recognizes wrapper functions annotated with //go:generate or
+      printf-like signatures.
+
+    Limitations:
+    - Cannot check runtime-constructed format strings.
+    - Does not detect performance issues (unnecessary allocations).
+    - Does not flag %v vs %w confusion (both are "valid" for vet).
+    - Does not enforce semantic correctness of the output.
+
+    Complement with: staticcheck (SA1006, SA5008), errcheck for Fprintf
+    return values, and gosimple for Sprintf(""+x) patterns.
+
+================================================================================
