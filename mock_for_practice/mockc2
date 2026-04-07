@@ -1,0 +1,1549 @@
+================================================================================
+  ██████  ██████      ██████  ██████  ██████  ██ ███    ██  ██████
+ ██       ██    ██   ██      ██    ██ ██   ██ ██ ████   ██ ██
+ ██   ███ ██    ██   ██      ██    ██ ██   ██ ██ ██ ██  ██ ██   ███
+ ██    ██ ██    ██   ██      ██    ██ ██   ██ ██ ██  ██ ██ ██    ██
+  ██████  ██████      ██████  ██████  ██████  ██ ██   ████  ██████
+
+        CLASSIC CODING QUESTIONS | GO (GOLANG) | MID → SENIOR
+        25 Problems | Full Working Code | Patterns Noted
+================================================================================
+
+CATEGORIES:
+  [A] Strings & Arrays
+  [B] Linked Lists
+  [C] Trees & Graphs
+  [D] Concurrency
+  [E] Maps & Hashing
+  [F] Sorting & Searching
+  [G] Goroutines & Channels
+
+FORMAT PER QUESTION:
+  - Problem statement
+  - Approach / pattern
+  - Full working Go code
+  - Time & Space complexity
+  - Notes / edge cases
+
+================================================================================
+  INDEX
+================================================================================
+  A01. Reverse a string
+  A02. Check if string is palindrome
+  A03. Find two numbers that sum to target (Two Sum)
+  A04. Find the longest substring without repeating characters
+  A05. Rotate a slice by k positions
+  A06. Merge two sorted slices
+  A07. Find duplicates in a slice
+  B01. Reverse a singly linked list
+  B02. Detect cycle in a linked list
+  B03. Find the middle of a linked list
+  C01. Binary tree inorder traversal (recursive + iterative)
+  C02. Check if binary tree is symmetric
+  C03. Maximum depth of binary tree
+  D01. FizzBuzz with goroutines
+  D02. Fan-out / fan-in pipeline
+  D03. Rate limiter using ticker
+  D04. Merge channels
+  E01. Group anagrams
+  E02. First non-repeating character
+  E03. Word frequency counter
+  F01. Binary search
+  F02. Find first and last position in sorted slice
+  G01. Concurrent map-reduce (sum of squares)
+  G02. Timeout with select
+  G03. Worker pool processing jobs
+
+================================================================================
+  [A] STRINGS & ARRAYS
+================================================================================
+
+--------------------------------------------------------------------------------
+A01. Reverse a String
+--------------------------------------------------------------------------------
+PROBLEM:
+  Given a string, return it reversed.
+
+APPROACH:
+  Convert to rune slice (handles multi-byte UTF-8), swap from both ends.
+
+CODE:
+  package main
+
+  import "fmt"
+
+  func reverseString(s string) string {
+      runes := []rune(s)
+      left, right := 0, len(runes)-1
+      for left < right {
+          runes[left], runes[right] = runes[right], runes[left]
+          left++
+          right--
+      }
+      return string(runes)
+  }
+
+  func main() {
+      fmt.Println(reverseString("hello"))   // olleh
+      fmt.Println(reverseString("golang"))  // gnalog
+      fmt.Println(reverseString("日本語"))   // 語本日 (UTF-8 safe)
+  }
+
+COMPLEXITY:
+  Time:  O(n)
+  Space: O(n) — rune slice copy
+
+NOTE:
+  Using []byte instead of []rune would break multi-byte characters.
+  Always use []rune for Unicode safety in Go.
+
+--------------------------------------------------------------------------------
+A02. Check if String is a Palindrome
+--------------------------------------------------------------------------------
+PROBLEM:
+  Return true if the string reads the same forwards and backwards.
+  Ignore case and non-alphanumeric characters.
+
+APPROACH:
+  Two pointers. Skip non-alphanumeric, compare lowercased characters.
+
+CODE:
+  package main
+
+  import (
+      "fmt"
+      "unicode"
+  )
+
+  func isPalindrome(s string) bool {
+      runes := []rune(s)
+      left, right := 0, len(runes)-1
+
+      for left < right {
+          for left < right && !unicode.IsLetter(runes[left]) &&
+              !unicode.IsDigit(runes[left]) {
+              left++
+          }
+          for left < right && !unicode.IsLetter(runes[right]) &&
+              !unicode.IsDigit(runes[right]) {
+              right--
+          }
+          if unicode.ToLower(runes[left]) != unicode.ToLower(runes[right]) {
+              return false
+          }
+          left++
+          right--
+      }
+      return true
+  }
+
+  func main() {
+      fmt.Println(isPalindrome("A man, a plan, a canal: Panama")) // true
+      fmt.Println(isPalindrome("race a car"))                     // false
+      fmt.Println(isPalindrome(""))                               // true
+  }
+
+COMPLEXITY:
+  Time:  O(n)
+  Space: O(n) — rune conversion
+
+--------------------------------------------------------------------------------
+A03. Two Sum
+--------------------------------------------------------------------------------
+PROBLEM:
+  Given a slice of integers and a target, return the indices of two numbers
+  that add up to target. Assume exactly one solution exists.
+
+APPROACH:
+  Hash map: store value -> index as we iterate. For each number, check if
+  (target - number) already exists in the map.
+
+CODE:
+  package main
+
+  import "fmt"
+
+  func twoSum(nums []int, target int) (int, int) {
+      seen := make(map[int]int) // value -> index
+
+      for i, num := range nums {
+          complement := target - num
+          if j, ok := seen[complement]; ok {
+              return j, i
+          }
+          seen[num] = i
+      }
+      return -1, -1 // no solution
+  }
+
+  func main() {
+      fmt.Println(twoSum([]int{2, 7, 11, 15}, 9))  // 0 1
+      fmt.Println(twoSum([]int{3, 2, 4}, 6))        // 1 2
+      fmt.Println(twoSum([]int{3, 3}, 6))            // 0 1
+  }
+
+COMPLEXITY:
+  Time:  O(n)
+  Space: O(n) — hash map
+
+NOTE:
+  Brute force is O(n²) — always mention the map optimisation first.
+
+--------------------------------------------------------------------------------
+A04. Longest Substring Without Repeating Characters
+--------------------------------------------------------------------------------
+PROBLEM:
+  Given a string, find the length of the longest substring without
+  repeating characters.
+
+APPROACH:
+  Sliding window with a map tracking the last seen index of each character.
+  Advance left pointer when a duplicate is found.
+
+CODE:
+  package main
+
+  import "fmt"
+
+  func lengthOfLongestSubstring(s string) int {
+      lastSeen := make(map[rune]int) // char -> last index
+      maxLen := 0
+      left := 0
+
+      for right, ch := range s {
+          if idx, ok := lastSeen[ch]; ok && idx >= left {
+              left = idx + 1 // shrink window past the duplicate
+          }
+          lastSeen[ch] = right
+          if right-left+1 > maxLen {
+              maxLen = right - left + 1
+          }
+      }
+      return maxLen
+  }
+
+  func main() {
+      fmt.Println(lengthOfLongestSubstring("abcabcbb")) // 3 ("abc")
+      fmt.Println(lengthOfLongestSubstring("bbbbb"))    // 1 ("b")
+      fmt.Println(lengthOfLongestSubstring("pwwkew"))   // 3 ("wke")
+      fmt.Println(lengthOfLongestSubstring(""))         // 0
+  }
+
+COMPLEXITY:
+  Time:  O(n)
+  Space: O(min(n, charset)) — map size bounded by character set
+
+PATTERN: Sliding Window
+
+--------------------------------------------------------------------------------
+A05. Rotate a Slice by K Positions
+--------------------------------------------------------------------------------
+PROBLEM:
+  Rotate a slice to the right by k steps in-place.
+  Example: [1,2,3,4,5], k=2 -> [4,5,1,2,3]
+
+APPROACH:
+  Three-reversal trick: reverse all, reverse first k, reverse rest.
+
+CODE:
+  package main
+
+  import "fmt"
+
+  func rotate(nums []int, k int) {
+      n := len(nums)
+      if n == 0 { return }
+      k = k % n // handle k > n
+
+      reverse(nums, 0, n-1)
+      reverse(nums, 0, k-1)
+      reverse(nums, k, n-1)
+  }
+
+  func reverse(nums []int, left, right int) {
+      for left < right {
+          nums[left], nums[right] = nums[right], nums[left]
+          left++
+          right--
+      }
+  }
+
+  func main() {
+      nums := []int{1, 2, 3, 4, 5, 6, 7}
+      rotate(nums, 3)
+      fmt.Println(nums) // [5 6 7 1 2 3 4]
+
+      nums2 := []int{1, 2}
+      rotate(nums2, 3)
+      fmt.Println(nums2) // [2 1]
+  }
+
+COMPLEXITY:
+  Time:  O(n)
+  Space: O(1) — in-place
+
+--------------------------------------------------------------------------------
+A06. Merge Two Sorted Slices
+--------------------------------------------------------------------------------
+PROBLEM:
+  Given two sorted slices, return a single merged sorted slice.
+
+APPROACH:
+  Two pointers — pick the smaller element at each step.
+
+CODE:
+  package main
+
+  import "fmt"
+
+  func mergeSorted(a, b []int) []int {
+      result := make([]int, 0, len(a)+len(b))
+      i, j := 0, 0
+
+      for i < len(a) && j < len(b) {
+          if a[i] <= b[j] {
+              result = append(result, a[i])
+              i++
+          } else {
+              result = append(result, b[j])
+              j++
+          }
+      }
+      result = append(result, a[i:]...)
+      result = append(result, b[j:]...)
+      return result
+  }
+
+  func main() {
+      fmt.Println(mergeSorted([]int{1, 3, 5}, []int{2, 4, 6}))
+      // [1 2 3 4 5 6]
+      fmt.Println(mergeSorted([]int{1, 2, 3}, []int{}))
+      // [1 2 3]
+  }
+
+COMPLEXITY:
+  Time:  O(n + m)
+  Space: O(n + m) — result slice
+
+--------------------------------------------------------------------------------
+A07. Find Duplicates in a Slice
+--------------------------------------------------------------------------------
+PROBLEM:
+  Given a slice of integers, return all elements that appear more than once.
+
+APPROACH:
+  Single pass with a frequency map.
+
+CODE:
+  package main
+
+  import "fmt"
+
+  func findDuplicates(nums []int) []int {
+      freq := make(map[int]int)
+      for _, n := range nums {
+          freq[n]++
+      }
+
+      var result []int
+      for val, count := range freq {
+          if count > 1 {
+              result = append(result, val)
+          }
+      }
+      return result
+  }
+
+  func main() {
+      fmt.Println(findDuplicates([]int{1, 2, 3, 2, 4, 3, 5}))
+      // [2 3] (order may vary — map iteration is random in Go)
+  }
+
+COMPLEXITY:
+  Time:  O(n)
+  Space: O(n)
+
+NOTE:
+  Output order is non-deterministic — sort if order matters.
+  Mention this to the interviewer.
+
+================================================================================
+  [B] LINKED LISTS
+================================================================================
+
+  // Node definition used across all linked list questions
+  type ListNode struct {
+      Val  int
+      Next *ListNode
+  }
+
+--------------------------------------------------------------------------------
+B01. Reverse a Singly Linked List
+--------------------------------------------------------------------------------
+PROBLEM:
+  Reverse a singly linked list and return the new head.
+
+APPROACH:
+  Iterative — maintain prev, curr pointers. Rewire Next at each step.
+
+CODE:
+  package main
+
+  import "fmt"
+
+  type ListNode struct {
+      Val  int
+      Next *ListNode
+  }
+
+  func reverseList(head *ListNode) *ListNode {
+      var prev *ListNode
+      curr := head
+
+      for curr != nil {
+          next := curr.Next // save next
+          curr.Next = prev  // reverse pointer
+          prev = curr       // advance prev
+          curr = next       // advance curr
+      }
+      return prev // prev is new head
+  }
+
+  // helpers
+  func newList(vals []int) *ListNode {
+      if len(vals) == 0 { return nil }
+      head := &ListNode{Val: vals[0]}
+      cur := head
+      for _, v := range vals[1:] {
+          cur.Next = &ListNode{Val: v}
+          cur = cur.Next
+      }
+      return head
+  }
+
+  func printList(head *ListNode) {
+      for head != nil {
+          fmt.Print(head.Val, " ")
+          head = head.Next
+      }
+      fmt.Println()
+  }
+
+  func main() {
+      head := newList([]int{1, 2, 3, 4, 5})
+      printList(reverseList(head)) // 5 4 3 2 1
+  }
+
+COMPLEXITY:
+  Time:  O(n)
+  Space: O(1) — iterative, no recursion stack
+
+--------------------------------------------------------------------------------
+B02. Detect Cycle in a Linked List
+--------------------------------------------------------------------------------
+PROBLEM:
+  Return true if the linked list has a cycle.
+
+APPROACH:
+  Floyd's Tortoise and Hare — slow pointer moves 1 step, fast moves 2.
+  If they meet, there's a cycle.
+
+CODE:
+  package main
+
+  import "fmt"
+
+  type ListNode struct {
+      Val  int
+      Next *ListNode
+  }
+
+  func hasCycle(head *ListNode) bool {
+      slow, fast := head, head
+
+      for fast != nil && fast.Next != nil {
+          slow = slow.Next
+          fast = fast.Next.Next
+          if slow == fast {
+              return true
+          }
+      }
+      return false
+  }
+
+  func main() {
+      // Build: 1 -> 2 -> 3 -> 4 -> (back to 2)
+      n1 := &ListNode{Val: 1}
+      n2 := &ListNode{Val: 2}
+      n3 := &ListNode{Val: 3}
+      n4 := &ListNode{Val: 4}
+      n1.Next = n2
+      n2.Next = n3
+      n3.Next = n4
+      n4.Next = n2 // cycle
+
+      fmt.Println(hasCycle(n1)) // true
+
+      // No cycle
+      m := &ListNode{Val: 1, Next: &ListNode{Val: 2}}
+      fmt.Println(hasCycle(m))  // false
+  }
+
+COMPLEXITY:
+  Time:  O(n)
+  Space: O(1)
+
+--------------------------------------------------------------------------------
+B03. Find Middle of a Linked List
+--------------------------------------------------------------------------------
+PROBLEM:
+  Return the middle node of a linked list.
+  If even number of nodes, return the second middle.
+
+APPROACH:
+  Slow and fast pointers — when fast reaches end, slow is at middle.
+
+CODE:
+  package main
+
+  import "fmt"
+
+  type ListNode struct {
+      Val  int
+      Next *ListNode
+  }
+
+  func middleNode(head *ListNode) *ListNode {
+      slow, fast := head, head
+
+      for fast != nil && fast.Next != nil {
+          slow = slow.Next
+          fast = fast.Next.Next
+      }
+      return slow
+  }
+
+  func main() {
+      // 1 -> 2 -> 3 -> 4 -> 5
+      head := &ListNode{1, &ListNode{2, &ListNode{3,
+          &ListNode{4, &ListNode{5, nil}}}}}
+      fmt.Println(middleNode(head).Val) // 3
+
+      // 1 -> 2 -> 3 -> 4
+      head2 := &ListNode{1, &ListNode{2, &ListNode{3,
+          &ListNode{4, nil}}}}
+      fmt.Println(middleNode(head2).Val) // 3 (second middle)
+  }
+
+COMPLEXITY:
+  Time:  O(n)
+  Space: O(1)
+
+================================================================================
+  [C] TREES & GRAPHS
+================================================================================
+
+  // TreeNode definition used across all tree questions
+  type TreeNode struct {
+      Val   int
+      Left  *TreeNode
+      Right *TreeNode
+  }
+
+--------------------------------------------------------------------------------
+C01. Binary Tree Inorder Traversal (Recursive + Iterative)
+--------------------------------------------------------------------------------
+PROBLEM:
+  Return the inorder traversal (Left, Root, Right) of a binary tree.
+
+CODE:
+  package main
+
+  import "fmt"
+
+  type TreeNode struct {
+      Val   int
+      Left  *TreeNode
+      Right *TreeNode
+  }
+
+  // Recursive
+  func inorderRecursive(root *TreeNode) []int {
+      if root == nil {
+          return nil
+      }
+      var result []int
+      result = append(result, inorderRecursive(root.Left)...)
+      result = append(result, root.Val)
+      result = append(result, inorderRecursive(root.Right)...)
+      return result
+  }
+
+  // Iterative — using explicit stack
+  func inorderIterative(root *TreeNode) []int {
+      var result []int
+      var stack []*TreeNode
+      curr := root
+
+      for curr != nil || len(stack) > 0 {
+          // Go as left as possible
+          for curr != nil {
+              stack = append(stack, curr)
+              curr = curr.Left
+          }
+          // Pop and visit
+          curr = stack[len(stack)-1]
+          stack = stack[:len(stack)-1]
+          result = append(result, curr.Val)
+          curr = curr.Right
+      }
+      return result
+  }
+
+  func main() {
+      //      4
+      //     / \
+      //    2   6
+      //   / \ / \
+      //  1  3 5  7
+      root := &TreeNode{4,
+          &TreeNode{2, &TreeNode{1, nil, nil}, &TreeNode{3, nil, nil}},
+          &TreeNode{6, &TreeNode{5, nil, nil}, &TreeNode{7, nil, nil}},
+      }
+      fmt.Println(inorderRecursive(root))  // [1 2 3 4 5 6 7]
+      fmt.Println(inorderIterative(root))  // [1 2 3 4 5 6 7]
+  }
+
+COMPLEXITY:
+  Time:  O(n)
+  Space: O(h) — h = height of tree (O(log n) balanced, O(n) worst)
+
+NOTE:
+  Interviewers often follow up asking for iterative — always know both.
+
+--------------------------------------------------------------------------------
+C02. Check if Binary Tree is Symmetric
+--------------------------------------------------------------------------------
+PROBLEM:
+  Return true if a binary tree is a mirror of itself (symmetric around
+  its centre).
+
+APPROACH:
+  Recursive: check if left subtree is mirror of right subtree.
+
+CODE:
+  package main
+
+  import "fmt"
+
+  type TreeNode struct {
+      Val   int
+      Left  *TreeNode
+      Right *TreeNode
+  }
+
+  func isSymmetric(root *TreeNode) bool {
+      if root == nil { return true }
+      return isMirror(root.Left, root.Right)
+  }
+
+  func isMirror(left, right *TreeNode) bool {
+      if left == nil && right == nil { return true }
+      if left == nil || right == nil { return false }
+      return left.Val == right.Val &&
+          isMirror(left.Left, right.Right) &&
+          isMirror(left.Right, right.Left)
+  }
+
+  func main() {
+      //      1
+      //     / \
+      //    2   2
+      //   / \ / \
+      //  3  4 4  3
+      root := &TreeNode{1,
+          &TreeNode{2, &TreeNode{3, nil, nil}, &TreeNode{4, nil, nil}},
+          &TreeNode{2, &TreeNode{4, nil, nil}, &TreeNode{3, nil, nil}},
+      }
+      fmt.Println(isSymmetric(root)) // true
+
+      //   1
+      //  / \
+      // 2   2
+      //  \   \
+      //   3   3
+      root2 := &TreeNode{1,
+          &TreeNode{2, nil, &TreeNode{3, nil, nil}},
+          &TreeNode{2, nil, &TreeNode{3, nil, nil}},
+      }
+      fmt.Println(isSymmetric(root2)) // false
+  }
+
+COMPLEXITY:
+  Time:  O(n)
+  Space: O(h)
+
+--------------------------------------------------------------------------------
+C03. Maximum Depth of Binary Tree
+--------------------------------------------------------------------------------
+PROBLEM:
+  Return the maximum depth (number of nodes along the longest path
+  from root to leaf).
+
+CODE:
+  package main
+
+  import "fmt"
+
+  type TreeNode struct {
+      Val   int
+      Left  *TreeNode
+      Right *TreeNode
+  }
+
+  func maxDepth(root *TreeNode) int {
+      if root == nil { return 0 }
+      leftDepth  := maxDepth(root.Left)
+      rightDepth := maxDepth(root.Right)
+      if leftDepth > rightDepth {
+          return leftDepth + 1
+      }
+      return rightDepth + 1
+  }
+
+  func main() {
+      //     3
+      //    / \
+      //   9  20
+      //      / \
+      //     15   7
+      root := &TreeNode{3,
+          &TreeNode{9, nil, nil},
+          &TreeNode{20, &TreeNode{15, nil, nil}, &TreeNode{7, nil, nil}},
+      }
+      fmt.Println(maxDepth(root)) // 3
+  }
+
+COMPLEXITY:
+  Time:  O(n)
+  Space: O(h)
+
+================================================================================
+  [D] CONCURRENCY
+================================================================================
+
+--------------------------------------------------------------------------------
+D01. FizzBuzz with Goroutines
+--------------------------------------------------------------------------------
+PROBLEM:
+  Print FizzBuzz 1..n using 4 goroutines:
+    - One prints "Fizz" (multiples of 3)
+    - One prints "Buzz" (multiples of 5)
+    - One prints "FizzBuzz" (multiples of 15)
+    - One prints the number (neither)
+
+APPROACH:
+  Use 4 channels to signal which goroutine should print. A coordinator
+  goroutine decides and sends to the correct channel.
+
+CODE:
+  package main
+
+  import (
+      "fmt"
+      "sync"
+  )
+
+  func fizzBuzz(n int) {
+      fizz     := make(chan struct{})
+      buzz     := make(chan struct{})
+      fizzbuzz := make(chan struct{})
+      number   := make(chan int)
+      done     := make(chan struct{})
+
+      var wg sync.WaitGroup
+      wg.Add(4)
+
+      // Fizz goroutine
+      go func() {
+          defer wg.Done()
+          for range fizz { fmt.Print("Fizz ") }
+      }()
+
+      // Buzz goroutine
+      go func() {
+          defer wg.Done()
+          for range buzz { fmt.Print("Buzz ") }
+      }()
+
+      // FizzBuzz goroutine
+      go func() {
+          defer wg.Done()
+          for range fizzbuzz { fmt.Print("FizzBuzz ") }
+      }()
+
+      // Number goroutine
+      go func() {
+          defer wg.Done()
+          for n := range number { fmt.Print(n, " ") }
+      }()
+
+      // Coordinator
+      go func() {
+          for i := 1; i <= n; i++ {
+              switch {
+              case i%15 == 0: fizzbuzz <- struct{}{}
+              case i%3  == 0: fizz     <- struct{}{}
+              case i%5  == 0: buzz     <- struct{}{}
+              default:        number   <- i
+              }
+          }
+          close(fizz)
+          close(buzz)
+          close(fizzbuzz)
+          close(number)
+          done <- struct{}{}
+      }()
+
+      <-done
+      wg.Wait()
+      fmt.Println()
+  }
+
+  func main() {
+      fizzBuzz(20)
+  }
+
+  // Output: 1 2 Fizz 4 Buzz Fizz 7 8 Fizz Buzz 11 Fizz 13 14 FizzBuzz 16 17 Fizz 19 Buzz
+
+--------------------------------------------------------------------------------
+D02. Fan-out / Fan-in Pipeline
+--------------------------------------------------------------------------------
+PROBLEM:
+  Create a pipeline that:
+    1. Generates numbers 1..n (source)
+    2. Fans out to 3 workers that square each number
+    3. Fans in (merges) all worker results into one channel
+
+CODE:
+  package main
+
+  import (
+      "fmt"
+      "sync"
+  )
+
+  // Stage 1 — source
+  func generate(nums ...int) <-chan int {
+      out := make(chan int)
+      go func() {
+          for _, n := range nums {
+              out <- n
+          }
+          close(out)
+      }()
+      return out
+  }
+
+  // Stage 2 — worker (square)
+  func square(in <-chan int) <-chan int {
+      out := make(chan int)
+      go func() {
+          for n := range in {
+              out <- n * n
+          }
+          close(out)
+      }()
+      return out
+  }
+
+  // Stage 3 — fan-in (merge)
+  func merge(cs ...<-chan int) <-chan int {
+      var wg sync.WaitGroup
+      merged := make(chan int)
+
+      output := func(c <-chan int) {
+          defer wg.Done()
+          for v := range c {
+              merged <- v
+          }
+      }
+
+      wg.Add(len(cs))
+      for _, c := range cs {
+          go output(c)
+      }
+
+      go func() {
+          wg.Wait()
+          close(merged)
+      }()
+      return merged
+  }
+
+  func main() {
+      in := generate(1, 2, 3, 4, 5, 6, 7, 8, 9)
+
+      // Fan-out to 3 workers
+      c1 := square(in)
+      c2 := square(in)
+      c3 := square(in)
+
+      // Fan-in
+      for result := range merge(c1, c2, c3) {
+          fmt.Print(result, " ")
+      }
+      fmt.Println()
+      // Output: squares of 1-9 in non-deterministic order
+  }
+
+PATTERN: Pipeline + Fan-out + Fan-in
+
+--------------------------------------------------------------------------------
+D03. Rate Limiter Using Ticker
+--------------------------------------------------------------------------------
+PROBLEM:
+  Process requests but limit to 3 per second using a ticker.
+
+CODE:
+  package main
+
+  import (
+      "fmt"
+      "time"
+  )
+
+  func main() {
+      requests := make(chan int, 10)
+      for i := 1; i <= 8; i++ {
+          requests <- i
+      }
+      close(requests)
+
+      // Allow 1 request every 333ms = ~3 per second
+      limiter := time.NewTicker(333 * time.Millisecond)
+      defer limiter.Stop()
+
+      for req := range requests {
+          <-limiter.C // wait for tick
+          fmt.Printf("request %d processed at %v\n",
+              req, time.Now().Format("15:04:05.000"))
+      }
+  }
+
+PATTERN: Rate Limiting with time.Ticker
+
+NOTE:
+  For bursty rate limiting (allow burst then throttle), use a buffered
+  channel filled by a ticker goroutine.
+
+--------------------------------------------------------------------------------
+D04. Merge Channels
+--------------------------------------------------------------------------------
+PROBLEM:
+  Write a function that takes multiple input channels and merges them
+  into a single output channel. Close output when all inputs are done.
+
+CODE:
+  package main
+
+  import (
+      "fmt"
+      "sync"
+  )
+
+  func mergeChannels(channels ...<-chan int) <-chan int {
+      out := make(chan int)
+      var wg sync.WaitGroup
+
+      forward := func(ch <-chan int) {
+          defer wg.Done()
+          for v := range ch {
+              out <- v
+          }
+      }
+
+      wg.Add(len(channels))
+      for _, ch := range channels {
+          go forward(ch)
+      }
+
+      go func() {
+          wg.Wait()
+          close(out)
+      }()
+      return out
+  }
+
+  func sourceChannel(vals ...int) <-chan int {
+      ch := make(chan int)
+      go func() {
+          for _, v := range vals {
+              ch <- v
+          }
+          close(ch)
+      }()
+      return ch
+  }
+
+  func main() {
+      ch1 := sourceChannel(1, 2, 3)
+      ch2 := sourceChannel(10, 20)
+      ch3 := sourceChannel(100)
+
+      for v := range mergeChannels(ch1, ch2, ch3) {
+          fmt.Print(v, " ")
+      }
+      fmt.Println()
+      // Output: values from all 3 channels (order non-deterministic)
+  }
+
+================================================================================
+  [E] MAPS & HASHING
+================================================================================
+
+--------------------------------------------------------------------------------
+E01. Group Anagrams
+--------------------------------------------------------------------------------
+PROBLEM:
+  Given a slice of strings, group anagrams together.
+  Example: ["eat","tea","tan","ate","nat","bat"]
+  -> [["eat","tea","ate"], ["tan","nat"], ["bat"]]
+
+APPROACH:
+  For each word, sort its characters to form a key. Group words by key.
+
+CODE:
+  package main
+
+  import (
+      "fmt"
+      "sort"
+  )
+
+  func groupAnagrams(strs []string) [][]string {
+      groups := make(map[string][]string)
+
+      for _, s := range strs {
+          runes := []rune(s)
+          sort.Slice(runes, func(i, j int) bool {
+              return runes[i] < runes[j]
+          })
+          key := string(runes)
+          groups[key] = append(groups[key], s)
+      }
+
+      result := make([][]string, 0, len(groups))
+      for _, group := range groups {
+          result = append(result, group)
+      }
+      return result
+  }
+
+  func main() {
+      input := []string{"eat", "tea", "tan", "ate", "nat", "bat"}
+      groups := groupAnagrams(input)
+      for _, g := range groups {
+          fmt.Println(g)
+      }
+      // [eat tea ate]
+      // [tan nat]
+      // [bat]   (order of groups may vary)
+  }
+
+COMPLEXITY:
+  Time:  O(n * k log k) — n strings, k = max length, sort each
+  Space: O(n * k) — map storage
+
+--------------------------------------------------------------------------------
+E02. First Non-Repeating Character
+--------------------------------------------------------------------------------
+PROBLEM:
+  Given a string, return the index of the first character that appears
+  exactly once. Return -1 if none exists.
+
+APPROACH:
+  Two passes: count frequency, then find first with count == 1.
+
+CODE:
+  package main
+
+  import "fmt"
+
+  func firstUniqChar(s string) int {
+      freq := make(map[rune]int)
+      for _, ch := range s {
+          freq[ch]++
+      }
+      for i, ch := range s {
+          if freq[ch] == 1 {
+              return i
+          }
+      }
+      return -1
+  }
+
+  func main() {
+      fmt.Println(firstUniqChar("leetcode"))  // 0 ('l')
+      fmt.Println(firstUniqChar("loveleet"))  // 2 ('v')
+      fmt.Println(firstUniqChar("aabb"))      // -1
+  }
+
+COMPLEXITY:
+  Time:  O(n)
+  Space: O(1) — bounded by character set (26 letters etc.)
+
+--------------------------------------------------------------------------------
+E03. Word Frequency Counter
+--------------------------------------------------------------------------------
+PROBLEM:
+  Given a string of words, return the top k most frequent words,
+  sorted by frequency (ties broken alphabetically).
+
+CODE:
+  package main
+
+  import (
+      "fmt"
+      "sort"
+      "strings"
+  )
+
+  func topKFrequent(words []string, k int) []string {
+      freq := make(map[string]int)
+      for _, w := range words {
+          freq[w]++
+      }
+
+      unique := make([]string, 0, len(freq))
+      for w := range freq {
+          unique = append(unique, w)
+      }
+
+      sort.Slice(unique, func(i, j int) bool {
+          if freq[unique[i]] != freq[unique[j]] {
+              return freq[unique[i]] > freq[unique[j]] // higher freq first
+          }
+          return unique[i] < unique[j] // alphabetical tie-break
+      })
+
+      return unique[:k]
+  }
+
+  func main() {
+      words := strings.Fields("the day is sunny the the the sunny is is")
+      fmt.Println(topKFrequent(words, 4))
+      // [the is sunny day]
+  }
+
+COMPLEXITY:
+  Time:  O(n + m log m) — n words, m unique words
+  Space: O(m)
+
+================================================================================
+  [F] SORTING & SEARCHING
+================================================================================
+
+--------------------------------------------------------------------------------
+F01. Binary Search
+--------------------------------------------------------------------------------
+PROBLEM:
+  Given a sorted slice of integers and a target, return its index.
+  Return -1 if not found.
+
+CODE:
+  package main
+
+  import "fmt"
+
+  func binarySearch(nums []int, target int) int {
+      left, right := 0, len(nums)-1
+
+      for left <= right {
+          mid := left + (right-left)/2 // avoids overflow vs (left+right)/2
+
+          switch {
+          case nums[mid] == target:
+              return mid
+          case nums[mid] < target:
+              left = mid + 1
+          default:
+              right = mid - 1
+          }
+      }
+      return -1
+  }
+
+  func main() {
+      nums := []int{-1, 0, 3, 5, 9, 12}
+      fmt.Println(binarySearch(nums, 9))   // 4
+      fmt.Println(binarySearch(nums, 2))   // -1
+      fmt.Println(binarySearch(nums, -1))  // 0
+  }
+
+COMPLEXITY:
+  Time:  O(log n)
+  Space: O(1)
+
+NOTE:
+  mid = left + (right-left)/2 is the safe form — avoids integer overflow
+  that (left+right)/2 can cause with large indices.
+
+--------------------------------------------------------------------------------
+F02. Find First and Last Position in Sorted Slice
+--------------------------------------------------------------------------------
+PROBLEM:
+  Given a sorted slice with duplicates, return the first and last index
+  of a target value. Return [-1, -1] if not found.
+
+APPROACH:
+  Two binary searches: one biased left (find first), one biased right
+  (find last).
+
+CODE:
+  package main
+
+  import "fmt"
+
+  func searchRange(nums []int, target int) [2]int {
+      return [2]int{findFirst(nums, target), findLast(nums, target)}
+  }
+
+  func findFirst(nums []int, target int) int {
+      left, right, result := 0, len(nums)-1, -1
+      for left <= right {
+          mid := left + (right-left)/2
+          if nums[mid] == target {
+              result = mid
+              right = mid - 1 // keep searching left
+          } else if nums[mid] < target {
+              left = mid + 1
+          } else {
+              right = mid - 1
+          }
+      }
+      return result
+  }
+
+  func findLast(nums []int, target int) int {
+      left, right, result := 0, len(nums)-1, -1
+      for left <= right {
+          mid := left + (right-left)/2
+          if nums[mid] == target {
+              result = mid
+              left = mid + 1 // keep searching right
+          } else if nums[mid] < target {
+              left = mid + 1
+          } else {
+              right = mid - 1
+          }
+      }
+      return result
+  }
+
+  func main() {
+      fmt.Println(searchRange([]int{5, 7, 7, 8, 8, 10}, 8))  // [3 4]
+      fmt.Println(searchRange([]int{5, 7, 7, 8, 8, 10}, 6))  // [-1 -1]
+      fmt.Println(searchRange([]int{}, 0))                    // [-1 -1]
+  }
+
+COMPLEXITY:
+  Time:  O(log n)
+  Space: O(1)
+
+================================================================================
+  [G] GOROUTINES & CHANNELS
+================================================================================
+
+--------------------------------------------------------------------------------
+G01. Concurrent Map-Reduce (Sum of Squares)
+--------------------------------------------------------------------------------
+PROBLEM:
+  Given a large slice of integers, compute the sum of squares concurrently
+  using multiple goroutines, then reduce to a final total.
+
+CODE:
+  package main
+
+  import (
+      "fmt"
+      "sync"
+  )
+
+  func sumOfSquares(nums []int, numWorkers int) int {
+      if len(nums) == 0 { return 0 }
+
+      chunkSize := (len(nums) + numWorkers - 1) / numWorkers
+      results := make(chan int, numWorkers)
+      var wg sync.WaitGroup
+
+      for i := 0; i < numWorkers; i++ {
+          start := i * chunkSize
+          if start >= len(nums) { break }
+          end := start + chunkSize
+          if end > len(nums) { end = len(nums) }
+
+          wg.Add(1)
+          go func(chunk []int) {
+              defer wg.Done()
+              sum := 0
+              for _, n := range chunk {
+                  sum += n * n
+              }
+              results <- sum
+          }(nums[start:end])
+      }
+
+      // Close results when all workers done
+      go func() {
+          wg.Wait()
+          close(results)
+      }()
+
+      total := 0
+      for partial := range results {
+          total += partial
+      }
+      return total
+  }
+
+  func main() {
+      nums := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+      fmt.Println(sumOfSquares(nums, 4))
+      // 1+4+9+16+25+36+49+64+81+100 = 385
+  }
+
+PATTERN: Map-Reduce
+
+--------------------------------------------------------------------------------
+G02. Timeout with Select
+--------------------------------------------------------------------------------
+PROBLEM:
+  Call a slow function. If it doesn't return within a timeout, cancel
+  and return an error.
+
+CODE:
+  package main
+
+  import (
+      "context"
+      "errors"
+      "fmt"
+      "time"
+  )
+
+  var ErrTimeout = errors.New("operation timed out")
+
+  func slowOperation(ctx context.Context) (string, error) {
+      result := make(chan string, 1)
+
+      go func() {
+          // Simulate slow work
+          time.Sleep(2 * time.Second)
+          result <- "done"
+      }()
+
+      select {
+      case res := <-result:
+          return res, nil
+      case <-ctx.Done():
+          return "", ErrTimeout
+      }
+  }
+
+  func main() {
+      // Timeout shorter than work — will time out
+      ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+      defer cancel()
+
+      res, err := slowOperation(ctx)
+      if err != nil {
+          fmt.Println("Error:", err) // Error: operation timed out
+      } else {
+          fmt.Println("Result:", res)
+      }
+
+      // Timeout longer than work — will succeed
+      ctx2, cancel2 := context.WithTimeout(context.Background(), 3*time.Second)
+      defer cancel2()
+
+      res2, err2 := slowOperation(ctx2)
+      if err2 != nil {
+          fmt.Println("Error:", err2)
+      } else {
+          fmt.Println("Result:", res2) // Result: done
+      }
+  }
+
+PATTERN: Context timeout + select
+
+NOTE:
+  The result channel is buffered (cap=1) so the goroutine doesn't leak
+  if we time out — it can still send and exit even if nobody receives.
+
+--------------------------------------------------------------------------------
+G03. Worker Pool Processing Jobs
+--------------------------------------------------------------------------------
+PROBLEM:
+  Process a batch of jobs (simulate HTTP calls) using a fixed worker pool.
+  Collect results and errors.
+
+CODE:
+  package main
+
+  import (
+      "fmt"
+      "math/rand"
+      "sync"
+      "time"
+  )
+
+  type Job struct {
+      ID int
+  }
+
+  type Result struct {
+      JobID  int
+      Output string
+      Err    error
+  }
+
+  func process(job Job) Result {
+      // Simulate variable processing time
+      time.Sleep(time.Duration(rand.Intn(100)) * time.Millisecond)
+      if job.ID%7 == 0 {
+          return Result{JobID: job.ID, Err: fmt.Errorf("job %d failed", job.ID)}
+      }
+      return Result{JobID: job.ID, Output: fmt.Sprintf("job %d done", job.ID)}
+  }
+
+  func runWorkerPool(jobs []Job, numWorkers int) []Result {
+      jobCh    := make(chan Job, len(jobs))
+      resultCh := make(chan Result, len(jobs))
+
+      // Fill job channel
+      for _, job := range jobs {
+          jobCh <- job
+      }
+      close(jobCh)
+
+      // Spawn workers
+      var wg sync.WaitGroup
+      for i := 0; i < numWorkers; i++ {
+          wg.Add(1)
+          go func() {
+              defer wg.Done()
+              for job := range jobCh {
+                  resultCh <- process(job)
+              }
+          }()
+      }
+
+      // Close result channel when all workers finish
+      go func() {
+          wg.Wait()
+          close(resultCh)
+      }()
+
+      // Collect results
+      var results []Result
+      for r := range resultCh {
+          results = append(results, r)
+      }
+      return results
+  }
+
+  func main() {
+      jobs := make([]Job, 20)
+      for i := range jobs {
+          jobs[i] = Job{ID: i + 1}
+      }
+
+      results := runWorkerPool(jobs, 5)
+
+      var errors, successes int
+      for _, r := range results {
+          if r.Err != nil {
+              errors++
+          } else {
+              successes++
+          }
+      }
+      fmt.Printf("Processed %d jobs: %d success, %d errors\n",
+          len(results), successes, errors)
+  }
+
+PATTERN: Worker Pool
+COMPLEXITY:
+  Time:  O(n / numWorkers) — parallel execution
+  Space: O(n) — buffered channels
+
+================================================================================
+  QUICK PATTERNS REFERENCE
+================================================================================
+
+  Two Pointers:
+    Used for: palindrome, rotate, merge sorted
+    Template: left, right := 0, len-1; for left < right { ... }
+
+  Sliding Window:
+    Used for: longest substring, max subarray
+    Template: left := 0; for right := range s { shrink left as needed }
+
+  Hash Map:
+    Used for: two sum, anagrams, frequency, first unique
+    Template: seen := make(map[K]V); for _, v := range input { ... }
+
+  Fast & Slow Pointers:
+    Used for: cycle detection, middle of list
+    Template: slow, fast := head, head; fast != nil && fast.Next != nil
+
+  Binary Search:
+    Used for: sorted search, first/last position
+    Template: left, right := 0, n-1; mid = left+(right-left)/2
+
+  Worker Pool:
+    Used for: concurrent job processing
+    Template: jobCh + resultCh + N goroutines + WaitGroup
+
+  Pipeline:
+    Used for: multi-stage data processing
+    Template: gen() -> stage1() -> stage2() -> collect
+
+  Fan-out / Fan-in:
+    Used for: parallel processing of same input
+    Template: one input channel -> N worker channels -> merge()
+
+================================================================================
+  EDGE CASES TO ALWAYS MENTION
+================================================================================
+
+  Strings:
+    - Empty string ""
+    - Single character
+    - Unicode / multi-byte characters (use []rune not []byte)
+
+  Slices:
+    - nil slice vs empty slice (len 0)
+    - Single element
+    - k > n in rotation (use k % n)
+
+  Linked Lists:
+    - nil head
+    - Single node
+    - Even vs odd length (middle node)
+
+  Trees:
+    - nil root
+    - Single node tree
+    - Unbalanced (left-skewed or right-skewed)
+
+  Concurrency:
+    - Goroutine leak — always have an exit path
+    - Closed channel — ranging over closed channel is safe in Go
+    - Buffered channel for non-blocking goroutine exit
+
+================================================================================
+  END OF FILE | go_coding_interview_classic.txt
+  Total: 25 Problems | 7 Categories | Full Working Code
+================================================================================

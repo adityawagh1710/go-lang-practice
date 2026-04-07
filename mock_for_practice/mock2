@@ -1,0 +1,342 @@
+GO LANG MOCK INTERVIEW QUESTIONS + ANSWERS (MID → SENIOR)
+
+--------------------------------------------------
+1. := vs =
+--------------------------------------------------
+Q: What is the difference between := and = ?
+
+A:
+:= → declares and initializes a variable (only inside functions)
+=  → assigns value to an already declared variable
+
+Example:
+var a int
+a = 10
+
+b := 20
+
+Note:
+:= can redeclare variables only if at least one new variable is introduced.
+
+--------------------------------------------------
+2. Escape Analysis
+--------------------------------------------------
+Q: What is escape analysis?
+
+A:
+Escape analysis determines whether a variable is allocated on:
+- Stack (fast)
+- Heap (slower, GC involved)
+
+If a variable "escapes" function scope → allocated on heap.
+
+Command to check:
+go build -gcflags="-m"
+
+--------------------------------------------------
+3. Value vs Pointer Receiver
+--------------------------------------------------
+Q: Difference between value and pointer receiver?
+
+A:
+Value receiver:
+- Works on a copy
+- Original data not modified
+
+Pointer receiver:
+- Works on original object
+- Can modify data
+- Avoids copying large structs
+
+Example:
+type User struct {
+    Name string
+}
+
+func (u User) SetName1(name string) {
+    u.Name = name
+}
+
+func (u *User) SetName2(name string) {
+    u.Name = name
+}
+
+--------------------------------------------------
+4. Goroutine Scheduling
+--------------------------------------------------
+Q: How are goroutines scheduled?
+
+A:
+Go uses M:N scheduler:
+- G → Goroutine
+- M → OS Thread
+- P → Processor
+
+Scheduler maps many goroutines to fewer OS threads.
+
+GOMAXPROCS controls number of OS threads executing Go code.
+
+--------------------------------------------------
+5. Channels (Buffered vs Unbuffered)
+--------------------------------------------------
+Q: Difference between buffered and unbuffered channels?
+
+A:
+Unbuffered:
+- Sender blocks until receiver is ready
+- Synchronous
+
+Buffered:
+- Sender blocks only when buffer is full
+- Asynchronous
+
+Example:
+ch := make(chan int, 2)
+
+--------------------------------------------------
+6. Goroutine Leaks
+--------------------------------------------------
+Q: What causes goroutine leaks?
+
+A:
+- Unread channels
+- Infinite loops
+- Missing context cancellation
+
+Fix:
+Use context
+
+select {
+case <-ctx.Done():
+    return
+}
+
+--------------------------------------------------
+7. Mutex vs RWMutex
+--------------------------------------------------
+Q: Difference between Mutex and RWMutex?
+
+A:
+Mutex:
+- Only one goroutine can lock
+
+RWMutex:
+- Multiple readers allowed
+- Only one writer
+
+RWMutex is useful for read-heavy workloads.
+
+--------------------------------------------------
+8. Interfaces in Go
+--------------------------------------------------
+Q: How are interfaces implemented?
+
+A:
+- Implicitly
+- No "implements" keyword
+- A type satisfies interface if it has required methods
+
+--------------------------------------------------
+9. Nil Interface Gotcha
+--------------------------------------------------
+Q: Why is this not nil?
+
+var err error = (*MyError)(nil)
+
+A:
+Interface = (type, value)
+
+Even if value is nil, type exists → not nil.
+
+--------------------------------------------------
+10. Interfaces vs Concrete Types
+--------------------------------------------------
+Q: When to use interfaces?
+
+A:
+Use interfaces for:
+- Abstraction
+- Testing (mocking)
+
+Avoid premature abstraction.
+
+--------------------------------------------------
+11. Table Driven Testing
+--------------------------------------------------
+Q: What is table-driven testing?
+
+A:
+Testing pattern using struct slices for multiple cases.
+
+Example:
+tests := []struct {
+    input int
+    want  int
+}{
+    {1, 2},
+    {2, 4},
+}
+
+--------------------------------------------------
+12. Mocking in Go
+--------------------------------------------------
+Q: How do you mock dependencies?
+
+A:
+- Use interfaces
+- Dependency Injection
+
+Tools:
+- gomock
+- testify/mock
+
+--------------------------------------------------
+13. Benchmarking
+--------------------------------------------------
+Q: What is BenchmarkXxx?
+
+A:
+Used for performance testing.
+
+Example:
+func BenchmarkAdd(b *testing.B) {
+    for i := 0; i < b.N; i++ {
+        Add(1, 2)
+    }
+}
+
+b.N → number of iterations
+
+--------------------------------------------------
+14. net/http Internals
+--------------------------------------------------
+Q: How does net/http handle requests?
+
+A:
+- Each request runs in its own goroutine
+- Uses Handler interface
+
+type Handler interface {
+    ServeHTTP(ResponseWriter, *Request)
+}
+
+--------------------------------------------------
+15. Middleware Pattern
+--------------------------------------------------
+Q: How to implement middleware?
+
+A:
+func logging(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        // pre logic
+        next.ServeHTTP(w, r)
+        // post logic
+    })
+}
+
+--------------------------------------------------
+16. Graceful Shutdown
+--------------------------------------------------
+Q: How to shutdown server gracefully?
+
+A:
+- Use context
+- Listen for OS signals
+- Call server.Shutdown()
+
+--------------------------------------------------
+17. go mod tidy
+--------------------------------------------------
+Q: What does go mod tidy do?
+
+A:
+- Removes unused dependencies
+- Adds missing dependencies
+
+--------------------------------------------------
+18. Build Tags
+--------------------------------------------------
+Q: What are build tags?
+
+A:
+Used for conditional compilation.
+
+Example:
+// +build linux
+
+--------------------------------------------------
+19. Profiling
+--------------------------------------------------
+Q: How to profile Go code?
+
+A:
+- Use pprof
+- Analyze CPU and memory
+
+--------------------------------------------------
+20. Worker Pool Design
+--------------------------------------------------
+Q: How to design worker pool?
+
+A:
+- Use buffered channel as queue
+- Fixed number of workers
+- Use context for cancellation
+
+--------------------------------------------------
+21. Garbage Collection
+--------------------------------------------------
+Q: How does Go GC work?
+
+A:
+- Concurrent GC
+- Tri-color mark and sweep
+- Low pause time
+
+--------------------------------------------------
+22. Performance Optimization
+--------------------------------------------------
+Q: How to optimize Go code?
+
+A:
+- Reduce allocations
+- Use sync.Pool
+- Avoid reflection
+- Profile first
+
+--------------------------------------------------
+23. Production Issues
+--------------------------------------------------
+Q: Common issues in production?
+
+A:
+- Goroutine leaks
+- Deadlocks
+- Memory leaks
+- High GC time
+- Missing context handling
+
+--------------------------------------------------
+24. Debugging Slow Service
+--------------------------------------------------
+Q: Service is slow under load. What to do?
+
+A:
+1. Check metrics (CPU, memory, latency)
+2. Use pprof
+3. Check goroutines
+4. Identify DB bottlenecks
+5. Add logging/tracing
+
+--------------------------------------------------
+RAPID FIRE
+--------------------------------------------------
+- defer has small overhead (stack-based execution)
+- zero value = default value (0, "", nil)
+- slice = dynamic, array = fixed
+- generics added in Go 1.18
+- context misuse = not cancelling, storing large data
+
+--------------------------------------------------
+END
+--------------------------------------------------

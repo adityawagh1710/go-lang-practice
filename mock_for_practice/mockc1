@@ -1,0 +1,329 @@
+GO LANG CLASSIC CODING INTERVIEW QUESTIONS + ANSWERS
+
+--------------------------------------------------
+1. Reverse a String
+--------------------------------------------------
+Q: Reverse a string in Go
+
+A:
+func reverseString(s string) string {
+    runes := []rune(s)
+    left, right := 0, len(runes)-1
+
+    for left < right {
+        runes[left], runes[right] = runes[right], runes[left]
+        left++
+        right--
+    }
+
+    return string(runes)
+}
+
+--------------------------------------------------
+2. Check Palindrome
+--------------------------------------------------
+Q: Check if string is palindrome
+
+A:
+func isPalindrome(s string) bool {
+    runes := []rune(s)
+    left, right := 0, len(runes)-1
+
+    for left < right {
+        if runes[left] != runes[right] {
+            return false
+        }
+        left++
+        right--
+    }
+
+    return true
+}
+
+--------------------------------------------------
+3. Find Duplicate in Slice
+--------------------------------------------------
+Q: Find duplicates in integer slice
+
+A:
+func findDuplicates(nums []int) []int {
+    seen := make(map[int]bool)
+    duplicates := []int{}
+
+    for _, num := range nums {
+        if seen[num] {
+            duplicates = append(duplicates, num)
+        } else {
+            seen[num] = true
+        }
+    }
+
+    return duplicates
+}
+
+--------------------------------------------------
+4. Two Sum Problem
+--------------------------------------------------
+Q: Find two numbers that add up to target
+
+A:
+func twoSum(nums []int, target int) []int {
+    m := make(map[int]int)
+
+    for i, num := range nums {
+        if j, ok := m[target-num]; ok {
+            return []int{j, i}
+        }
+        m[num] = i
+    }
+
+    return nil
+}
+
+--------------------------------------------------
+5. Word Frequency Counter
+--------------------------------------------------
+Q: Count frequency of words in string
+
+A:
+func wordCount(s string) map[string]int {
+    words := strings.Fields(s)
+    freq := make(map[string]int)
+
+    for _, word := range words {
+        freq[word]++
+    }
+
+    return freq
+}
+
+--------------------------------------------------
+6. Fibonacci (Iterative)
+--------------------------------------------------
+Q: Generate nth Fibonacci number
+
+A:
+func fibonacci(n int) int {
+    if n <= 1 {
+        return n
+    }
+
+    a, b := 0, 1
+    for i := 2; i <= n; i++ {
+        a, b = b, a+b
+    }
+
+    return b
+}
+
+--------------------------------------------------
+7. Factorial (Recursive)
+--------------------------------------------------
+Q: Find factorial of number
+
+A:
+func factorial(n int) int {
+    if n == 0 {
+        return 1
+    }
+    return n * factorial(n-1)
+}
+
+--------------------------------------------------
+8. Valid Parentheses
+--------------------------------------------------
+Q: Check if parentheses are valid
+
+A:
+func isValid(s string) bool {
+    stack := []rune{}
+    pairs := map[rune]rune{
+        ')': '(',
+        '}': '{',
+        ']': '[',
+    }
+
+    for _, ch := range s {
+        if ch == '(' || ch == '{' || ch == '[' {
+            stack = append(stack, ch)
+        } else {
+            if len(stack) == 0 || stack[len(stack)-1] != pairs[ch] {
+                return false
+            }
+            stack = stack[:len(stack)-1]
+        }
+    }
+
+    return len(stack) == 0
+}
+
+--------------------------------------------------
+9. Merge Two Sorted Arrays
+--------------------------------------------------
+Q: Merge two sorted arrays
+
+A:
+func merge(a, b []int) []int {
+    i, j := 0, 0
+    result := []int{}
+
+    for i < len(a) && j < len(b) {
+        if a[i] < b[j] {
+            result = append(result, a[i])
+            i++
+        } else {
+            result = append(result, b[j])
+            j++
+        }
+    }
+
+    result = append(result, a[i:]...)
+    result = append(result, b[j:]...)
+
+    return result
+}
+
+--------------------------------------------------
+10. Binary Search
+--------------------------------------------------
+Q: Implement binary search
+
+A:
+func binarySearch(nums []int, target int) int {
+    left, right := 0, len(nums)-1
+
+    for left <= right {
+        mid := left + (right-left)/2
+
+        if nums[mid] == target {
+            return mid
+        } else if nums[mid] < target {
+            left = mid + 1
+        } else {
+            right = mid - 1
+        }
+    }
+
+    return -1
+}
+
+--------------------------------------------------
+11. Goroutine Worker Pool
+--------------------------------------------------
+Q: Implement worker pool
+
+A:
+func worker(id int, jobs <-chan int, results chan<- int) {
+    for job := range jobs {
+        results <- job * 2
+    }
+}
+
+func workerPool() {
+    jobs := make(chan int, 5)
+    results := make(chan int, 5)
+
+    for w := 1; w <= 3; w++ {
+        go worker(w, jobs, results)
+    }
+
+    for j := 1; j <= 5; j++ {
+        jobs <- j
+    }
+    close(jobs)
+
+    for r := 1; r <= 5; r++ {
+        <-results
+    }
+}
+
+--------------------------------------------------
+12. Remove Duplicates from Slice
+--------------------------------------------------
+Q: Remove duplicates
+
+A:
+func removeDuplicates(nums []int) []int {
+    seen := make(map[int]bool)
+    result := []int{}
+
+    for _, num := range nums {
+        if !seen[num] {
+            seen[num] = true
+            result = append(result, num)
+        }
+    }
+
+    return result
+}
+
+--------------------------------------------------
+13. Find Max in Slice
+--------------------------------------------------
+Q: Find maximum element
+
+A:
+func findMax(nums []int) int {
+    max := nums[0]
+
+    for _, num := range nums {
+        if num > max {
+            max = num
+        }
+    }
+
+    return max
+}
+
+--------------------------------------------------
+14. Check Anagram
+--------------------------------------------------
+Q: Check if two strings are anagrams
+
+A:
+func isAnagram(s1, s2 string) bool {
+    if len(s1) != len(s2) {
+        return false
+    }
+
+    count := make(map[rune]int)
+
+    for _, ch := range s1 {
+        count[ch]++
+    }
+
+    for _, ch := range s2 {
+        count[ch]--
+        if count[ch] < 0 {
+            return false
+        }
+    }
+
+    return true
+}
+
+--------------------------------------------------
+15. HTTP JSON API Example
+--------------------------------------------------
+Q: Write simple HTTP JSON handler
+
+A:
+type User struct {
+    Name string `json:"name"`
+}
+
+func handler(w http.ResponseWriter, r *http.Request) {
+    user := User{Name: "Go Dev"}
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(user)
+}
+
+func main() {
+    http.HandleFunc("/user", handler)
+    http.ListenAndServe(":8080", nil)
+}
+
+--------------------------------------------------
+END
+--------------------------------------------------

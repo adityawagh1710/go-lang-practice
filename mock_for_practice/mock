@@ -1,0 +1,1016 @@
+================================================================================
+GO MOCK
+================================================================================
+
+TOPICS COVERED:
+  [1] Concurrency          [6] Channels
+  [2] Memory & Runtime     [7] Performance
+  [3] Interfaces           [8] Testing
+  [4] Error Handling       [9] Generics
+  [5] Context              [10] Design
+
+LEVEL KEY:
+  [MID]    = Medior-level (expected solid understanding)
+  [SENIOR] = Senior-level (expected production depth + tradeoffs)
+
+================================================================================
+  INDEX
+================================================================================
+  01. Goroutines vs OS threads                  [MID]    Concurrency
+  02. Buffered vs unbuffered channels           [MID]    Channels
+  03. errors.Is vs errors.As                    [MID]    Error Handling
+  04. Implicit interface satisfaction           [MID]    Interfaces
+  05. context.Context best practices            [MID]    Context
+  06. Value vs pointer parameters               [MID]    Memory & Runtime
+  07. Table-driven testing                      [MID]    Testing
+  08. defer guarantees and pitfalls             [MID]    Error Handling
+  09. Generics type constraints                 [MID]    Generics
+  10. Accept interfaces, return structs         [MID]    Design
+  11. Goroutine leaks                           [SENIOR] Concurrency
+  12. Go garbage collector & GC pressure        [SENIOR] Memory & Runtime
+  13. Worker pool pattern                       [SENIOR] Concurrency
+  14. Escape analysis                           [SENIOR] Performance
+  15. Embedding vs inheritance                  [SENIOR] Design
+  16. sync/atomic vs mutex                      [SENIOR] Concurrency
+  17. select statement & timeouts               [SENIOR] Channels
+  18. context.WithValue anti-patterns           [SENIOR] Context
+  19. Diagnosing high latency in HTTP service   [SENIOR] Performance
+  20. Limitations of Go generics               [SENIOR] Generics
+
+================================================================================
+  MID LEVEL QUESTIONS
+================================================================================
+
+--------------------------------------------------------------------------------
+Q01 [MID] | Concurrency
+--------------------------------------------------------------------------------
+QUESTION:
+  Explain the difference between a goroutine and an OS thread.
+  Why are goroutines cheaper?
+
+ANSWER:
+  Goroutines are multiplexed onto a small number of OS threads by the Go
+  runtime scheduler using an M:N scheduling model (M goroutines on N threads).
+
+  Key differences:
+  ┌──────────────────────┬────────────────────────┬──────────────────────────┐
+  │ Aspect               │ OS Thread              │ Goroutine                │
+  ├──────────────────────┼────────────────────────┼──────────────────────────┤
+  │ Stack size           │ ~1–8 MB (fixed)        │ ~2–8 KB (grows/shrinks)  │
+  │ Context switch       │ Kernel space (costly)  │ User space (fast)        │
+  │ Scheduling           │ OS scheduler           │ Go runtime scheduler     │
+  │ Creation cost        │ High                   │ Very low                 │
+  │ Typical count        │ Hundreds               │ Millions possible        │
+  └──────────────────────┴────────────────────────┴──────────────────────────┘
+
+  The Go runtime dynamically resizes goroutine stacks using stack copying.
+  Context switching happens entirely in user space, avoiding expensive
+  system calls.
+
+  Java comparison:
+    Java virtual threads (Project Loom, Java 21) are analogous — also
+    lightweight, multiplexed over OS threads. Go had this model from day one.
+
+  Code example:
+    go func() {
+        fmt.Println("I'm a goroutine")
+    }()
+    // Spawning 1 million of these is feasible in Go
+
+--------------------------------------------------------------------------------
+Q02 [MID] | Channels
+--------------------------------------------------------------------------------
+QUESTION:
+  When would you choose a buffered channel over an unbuffered one?
+  What's the risk of buffered channels?
+
+ANSWER:
+  Unbuffered channel: sender blocks until receiver is ready — enforces
+  synchronous handoff. Think of it as a direct handshake.
+
+  Buffered channel: sender blocks only when the buffer is full — decouples
+  producer and receiver up to the buffer size.
+
+  When to use buffered:
+    - Work queues where producers can burst ahead of consumers
+    - Collecting results from goroutines into a results channel
+    - When you know the exact number of sends (cap = num sends)
+
+  When to use unbuffered:
+    - Explicit synchronisation between goroutines
+    - Signal channels (done, quit)
+    - Avoiding hidden back-pressure
+
+  Risk of buffered channels:
+    If a consumer is slow or dies, the buffer silently masks the slowdown.
+    The producer keeps filling the buffer without knowing there's a problem.
+    This can hide performance issues until the buffer is full and the
+    system stalls abruptly.
+
+  Code example:
+    // Unbuffered — sender blocks until receiver reads
+    ch := make(chan int)
+
+    // Buffered — sender can put up to 5 without blocking
+    ch := make(chan int, 5)
+
+    // Signal channel idiom (buffered cap=1 avoids goroutine leak)
+    done := make(chan struct{}, 1)
+
+--------------------------------------------------------------------------------
+Q03 [MID] | Error Handling
+--------------------------------------------------------------------------------
+QUESTION:
+  What's the difference between errors.Is and errors.As?
+  When do you use each?
+
+ANSWER:
+  Both unwrap error chains (errors wrapped with fmt.Errorf("%w", err)).
+
+  errors.Is(err, target):
+    Checks if any error in the chain matches target by value.
+    Uses == or a custom Is() method.
+    Used for: sentinel errors (predefined error values).
+
+  errors.As(err, &target):
+    Checks if any error in the chain can be assigned to target's type.
+    Populates the target pointer with the matched error.
+    Used for: typed errors where you need to extract metadata/fields.
+
+  Code example:
+    var ErrNotFound = errors.New("not found")   // sentinel
+
+    // errors.Is — sentinel matching
+    if errors.Is(err, ErrNotFound) {
+        // handle not found
+    }
+
+    // errors.As — typed error with fields
+    type ValidationError struct {
+        Field   string
+        Message string
+    }
+    func (e *ValidationError) Error() string { ... }
+
+    var valErr *ValidationError
+    if errors.As(err, &valErr) {
+        fmt.Println(valErr.Field) // access structured data
+    }
+
+  Java comparison:
+    errors.Is ≈ catching a specific exception type by reference
+    errors.As ≈ instanceof check + casting to access fields
+
+--------------------------------------------------------------------------------
+Q04 [MID] | Interfaces
+--------------------------------------------------------------------------------
+QUESTION:
+  What is implicit interface satisfaction in Go and why does it matter?
+
+ANSWER:
+  In Go, a type satisfies an interface automatically if it implements all
+  the methods in the interface. There is no "implements" keyword.
+
+  Why it matters:
+    1. Loose coupling — packages can define small interfaces over types
+       from other packages without creating circular imports.
+    2. Testability — you can define a local interface that your real
+       dependency satisfies, then mock it in tests.
+    3. Composability — small interfaces (io.Reader, io.Writer) combine
+       naturally via embedding.
+
+  Code example:
+    type Stringer interface {
+        String() string
+    }
+
+    type User struct { Name string }
+
+    // User implicitly satisfies Stringer — no declaration needed
+    func (u User) String() string { return u.Name }
+
+    func Print(s Stringer) { fmt.Println(s.String()) }
+
+    // Verify at compile time (idiom):
+    var _ Stringer = User{}
+
+  Java comparison:
+    Java uses explicit "implements Stringer" — Go's implicit model allows
+    retrofitting any existing type to satisfy a new interface without
+    modifying it.
+
+--------------------------------------------------------------------------------
+Q05 [MID] | Context
+--------------------------------------------------------------------------------
+QUESTION:
+  Why should context.Context always be the first parameter and never
+  stored in a struct?
+
+ANSWER:
+  Convention: context is always the first parameter, named ctx.
+    func DoWork(ctx context.Context, id int) error { ... }
+
+  Why first parameter:
+    Makes cancellation/deadline propagation explicit at every call boundary.
+    Grep-able, tooling-friendly, and consistent across the ecosystem.
+
+  Why not in a struct:
+    A struct's lifetime often differs from a single request's lifetime.
+    If you store ctx in a struct, it's unclear which operations should
+    respect which cancellation. This causes subtle bugs in concurrent code
+    where a goroutine holds a struct reference across multiple requests.
+
+  Correct:
+    type Server struct { db *sql.DB }
+    func (s *Server) GetUser(ctx context.Context, id int) (*User, error) {
+        return s.db.QueryRowContext(ctx, "SELECT ...", id)
+    }
+
+  Incorrect:
+    type Server struct {
+        ctx context.Context  // BAD — bakes in one request's context
+        db  *sql.DB
+    }
+
+  Exception: frameworks (net/http Request already carries a context,
+  accessible via req.Context()).
+
+--------------------------------------------------------------------------------
+Q06 [MID] | Memory & Runtime
+--------------------------------------------------------------------------------
+QUESTION:
+  What's the difference between passing a value vs a pointer to a function
+  in Go? When should you prefer each?
+
+ANSWER:
+  Value copy:
+    - Caller's original is not modified
+    - No aliasing — safe for concurrent reads
+    - Cheap for small types (int, bool, small structs)
+
+  Pointer:
+    - Shared access — function can mutate the original
+    - Avoids copying large structs
+    - Enables interface satisfaction with pointer receivers
+
+  Decision guide:
+  ┌─────────────────────────────────┬────────────────────┐
+  │ Scenario                        │ Prefer             │
+  ├─────────────────────────────────┼────────────────────┤
+  │ Small, immutable type           │ Value              │
+  │ Large struct (avoid copy)       │ Pointer            │
+  │ Need to mutate the argument     │ Pointer            │
+  │ Method must satisfy interface   │ Pointer receiver   │
+  │ Concurrent reads, no mutation   │ Value              │
+  └─────────────────────────────────┴────────────────────┘
+
+  Rule of thumb: <= ~3 machine words → value. Larger or mutable → pointer.
+
+  Note: slices, maps, and channels are already reference types — you
+  rarely need a pointer to them.
+
+  Java comparison:
+    Java always passes object references — Go gives you explicit control,
+    which is important for GC pressure (pointers escape to heap).
+
+--------------------------------------------------------------------------------
+Q07 [MID] | Testing
+--------------------------------------------------------------------------------
+QUESTION:
+  What is table-driven testing and why is it idiomatic in Go?
+
+ANSWER:
+  Table-driven tests define a slice of structs (the "table"), each holding
+  inputs and expected outputs, then loop with t.Run to create subtests.
+
+  Why idiomatic:
+    - Reduces boilerplate — one loop, many cases
+    - Adding a test case = adding one struct literal
+    - t.Run creates named subtests visible in -v output
+    - go test -run TestFunc/case_name runs a single subtest
+
+  Code example:
+    func TestAdd(t *testing.T) {
+        tests := []struct {
+            name     string
+            a, b     int
+            expected int
+        }{
+            {"positive", 2, 3, 5},
+            {"zero", 0, 0, 0},
+            {"negative", -1, -2, -3},
+        }
+
+        for _, tt := range tests {
+            t.Run(tt.name, func(t *testing.T) {
+                got := Add(tt.a, tt.b)
+                if got != tt.expected {
+                    t.Errorf("Add(%d,%d) = %d; want %d",
+                        tt.a, tt.b, got, tt.expected)
+                }
+            })
+        }
+    }
+
+  Java comparison:
+    Similar to JUnit 5 @ParameterizedTest with @MethodSource, but Go's
+    approach is plain structs with no annotation magic.
+
+--------------------------------------------------------------------------------
+Q08 [MID] | Error Handling
+--------------------------------------------------------------------------------
+QUESTION:
+  What does defer guarantee and what are common pitfalls?
+
+ANSWER:
+  Guarantee:
+    Deferred calls run in LIFO order when the surrounding function returns,
+    even if the function panics. This makes defer ideal for cleanup.
+
+  Common usage:
+    f, _ := os.Open("file.txt")
+    defer f.Close()  // always runs when function exits
+
+  Pitfalls:
+
+  1. Loop defer — deferred call runs when the FUNCTION exits, not the
+     loop iteration. Can exhaust file descriptors:
+       for _, f := range files {
+           defer f.Close()  // BAD — all close at function end
+       }
+     Fix: wrap in a closure or helper function.
+
+  2. Named return variables — a deferred function can modify them:
+       func double(x int) (result int) {
+           defer func() { result *= 2 }()
+           result = x
+           return  // returns x*2, not x
+       }
+
+  3. Argument evaluation at defer time (not at execution time):
+       x := 10
+       defer fmt.Println(x)  // prints 10, not whatever x is later
+       x = 20
+
+  4. Error from deferred call ignored:
+       defer f.Close()  // Close() can return an error — often ignored
+     Fix: use a named return to capture it if needed.
+
+--------------------------------------------------------------------------------
+Q09 [MID] | Generics
+--------------------------------------------------------------------------------
+QUESTION:
+  Explain Go generics type constraints. What is comparable?
+
+ANSWER:
+  Generics (added Go 1.18) allow functions and types to be parameterized
+  over types. Type constraints restrict what types are valid.
+
+  Constraint syntax:
+    func Map[T any, R any](s []T, f func(T) R) []R { ... }
+
+    // Union constraint — only int or float64
+    type Number interface {
+        int | float64
+    }
+    func Sum[T Number](s []T) T { ... }
+
+  comparable:
+    A built-in constraint meaning the type supports == and !=.
+    Required to use a type as a map key inside a generic function.
+
+    func Contains[T comparable](s []T, v T) bool {
+        for _, item := range s {
+            if item == v { return true }
+        }
+        return false
+    }
+
+  Note: any is an alias for interface{} — the most permissive constraint.
+  comparable is stricter — interfaces and slices do NOT satisfy it.
+
+  Java comparison:
+    Similar to Java generics bounded wildcards (<T extends Number>), but
+    Go constraints are plain interfaces, not a separate syntax.
+
+--------------------------------------------------------------------------------
+Q10 [MID] | Design
+--------------------------------------------------------------------------------
+QUESTION:
+  What is the "accept interfaces, return structs" principle in Go?
+
+ANSWER:
+  Accept interfaces (in parameters):
+    Functions should accept interface types so callers can pass any
+    conforming implementation — enabling mocks in tests and flexible
+    composition without modifying the function.
+
+  Return structs (as return types):
+    Return concrete types so callers have access to the full type without
+    type-asserting. It also keeps APIs stable — adding methods to a
+    returned interface is a breaking change.
+
+  Code example:
+    // GOOD — accepts interface (testable), returns struct (concrete)
+    func NewCache(store Storage) *Cache {
+        return &Cache{store: store}
+    }
+
+    // BAD — returns interface (forces type assertion, hides type)
+    func NewCache(store Storage) Storage {
+        return &Cache{store: store}
+    }
+
+  Exception: returning an error interface is idiomatic (it IS the
+  convention in Go). Also, factory functions returning an interface make
+  sense when hiding implementation is the explicit design goal.
+
+  Java comparison:
+    Java often returns interface types (List instead of ArrayList) for
+    flexibility. Go inverts this — return the concrete type; the caller
+    decides what interface to view it through.
+
+================================================================================
+  SENIOR LEVEL QUESTIONS
+================================================================================
+
+--------------------------------------------------------------------------------
+Q11 [SENIOR] | Concurrency
+--------------------------------------------------------------------------------
+QUESTION:
+  Describe a goroutine leak. How do you detect and prevent one?
+
+ANSWER:
+  A goroutine leak occurs when a goroutine is spawned but never terminates.
+  It stays in memory indefinitely, consuming stack space and potentially
+  holding resources (connections, file handles, locks).
+
+  Common causes:
+    1. Blocked on channel receive with no sender
+    2. Blocked on channel send with no receiver and no select default
+    3. Infinite loop with no exit condition
+    4. Waiting on sync.WaitGroup.Wait() that never completes
+    5. Goroutine blocking on a mutex that's never released
+
+  Detection:
+    // At test time — goleak library
+    import "go.uber.org/goleak"
+    func TestMyFunc(t *testing.T) {
+        defer goleak.VerifyNone(t)
+        // ... test code
+    }
+
+    // At runtime — watch goroutine count
+    fmt.Println(runtime.NumGoroutine())
+
+    // pprof goroutine profile
+    // GET /debug/pprof/goroutine?debug=2
+
+  Prevention:
+    1. Always pass context — goroutines should select on ctx.Done()
+    2. Close channels when producers are done
+    3. Use sync.WaitGroup to track goroutine lifecycle
+    4. Use errgroup (golang.org/x/sync/errgroup) for structured goroutines
+    5. Set timeouts on all I/O operations
+
+  Pattern — context-cancellable goroutine:
+    func worker(ctx context.Context, jobs <-chan Job) {
+        for {
+            select {
+            case job, ok := <-jobs:
+                if !ok { return }
+                process(job)
+            case <-ctx.Done():
+                return  // guaranteed exit
+            }
+        }
+    }
+
+--------------------------------------------------------------------------------
+Q12 [SENIOR] | Memory & Runtime
+--------------------------------------------------------------------------------
+QUESTION:
+  How does the Go garbage collector work? What causes GC pressure
+  and how do you reduce it?
+
+ANSWER:
+  Go GC algorithm:
+    Concurrent tri-color mark-and-sweep with short stop-the-world (STW)
+    pauses. Phases:
+      1. Mark setup (STW — milliseconds)
+      2. Concurrent mark — marks live objects while program runs
+      3. Mark termination (STW)
+      4. Concurrent sweep — reclaims dead objects concurrently
+
+  GC is triggered when heap doubles from last GC (GOGC=100 default).
+  Lower GOGC = more frequent GC, less memory use, more CPU.
+  Higher GOGC = less frequent GC, more memory use, less CPU.
+
+  What causes GC pressure:
+    - Many short-lived heap allocations in hot paths
+    - Interface boxing (value stored in interface escapes to heap)
+    - Closures capturing variables (may cause heap allocation)
+    - Appending to slices beyond capacity (reallocations)
+    - String concatenation in loops (creates intermediate strings)
+
+  How to reduce:
+  ┌─────────────────────────────────┬──────────────────────────────────────┐
+  │ Technique                       │ Details                              │
+  ├─────────────────────────────────┼──────────────────────────────────────┤
+  │ sync.Pool                       │ Reuse objects across goroutines      │
+  │ Preallocate slices/maps         │ make([]T, 0, knownCap)              │
+  │ Use concrete types not interface│ Avoids boxing / heap escape          │
+  │ strings.Builder                 │ Avoids intermediate string allocs    │
+  │ Reduce pointer density          │ Flat structs with values, not ptrs   │
+  │ GOGC tuning                     │ Increase for latency-sensitive apps  │
+  └─────────────────────────────────┴──────────────────────────────────────┘
+
+  Profiling:
+    go tool pprof cpu.prof       // CPU profile
+    go tool pprof -alloc_space   // allocation profile (heap)
+    GODEBUG=gctrace=1            // print GC stats to stderr
+
+  Java comparison:
+    Go GC is simpler (no generational GC) — tradeoff is that all objects
+    are in one heap. Java's G1/ZGC has generational collection.
+    Go compensates by encouraging stack allocation via escape analysis.
+
+--------------------------------------------------------------------------------
+Q13 [SENIOR] | Concurrency
+--------------------------------------------------------------------------------
+QUESTION:
+  Describe a worker pool pattern in Go. Walk through a production-grade
+  implementation.
+
+ANSWER:
+  Worker pool limits concurrent goroutines processing a shared job queue.
+
+  Basic pattern:
+    func workerPool(ctx context.Context, numWorkers int,
+        jobs <-chan Job, results chan<- Result) {
+
+        var wg sync.WaitGroup
+        for i := 0; i < numWorkers; i++ {
+            wg.Add(1)
+            go func() {
+                defer wg.Done()
+                for {
+                    select {
+                    case job, ok := <-jobs:
+                        if !ok { return }
+                        results <- process(job)
+                    case <-ctx.Done():
+                        return
+                    }
+                }
+            }()
+        }
+        wg.Wait()
+        close(results)
+    }
+
+  Production additions:
+  ┌────────────────────────────┬─────────────────────────────────────────┐
+  │ Concern                    │ Solution                                │
+  ├────────────────────────────┼─────────────────────────────────────────┤
+  │ Error propagation          │ errgroup (golang.org/x/sync/errgroup)   │
+  │ Cancellation               │ context.WithCancel / WithTimeout        │
+  │ Goroutine count limit      │ Channel buffer size = numWorkers        │
+  │ Results collection         │ Dedicated results channel + collector   │
+  │ Panic recovery             │ defer recover() inside each worker      │
+  │ Metrics / observability    │ Atomic counters or Prometheus gauges    │
+  └────────────────────────────┴─────────────────────────────────────────┘
+
+  errgroup version (cleaner):
+    g, ctx := errgroup.WithContext(ctx)
+    for i := 0; i < numWorkers; i++ {
+        g.Go(func() error {
+            for job := range jobs {
+                if err := process(job); err != nil {
+                    return err  // cancels all workers via ctx
+                }
+            }
+            return nil
+        })
+    }
+    return g.Wait()
+
+  Java comparison:
+    Similar to Java's ExecutorService with a fixed thread pool.
+    Go's version is more explicit — you manage the channels directly.
+    errgroup ≈ CompletableFuture.allOf with exception propagation.
+
+--------------------------------------------------------------------------------
+Q14 [SENIOR] | Performance
+--------------------------------------------------------------------------------
+QUESTION:
+  Explain escape analysis in Go. How can you determine whether a value
+  escapes to the heap?
+
+ANSWER:
+  Escape analysis is performed by the Go compiler at build time.
+  It decides whether a variable can live on the stack (cheaper, collected
+  with the stack frame) or must escape to the heap (GC-managed).
+
+  A value escapes to the heap when:
+    1. Its address is returned from the function
+    2. It's stored in a heap-allocated variable (interface, slice element)
+    3. It's captured by a closure that outlives the function
+    4. It's too large to fit on the stack
+    5. It's passed to a function that causes it to escape
+
+  How to inspect:
+    go build -gcflags='-m' ./...
+
+    Output example:
+      ./main.go:12:6: moved to heap: x
+      ./main.go:18:13: &y escapes to heap
+
+    For more detail:
+      go build -gcflags='-m -m' ./...
+
+  Practical example:
+    // Stays on stack — address never leaves this scope
+    func add(a, b int) int {
+        result := a + b   // stack
+        return result
+    }
+
+    // Escapes to heap — address returned to caller
+    func newInt(x int) *int {
+        return &x  // x escapes
+    }
+
+    // Interface boxing causes escape:
+    var i interface{} = 42  // 42 escapes to heap
+
+  Why it matters:
+    Stack allocations are free at GC time — they're cleaned up with the
+    frame. Reducing heap escapes reduces GC pressure and latency spikes.
+
+--------------------------------------------------------------------------------
+Q15 [SENIOR] | Design
+--------------------------------------------------------------------------------
+QUESTION:
+  Compare embedding vs inheritance in Go. What are the tradeoffs?
+
+ANSWER:
+  Go has NO inheritance. It achieves code reuse through composition
+  via struct embedding.
+
+  How embedding works:
+    type Animal struct {
+        Name string
+    }
+    func (a Animal) Speak() string { return a.Name + " speaks" }
+
+    type Dog struct {
+        Animal          // embedded — promotes Animal's methods
+        Breed string
+    }
+
+    d := Dog{Animal: Animal{Name: "Rex"}, Breed: "Lab"}
+    fmt.Println(d.Speak())  // promoted — works without d.Animal.Speak()
+
+  Key differences from inheritance:
+  ┌─────────────────────────┬────────────────────────┬──────────────────────┐
+  │ Aspect                  │ OOP Inheritance        │ Go Embedding         │
+  ├─────────────────────────┼────────────────────────┼──────────────────────┤
+  │ Method override         │ Polymorphic dispatch   │ Shadowing only       │
+  │ "is-a" relationship     │ Enforced by language   │ Not implied          │
+  │ Interface satisfaction  │ Inherited              │ Promoted methods     │
+  │ Hierarchy depth         │ Can be deep            │ Stays shallow        │
+  │ Coupling                │ Tight (parent/child)   │ Loose (composition)  │
+  └─────────────────────────┴────────────────────────┴──────────────────────┘
+
+  Tradeoffs:
+    - Promoted methods use the embedded type's receiver — if Dog shadows
+      Speak(), calling via Animal interface still calls Animal.Speak()
+    - No runtime polymorphism — use interfaces for that
+    - Multiple embedding can create ambiguity if both types have same method
+
+  Prefer explicit delegation when behaviour needs true customisation:
+    type Dog struct {
+        animal Animal
+    }
+    func (d Dog) Speak() string { return "Woof" }  // full control
+
+  Java comparison:
+    Java class inheritance ≈ NOT possible in Go.
+    Java composition pattern (wrapping) ≈ Go explicit delegation.
+    Java interface default methods ≈ Go interface embedding (partial).
+
+--------------------------------------------------------------------------------
+Q16 [SENIOR] | Concurrency
+--------------------------------------------------------------------------------
+QUESTION:
+  When would you use sync/atomic instead of a mutex? What are the limits?
+
+ANSWER:
+  sync/atomic is suitable for:
+    - Single-value counters (request counts, error counts)
+    - Boolean flags (shutdown signal)
+    - Pointer swaps (replacing a config pointer atomically)
+
+  Operations available:
+    atomic.AddInt64(&counter, 1)
+    atomic.LoadInt64(&counter)
+    atomic.StoreInt64(&counter, 0)
+    atomic.CompareAndSwapInt64(&val, old, new)
+
+  When atomic beats mutex:
+    - Single-variable operations with no compound logic
+    - Very hot paths where mutex contention would be significant
+    - Lock-free data structures (advanced)
+
+  Limits — do NOT use atomic when:
+  ┌──────────────────────────────────┬──────────────────────────────────┐
+  │ Situation                        │ Use Instead                      │
+  ├──────────────────────────────────┼──────────────────────────────────┤
+  │ Multiple fields must be updated  │ sync.Mutex                       │
+  │ Complex compound operations      │ sync.Mutex                       │
+  │ Protecting a struct              │ sync.Mutex (or sync.RWMutex)     │
+  │ Queue/stack data structure       │ channel or mutex                 │
+  └──────────────────────────────────┴──────────────────────────────────┘
+
+  Code example:
+    var requestCount int64
+
+    // atomic — fine for a single counter
+    atomic.AddInt64(&requestCount, 1)
+
+    // mutex — needed when updating multiple fields atomically
+    type Stats struct {
+        mu      sync.Mutex
+        count   int64
+        errored int64
+    }
+    func (s *Stats) Record(err error) {
+        s.mu.Lock()
+        defer s.mu.Unlock()
+        s.count++
+        if err != nil { s.errored++ }
+    }
+
+  Java comparison:
+    atomic ≈ java.util.concurrent.atomic.AtomicLong
+    mutex  ≈ synchronized block or ReentrantLock
+
+--------------------------------------------------------------------------------
+Q17 [SENIOR] | Channels
+--------------------------------------------------------------------------------
+QUESTION:
+  Explain the select statement. How do you implement a timeout and a
+  non-blocking channel operation?
+
+ANSWER:
+  select blocks until one of its cases is ready, then executes that case.
+  If multiple cases are ready simultaneously, one is chosen at random.
+
+  Basic select:
+    select {
+    case msg := <-ch1:
+        fmt.Println("received from ch1:", msg)
+    case ch2 <- "hello":
+        fmt.Println("sent to ch2")
+    }
+
+  Timeout using time.After:
+    select {
+    case result := <-work:
+        fmt.Println("got result:", result)
+    case <-time.After(5 * time.Second):
+        fmt.Println("timed out")
+    }
+
+  Production preference — context.WithTimeout (avoids timer leak):
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+
+    select {
+    case result := <-work:
+        fmt.Println("got result:", result)
+    case <-ctx.Done():
+        fmt.Println("timed out:", ctx.Err())
+    }
+
+  Non-blocking channel operation (default branch):
+    select {
+    case msg := <-ch:
+        fmt.Println("got:", msg)
+    default:
+        fmt.Println("no message ready — continuing")
+    }
+
+  Why context over time.After:
+    time.After creates a timer that leaks until it fires if the case
+    is selected early. context.WithTimeout is cancelled via defer cancel(),
+    cleaning up the timer properly.
+
+  Java comparison:
+    select ≈ CompletableFuture.anyOf() but synchronous and channel-based.
+    Timeout ≈ Future.get(5, TimeUnit.SECONDS).
+
+--------------------------------------------------------------------------------
+Q18 [SENIOR] | Context
+--------------------------------------------------------------------------------
+QUESTION:
+  How do you propagate values through context without creating an
+  anti-pattern?
+
+ANSWER:
+  context.WithValue is for request-scoped metadata that crosses API
+  boundaries — not a replacement for function parameters.
+
+  Correct uses:
+    - Request ID / trace ID for logging/tracing
+    - Auth token / user identity passed through middleware
+    - Deadline and cancellation (the primary purpose of context)
+
+  Anti-patterns to avoid:
+  ┌───────────────────────────────┬──────────────────────────────────────┐
+  │ Anti-pattern                  │ Why it's bad                         │
+  ├───────────────────────────────┼──────────────────────────────────────┤
+  │ Replace function args         │ Hides dependencies, untestable       │
+  │ Use built-in types as keys    │ Key collisions across packages       │
+  │ Store mutable state           │ Context is immutable by design       │
+  │ Pass everything via context   │ Makes code hard to understand        │
+  └───────────────────────────────┴──────────────────────────────────────┘
+
+  Correct key pattern — unexported type per package:
+    // In your package
+    type contextKey string
+    const requestIDKey contextKey = "requestID"
+
+    func WithRequestID(ctx context.Context, id string) context.Context {
+        return context.WithValue(ctx, requestIDKey, id)
+    }
+
+    func GetRequestID(ctx context.Context) (string, bool) {
+        id, ok := ctx.Value(requestIDKey).(string)
+        return id, ok
+    }
+
+  Why unexported key type:
+    Prevents key collisions — another package cannot accidentally use the
+    same key because they can't access your unexported type.
+
+--------------------------------------------------------------------------------
+Q19 [SENIOR] | Performance
+--------------------------------------------------------------------------------
+QUESTION:
+  You're seeing high latency spikes in a Go HTTP service. Walk through
+  how you'd diagnose and fix it.
+
+ANSWER:
+  Step-by-step diagnostic approach:
+
+  Step 1 — Enable pprof endpoints (if not already):
+    import _ "net/http/pprof"
+    // GET /debug/pprof/
+
+  Step 2 — Collect profiles under load:
+    go tool pprof http://localhost:6060/debug/pprof/heap     // memory
+    go tool pprof http://localhost:6060/debug/pprof/profile  // 30s CPU
+    go tool pprof http://localhost:6060/debug/pprof/goroutine // goroutines
+    curl http://localhost:6060/debug/pprof/trace?seconds=5 > trace.out
+    go tool trace trace.out   // visual timeline
+
+  Step 3 — Check for GC pauses:
+    GODEBUG=gctrace=1 ./myservice
+    Look for long STW pauses. Fix: reduce allocations (sync.Pool,
+    preallocate buffers), or tune GOGC.
+
+  Step 4 — Check goroutine profile:
+    Look for goroutines blocked on:
+      - Mutex contention → reduce lock scope or use RWMutex
+      - Slow DB/network I/O → add timeouts via context
+      - Channel blocking → possible goroutine leak
+
+  Step 5 — Check trace for scheduler latency:
+    Look for long gaps between goroutine scheduling.
+    Possible cause: goroutines doing excessive syscalls blocking OS threads.
+    Fix: set GOMAXPROCS correctly (usually = NumCPU).
+
+  Step 6 — Reproduce in benchmark:
+    func BenchmarkHandler(b *testing.B) {
+        b.ReportAllocs()
+        for i := 0; i < b.N; i++ {
+            // exercise hot path
+        }
+    }
+
+  Common root causes and fixes:
+  ┌──────────────────────────────┬────────────────────────────────────┐
+  │ Root cause                   │ Fix                                │
+  ├──────────────────────────────┼────────────────────────────────────┤
+  │ GC pauses (high alloc rate)  │ sync.Pool, preallocate, reduce ptrs│
+  │ Mutex contention             │ sync.RWMutex, finer-grained locking│
+  │ Missing I/O timeouts         │ context.WithTimeout on all I/O     │
+  │ Goroutine pile-up            │ Fix leaks, add backpressure        │
+  │ GOMAXPROCS too low           │ runtime.GOMAXPROCS(runtime.NumCPU())│
+  └──────────────────────────────┴────────────────────────────────────┘
+
+--------------------------------------------------------------------------------
+Q20 [SENIOR] | Generics
+--------------------------------------------------------------------------------
+QUESTION:
+  What are the current limitations of Go generics and when should
+  you avoid them?
+
+ANSWER:
+  Current limitations (as of Go 1.22):
+
+  1. No method-level type parameters:
+       // INVALID — methods cannot have their own type params
+       func (s *Set[T]) Map[R any](f func(T) R) []R { ... }
+       // Workaround: make Map a package-level generic function
+
+  2. No type specialisation:
+       One compiled implementation handles all type parameter instances.
+       No performance gains from specialised codegen (unlike C++ templates).
+
+  3. Type assertions inside generic functions are limited:
+       // Cannot switch on type parameter directly in all cases
+       func Foo[T any](v T) {
+           switch v.(type) { ... }  // compile error for unconstrained T
+       }
+
+  4. Reflection + generics is awkward:
+       reflect.TypeOf works but is verbose; generics don't simplify runtime
+       type inspection.
+
+  5. No variadic type parameters:
+       Cannot express "a function of any number of types" generically.
+
+  When to AVOID generics:
+    - Logic is trivial — interface{} or any suffices
+    - Only 1–2 concrete types needed — just write both
+    - When it obscures intent or adds complexity for the reader
+    - Performance-critical code where interface dispatch is measurably
+      faster in your specific benchmark
+
+  When generics ARE the right choice:
+    - Container types: Set[T], Stack[T], Queue[T]
+    - Functional utilities: Map, Filter, Reduce over slices
+    - SDK/library code operating on multiple numeric types
+    - Algorithms that are structurally identical across types
+
+  Java comparison:
+    Go generics are intentionally simpler than Java's — no wildcards,
+    no covariance/contravariance. This reduces power but also complexity.
+    Go constraints are plain interfaces, which is more coherent.
+
+================================================================================
+  QUICK REFERENCE: KEY GO IDIOMS
+================================================================================
+
+  Goroutine + context cancellation:
+    go func() {
+        select {
+        case <-ctx.Done(): return
+        case work := <-jobs: process(work)
+        }
+    }()
+
+  Error wrapping:
+    return fmt.Errorf("getUserByID %d: %w", id, err)
+
+  Interface guard (compile-time check):
+    var _ io.Reader = (*MyReader)(nil)
+
+  Defer for cleanup:
+    mu.Lock()
+    defer mu.Unlock()
+
+  sync.Pool for reuse:
+    var pool = sync.Pool{New: func() any { return new(bytes.Buffer) }}
+    buf := pool.Get().(*bytes.Buffer)
+    defer pool.Put(buf)
+
+  Preallocate slices:
+    results := make([]Result, 0, len(inputs))
+
+================================================================================
+  INTERVIEW TIPS
+================================================================================
+
+  - For concurrency questions: always mention context cancellation —
+    examiners notice when candidates forget cleanup paths.
+
+  - For memory questions: tie your answer back to GC pressure and the
+    heap vs stack distinction — shows systems-level thinking.
+
+  - For interface questions: mention the io.Reader / io.Writer examples —
+    they are Go's canonical small interface examples.
+
+  - For error handling: mention %w for wrapping and the errors.Is/As
+    unwrap chain — a common gap in mid-level candidates.
+
+  - For generics: acknowledge the limitations — senior candidates are
+    expected to know where NOT to use a feature.
+
+================================================================================
+  END OF FILE | go_mock_interview_qa.txt
+  Total: 20 Questions | 2 Levels | 10 Topics
+================================================================================
