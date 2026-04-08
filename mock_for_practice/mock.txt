@@ -1,5 +1,4 @@
-================================================================================
-GO MOCK
+GO LANG CLASSIC CODING INTERVIEW QUESTIONS + ANSWERS
 ================================================================================
 
 TOPICS COVERED:
@@ -1010,7 +1009,4 @@ ANSWER:
   - For generics: acknowledge the limitations — senior candidates are
     expected to know where NOT to use a feature.
 
-================================================================================
-  END OF FILE | go_mock_interview_qa.txt
-  Total: 20 Questions | 2 Levels | 10 Topics
 ================================================================================

@@ -1,5 +1,5 @@
-GO LANG MOCK INTERVIEW QUESTIONS + ANSWERS (MID → SENIOR)
-
+GO LANG CLASSIC CODING INTERVIEW QUESTIONS + ANSWERS
+================================================================================
 --------------------------------------------------
 1. := vs =
 --------------------------------------------------
@@ -337,6 +337,4 @@ RAPID FIRE
 - generics added in Go 1.18
 - context misuse = not cancelling, storing large data
 
---------------------------------------------------
-END
 --------------------------------------------------

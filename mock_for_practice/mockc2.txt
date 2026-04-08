@@ -1,14 +1,5 @@
+GO LANG CLASSIC CODING INTERVIEW QUESTIONS + ANSWERS
 ================================================================================
-  ██████  ██████      ██████  ██████  ██████  ██ ███    ██  ██████
- ██       ██    ██   ██      ██    ██ ██   ██ ██ ████   ██ ██
- ██   ███ ██    ██   ██      ██    ██ ██   ██ ██ ██ ██  ██ ██   ███
- ██    ██ ██    ██   ██      ██    ██ ██   ██ ██ ██  ██ ██ ██    ██
-  ██████  ██████      ██████  ██████  ██████  ██ ██   ████  ██████
-
-        CLASSIC CODING QUESTIONS | GO (GOLANG) | MID → SENIOR
-        25 Problems | Full Working Code | Patterns Noted
-================================================================================
-
 CATEGORIES:
   [A] Strings & Arrays
   [B] Linked Lists
@@ -1543,7 +1534,4 @@ COMPLEXITY:
     - Closed channel — ranging over closed channel is safe in Go
     - Buffered channel for non-blocking goroutine exit
 
-================================================================================
-  END OF FILE | go_coding_interview_classic.txt
-  Total: 25 Problems | 7 Categories | Full Working Code
 ================================================================================
