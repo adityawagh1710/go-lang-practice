@@ -1,0 +1,34 @@
+Start[Incoming Request] 
+--> Accept[net/http → Gin ServeHTTP]
+--> Context[Create/Reuse gin.Context]
+--> Middlewares[Middleware Chain (Before)]
+--> RouteMatch[Route Matching]
+--> Handler[Route Handler Execution]
+--> MiddlewaresAfter[Middleware Chain (After)]
+--> Response[Send Response]
+--> Cleanup[Context Reset & Pool]
+--> End[Client receives Response]
+
+
+(1) Request Entry: The net/http server receives the raw TCP connection and 
+wraps it in an http.ResponseWriter and http.Request.
+
+(2) Context Allocation: Gin retrieves a *gin.Context from a sync.Pool. 
+This is a critical performance optimization to reduce Garbage Collection overhead.
+
+(3) Routing: The engine looks up the path in its Radix Tree. 
+If found, it retrieves the "Handlers Chain" (Middleware + final Controller).
+
+(4) Middleware Chain (Pre-processing): Gin executes handlers in the order they were registered.
+
+(5) c.Next(): When a middleware calls c.Next(), Gin increments an internal index and calls the next handler in the chain.
+
+(6) Business Logic: The final handler in the chain (your controller/action) is executed.
+
+(7) Middleware Chain (Post-processing): After the final handler finishes, 
+execution "bubbles back up" through the middleware (any code written after c.Next() in the middleware functions).
+
+(8) Response Writing: The context writes the status code and 
+serialized body (JSON/XML/HTML) to the http.ResponseWriter.
+
+(9) Cleanup: The gin.Context is cleared and put back into the sync.Pool for reuse.
