@@ -4,6 +4,7 @@ go 1.25.0
 
 require (
 	github.com/charmbracelet/bubbletea v1.3.10
+	github.com/gin-gonic/gin v1.12.0
 	github.com/pborman/uuid v1.2.1
 	github.com/rs/zerolog v1.35.0
 	github.com/sirupsen/logrus v1.9.4
@@ -25,7 +26,6 @@ require (
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
 	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
 	github.com/gin-contrib/sse v1.1.0 // indirect
-	github.com/gin-gonic/gin v1.12.0 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.30.2 // indirect
@@ -68,7 +68,7 @@ require (
 require (
 	github.com/fatih/color v1.19.0
 	github.com/go-chi/chi/v5 v5.2.5
-	github.com/google/uuid v1.6.0 // indirect
+	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/spf13/cobra v1.10.2
 	github.com/urfave/cli/v2 v2.27.7
