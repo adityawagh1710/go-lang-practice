@@ -1,0 +1,1373 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang FIBER FRAMEWORK
+════════════════════════════════════════════════════════════════════════════════════
+INDEX
+─────────────────────────────────────────────────────────────────────────────────
+  [01] What is Fiber? — Overview & Philosophy
+  [02] Installation & Project Setup
+  [03] App Initialization & Configuration
+  [04] Routing — Basic, Params, Query, Groups
+  [05] Request Context (ctx *fiber.Ctx)
+  [06] Response Writing
+  [07] Middleware — Built-in & Custom
+  [08] Error Handling
+  [09] Fiber vs net/http vs Gin vs Echo
+  [10] File Upload & Static Files
+  [11] Cookies & Sessions
+  [12] WebSockets
+  [13] Database Integration (GORM + Fiber)
+  [14] Testing Fiber Apps
+  [15] Performance Internals (fasthttp, zero-alloc)
+  [16] Production Best Practices
+  [17] Interview Questions & Answers — Mid-Level
+  [18] Interview Questions & Answers — Senior Level
+
+─────────────────────────────────────────────────────────────────────────────────
+[01] WHAT IS FIBER? — OVERVIEW & PHILOSOPHY
+─────────────────────────────────────────────────────────────────────────────────
+
+Fiber is an Express.js-inspired HTTP web framework written in Go.
+It is built on top of Fasthttp — the fastest HTTP engine for Go —
+instead of the standard net/http package.
+
+KEY GOALS:
+  • Extreme performance (low memory allocs, zero-copy where possible)
+  • Developer-friendly API inspired by Express.js
+  • Minimal boilerplate
+  • Rich middleware ecosystem
+
+FIBER vs NET/HTTP — CORE DIFFERENCE:
+┌──────────────────────┬─────────────────────────┬──────────────────────────────┐
+│ Aspect               │ net/http                │ Fiber (fasthttp)             │
+├──────────────────────┼─────────────────────────┼──────────────────────────────┤
+│ Handler signature    │ (w http.ResponseWriter, │ func(*fiber.Ctx) error       │
+│                      │  r *http.Request)       │                              │
+│ Request object       │ *http.Request           │ *fiber.Ctx (combined)        │
+│ Router               │ stdlib mux / 3rd-party  │ Built-in (radix tree)        │
+│ Allocs per req       │ Higher                  │ Near-zero (ctx pooled)       │
+│ JSON decode          │ encoding/json           │ sonic/fastjson (configurable)│
+└──────────────────────┴─────────────────────────┴──────────────────────────────┘
+
+JAVA ANALOGY:
+  net/http    ≈ raw Java Servlet API
+  Fiber       ≈ Spring Boot (opinionated, fast, convention-over-config)
+  Gin/Echo    ≈ JAX-RS / Quarkus
+
+GitHub: https://github.com/gofiber/fiber
+Docs:   https://docs.gofiber.io
+
+─────────────────────────────────────────────────────────────────────────────────
+[02] INSTALLATION & PROJECT SETUP
+─────────────────────────────────────────────────────────────────────────────────
+
+# Initialize module
+  go mod init github.com/yourname/myapp
+
+# Install Fiber v2 (stable, most widely used)
+  go get github.com/gofiber/fiber/v2
+
+# Install Fiber v3 (latest, some API changes)
+  go get github.com/gofiber/fiber/v3
+
+# Recommended project structure
+  myapp/
+  ├── main.go
+  ├── go.mod
+  ├── go.sum
+  ├── config/
+  │   └── config.go
+  ├── handlers/
+  │   ├── user.go
+  │   └── product.go
+  ├── middleware/
+  │   └── auth.go
+  ├── models/
+  │   └── user.go
+  ├── routes/
+  │   └── routes.go
+  └── utils/
+      └── response.go
+
+─────────────────────────────────────────────────────────────────────────────────
+[03] APP INITIALIZATION & CONFIGURATION
+─────────────────────────────────────────────────────────────────────────────────
+
+MINIMAL HELLO WORLD:
+  package main
+
+  import (
+      "log"
+      "github.com/gofiber/fiber/v2"
+  )
+
+  func main() {
+      app := fiber.New()
+
+      app.Get("/", func(c *fiber.Ctx) error {
+          return c.SendString("Hello, Fiber!")
+      })
+
+      log.Fatal(app.Listen(":3000"))
+  }
+
+─────────────────────────────────────────────────────────────────────────────────
+
+APP CONFIG (fiber.Config):
+
+  app := fiber.New(fiber.Config{
+      // App name shown in response header: Server: MyApp
+      AppName: "MyApp v1.0",
+
+      // Max request body size (default: 4MB)
+      BodyLimit: 10 * 1024 * 1024, // 10MB
+
+      // Read/Write timeout
+      ReadTimeout:  5 * time.Second,
+      WriteTimeout: 10 * time.Second,
+
+      // Custom JSON encoder/decoder (default: encoding/json)
+      // Use sonic for much faster JSON: github.com/bytedance/sonic
+      JSONEncoder: sonic.Marshal,
+      JSONDecoder: sonic.Unmarshal,
+
+      // Disable startup message
+      DisableStartupMessage: false,
+
+      // Enable case-sensitive routing
+      CaseSensitive: true,
+
+      // Enable strict routing (/foo != /foo/)
+      StrictRouting: true,
+
+      // Custom error handler
+      ErrorHandler: func(c *fiber.Ctx, err error) error {
+          code := fiber.StatusInternalServerError
+          var e *fiber.Error
+          if errors.As(err, &e) {
+              code = e.Code
+          }
+          return c.Status(code).JSON(fiber.Map{"error": err.Error()})
+      },
+  })
+
+─────────────────────────────────────────────────────────────────────────────────
+[04] ROUTING — BASIC, PARAMS, QUERY, GROUPS
+─────────────────────────────────────────────────────────────────────────────────
+
+BASIC HTTP METHODS:
+  app.Get("/users",       handler)
+  app.Post("/users",      handler)
+  app.Put("/users/:id",   handler)
+  app.Patch("/users/:id", handler)
+  app.Delete("/users/:id",handler)
+  app.All("/any",         handler)   // matches all methods
+  app.Use("/prefix",      handler)   // matches all methods + sub-paths
+
+─────────────────────────────────────────────────────────────────────────────────
+
+ROUTE PARAMETERS:
+  // Named param
+  app.Get("/users/:id", func(c *fiber.Ctx) error {
+      id := c.Params("id")            // string
+      return c.SendString("User: " + id)
+  })
+
+  // Optional param (trailing ?)
+  app.Get("/posts/:id?", func(c *fiber.Ctx) error {
+      id := c.Params("id", "default") // fallback if empty
+      return c.SendString(id)
+  })
+
+  // Wildcard param
+  app.Get("/files/*", func(c *fiber.Ctx) error {
+      path := c.Params("*")           // captures everything after /files/
+      return c.SendString(path)
+  })
+
+  // Typed params with ParamsInt / ParamsParser
+  app.Get("/items/:id", func(c *fiber.Ctx) error {
+      id, err := c.ParamsInt("id")
+      if err != nil {
+          return fiber.ErrBadRequest
+      }
+      return c.JSON(fiber.Map{"id": id})
+  })
+
+─────────────────────────────────────────────────────────────────────────────────
+
+QUERY PARAMETERS:
+  // GET /search?q=golang&page=2&limit=10
+  app.Get("/search", func(c *fiber.Ctx) error {
+      q     := c.Query("q")
+      page  := c.QueryInt("page", 1)    // default = 1
+      limit := c.QueryInt("limit", 20)
+      return c.JSON(fiber.Map{
+          "query": q,
+          "page":  page,
+          "limit": limit,
+      })
+  })
+
+  // Bind all query params to a struct
+  type SearchQuery struct {
+      Q     string `query:"q"`
+      Page  int    `query:"page"`
+      Limit int    `query:"limit"`
+  }
+
+  app.Get("/search", func(c *fiber.Ctx) error {
+      var sq SearchQuery
+      if err := c.QueryParser(&sq); err != nil {
+          return fiber.ErrBadRequest
+      }
+      return c.JSON(sq)
+  })
+
+─────────────────────────────────────────────────────────────────────────────────
+
+ROUTE GROUPS (like Express Router / Spring @RequestMapping):
+  // routes/routes.go
+  func SetupRoutes(app *fiber.App) {
+      api := app.Group("/api")
+
+      v1 := api.Group("/v1")
+      v1.Get("/users",    handlers.GetUsers)
+      v1.Post("/users",   handlers.CreateUser)
+      v1.Get("/users/:id",handlers.GetUser)
+
+      v2 := api.Group("/v2")
+      v2.Get("/users",    handlers.GetUsersV2)
+  }
+
+  // main.go
+  func main() {
+      app := fiber.New()
+      routes.SetupRoutes(app)
+      log.Fatal(app.Listen(":3000"))
+  }
+
+─────────────────────────────────────────────────────────────────────────────────
+
+ROUTE WITH MIDDLEWARE (per-route):
+  app.Get("/admin",
+      middleware.AuthRequired,    // runs first
+      middleware.RequireRole("admin"),
+      handlers.AdminDashboard,    // runs last
+  )
+
+─────────────────────────────────────────────────────────────────────────────────
+[05] REQUEST CONTEXT (*fiber.Ctx)
+─────────────────────────────────────────────────────────────────────────────────
+
+The *fiber.Ctx is Fiber's single object combining request + response.
+It is POOLED — never store it or pass it to goroutines directly.
+Use c.Context() to get a detachable copy if needed.
+
+  func handler(c *fiber.Ctx) error {
+      // ── METHOD & PATH ─────────────────────────────────
+      method := c.Method()          // "GET", "POST", etc.
+      path   := c.Path()            // "/users/42"
+      ip     := c.IP()              // "192.168.1.1"
+      host   := c.Hostname()        // "example.com"
+
+      // ── REQUEST HEADERS ───────────────────────────────
+      auth   := c.Get("Authorization")
+      ct     := c.Get(fiber.HeaderContentType)
+
+      // ── BODY PARSING ──────────────────────────────────
+      body   := c.Body()            // raw []byte — NEVER modify
+      bodyStr:= c.BodyRaw()         // same as Body() for fasthttp
+
+      // Bind JSON body to struct
+      type CreateUserReq struct {
+          Name  string `json:"name"  validate:"required"`
+          Email string `json:"email" validate:"required,email"`
+      }
+      var req CreateUserReq
+      if err := c.BodyParser(&req); err != nil {
+          return fiber.ErrBadRequest
+      }
+
+      // ── LOCALS (per-request key-value store) ──────────
+      // Set in middleware, read in handler
+      c.Locals("userID", "abc123")
+      userID := c.Locals("userID").(string)
+
+      // ── CONTEXT (for goroutines / DB calls) ───────────
+      // ⚠ DO NOT pass c itself to a goroutine
+      ctx := c.UserContext() // returns context.Context
+      result, err := db.FindUser(ctx, userID)
+
+      return c.JSON(result)
+  }
+
+─────────────────────────────────────────────────────────────────────────────────
+
+IMPORTANT — CTX LIFECYCLE WARNING:
+  ❌ WRONG — ctx is returned to pool after handler returns:
+    go func() {
+        body := c.Body() // RACE CONDITION / panic
+    }()
+
+  ✅ CORRECT — copy what you need before spawning:
+    body := make([]byte, len(c.Body()))
+    copy(body, c.Body())
+    go func() {
+        process(body)
+    }()
+
+─────────────────────────────────────────────────────────────────────────────────
+[06] RESPONSE WRITING
+─────────────────────────────────────────────────────────────────────────────────
+
+  func handler(c *fiber.Ctx) error {
+      // Plain text
+      return c.SendString("OK")
+
+      // Status + text
+      return c.Status(fiber.StatusCreated).SendString("Created")
+
+      // JSON
+      return c.JSON(fiber.Map{
+          "id":   1,
+          "name": "Aditya",
+      })
+
+      // JSON with status
+      return c.Status(201).JSON(user)
+
+      // XML
+      return c.XML(user) // Content-Type: application/xml
+
+      // Send bytes
+      return c.Send([]byte("raw bytes"))
+
+      // Send file (for downloads)
+      return c.Download("./files/report.pdf")
+
+      // Redirect
+      return c.Redirect("/new-path", fiber.StatusMovedPermanently)
+
+      // Set response headers
+      c.Set("X-Custom-Header", "value")
+      c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
+      return c.SendString(`{"ok":true}`)
+
+      // Send with specific content type
+      c.Type("json")
+      return c.SendString(`{"ok":true}`)
+
+      // Render HTML template (with template engine configured)
+      return c.Render("index", fiber.Map{"Title": "Home"})
+  }
+
+─────────────────────────────────────────────────────────────────────────────────
+
+fiber.Map is just map[string]interface{}:
+  type Map map[string]interface{}
+
+─────────────────────────────────────────────────────────────────────────────────
+[07] MIDDLEWARE — BUILT-IN & CUSTOM
+─────────────────────────────────────────────────────────────────────────────────
+
+WHAT IS MIDDLEWARE?
+  A function that runs before (or after) the route handler.
+  Signature: func(*fiber.Ctx) error
+  Call c.Next() to pass control to the next middleware/handler.
+
+─────────────────────────────────────────────────────────────────────────────────
+
+GLOBAL MIDDLEWARE:
+  app.Use(middleware1, middleware2) // applied to ALL routes
+
+SCOPED MIDDLEWARE (group-level):
+  api := app.Group("/api", authMiddleware)
+
+PER-ROUTE MIDDLEWARE:
+  app.Get("/admin", authMiddleware, adminHandler)
+
+─────────────────────────────────────────────────────────────────────────────────
+
+CUSTOM MIDDLEWARE EXAMPLE — JWT AUTH:
+  // middleware/auth.go
+  package middleware
+
+  import (
+      "github.com/gofiber/fiber/v2"
+      "strings"
+  )
+
+  func AuthRequired(c *fiber.Ctx) error {
+      header := c.Get("Authorization")
+      if header == "" || !strings.HasPrefix(header, "Bearer ") {
+          return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+              "error": "missing or invalid token",
+          })
+      }
+
+      token := strings.TrimPrefix(header, "Bearer ")
+      userID, err := validateToken(token)
+      if err != nil {
+          return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+              "error": "invalid token",
+          })
+      }
+
+      c.Locals("userID", userID) // pass to next handler
+      return c.Next()            // ← MUST call to continue chain
+  }
+
+─────────────────────────────────────────────────────────────────────────────────
+
+CUSTOM MIDDLEWARE EXAMPLE — REQUEST LOGGER:
+  func RequestLogger(c *fiber.Ctx) error {
+      start := time.Now()
+
+      // ── before handler ───────────────────────────────
+      err := c.Next()
+      // ── after handler ────────────────────────────────
+
+      log.Printf("[%s] %s %s — %d — %v",
+          c.Method(), c.Path(), c.IP(),
+          c.Response().StatusCode(),
+          time.Since(start),
+      )
+      return err
+  }
+
+─────────────────────────────────────────────────────────────────────────────────
+
+BUILT-IN MIDDLEWARE (gofiber/fiber/v2/middleware/...):
+
+  import (
+      "github.com/gofiber/fiber/v2/middleware/logger"
+      "github.com/gofiber/fiber/v2/middleware/recover"
+      "github.com/gofiber/fiber/v2/middleware/cors"
+      "github.com/gofiber/fiber/v2/middleware/limiter"
+      "github.com/gofiber/fiber/v2/middleware/compress"
+      "github.com/gofiber/fiber/v2/middleware/requestid"
+      "github.com/gofiber/fiber/v2/middleware/helmet"
+      "github.com/gofiber/fiber/v2/middleware/cache"
+      "github.com/gofiber/fiber/v2/middleware/timeout"
+  )
+
+  app.Use(recover.New())     // panic recovery
+  app.Use(logger.New())      // HTTP request logs
+  app.Use(requestid.New())   // X-Request-ID header
+
+  // CORS
+  app.Use(cors.New(cors.Config{
+      AllowOrigins: "https://example.com, https://app.example.com",
+      AllowMethods: "GET,POST,PUT,DELETE,OPTIONS",
+      AllowHeaders: "Origin,Content-Type,Authorization",
+  }))
+
+  // Rate Limiter
+  app.Use(limiter.New(limiter.Config{
+      Max:        100,          // 100 requests
+      Expiration: 1 * time.Minute,
+      KeyGenerator: func(c *fiber.Ctx) string {
+          return c.IP() // limit per IP
+      },
+      LimitReached: func(c *fiber.Ctx) error {
+          return c.Status(429).JSON(fiber.Map{"error": "rate limit exceeded"})
+      },
+  }))
+
+  // Compression
+  app.Use(compress.New(compress.Config{
+      Level: compress.LevelBestSpeed,
+  }))
+
+  // Helmet (security headers)
+  app.Use(helmet.New())
+
+  // Cache
+  app.Use(cache.New(cache.Config{
+      Expiration:   30 * time.Minute,
+      CacheControl: true,
+  }))
+
+─────────────────────────────────────────────────────────────────────────────────
+[08] ERROR HANDLING
+─────────────────────────────────────────────────────────────────────────────────
+
+FIBER ERROR TYPE:
+  // fiber.Error is a struct with Code + Message
+  type Error struct {
+      Code    int    `json:"code"`
+      Message string `json:"message"`
+  }
+
+  // Built-in HTTP errors
+  fiber.ErrBadRequest         // 400
+  fiber.ErrUnauthorized       // 401
+  fiber.ErrForbidden          // 403
+  fiber.ErrNotFound           // 404
+  fiber.ErrInternalServerError// 500
+
+─────────────────────────────────────────────────────────────────────────────────
+
+RETURNING ERRORS FROM HANDLERS:
+  app.Get("/items/:id", func(c *fiber.Ctx) error {
+      id, err := c.ParamsInt("id")
+      if err != nil {
+          return fiber.ErrBadRequest // fiber handles it via ErrorHandler
+      }
+
+      item, err := db.GetItem(id)
+      if err != nil {
+          if errors.Is(err, ErrNotFound) {
+              return fiber.ErrNotFound
+          }
+          return fiber.NewError(500, "database error: " + err.Error())
+      }
+
+      return c.JSON(item)
+  })
+
+─────────────────────────────────────────────────────────────────────────────────
+
+CUSTOM GLOBAL ERROR HANDLER:
+  app := fiber.New(fiber.Config{
+      ErrorHandler: func(c *fiber.Ctx, err error) error {
+          code := fiber.StatusInternalServerError
+          msg  := "Internal Server Error"
+
+          var fiberErr *fiber.Error
+          if errors.As(err, &fiberErr) {
+              code = fiberErr.Code
+              msg  = fiberErr.Message
+          }
+
+          return c.Status(code).JSON(fiber.Map{
+              "success": false,
+              "error":   msg,
+          })
+      },
+  })
+
+─────────────────────────────────────────────────────────────────────────────────
+
+DOMAIN-SPECIFIC ERRORS WITH errors.As:
+  // models/errors.go
+  type ValidationError struct {
+      Field   string
+      Message string
+  }
+  func (e *ValidationError) Error() string {
+      return fmt.Sprintf("validation: %s — %s", e.Field, e.Message)
+  }
+
+  // In error handler:
+  var valErr *ValidationError
+  if errors.As(err, &valErr) {
+      return c.Status(422).JSON(fiber.Map{
+          "error": "validation failed",
+          "field": valErr.Field,
+          "msg":   valErr.Message,
+      })
+  }
+
+─────────────────────────────────────────────────────────────────────────────────
+[09] FIBER vs NET/HTTP vs GIN vs ECHO
+─────────────────────────────────────────────────────────────────────────────────
+
+┌─────────────────┬──────────────┬──────────────┬──────────────┬─────────────────┐
+│ Feature         │ net/http     │ Fiber        │ Gin          │ Echo            │
+├─────────────────┼──────────────┼──────────────┼──────────────┼─────────────────┤
+│ HTTP engine     │ stdlib       │ fasthttp     │ stdlib       │ stdlib          │
+│ Performance     │ Good         │ Excellent    │ Very Good    │ Very Good       │
+│ Context type    │ 2 args       │ *fiber.Ctx   │ *gin.Context │ echo.Context    │
+│ Router          │ 3rd party    │ radix tree   │ radix tree   │ radix tree      │
+│ Middleware      │ manual chain │ built-in     │ built-in     │ built-in        │
+│ net/http compat │ Yes          │ No (fasthttp)│ Yes          │ Yes             │
+│ Websocket       │ 3rd party    │ built-in     │ 3rd party    │ built-in        │
+│ Learning curve  │ Low          │ Low (Express)│ Low          │ Low             │
+│ Allocs/req      │ Higher       │ Lowest       │ Low          │ Low             │
+└─────────────────┴──────────────┴──────────────┴──────────────┴─────────────────┘
+
+WHEN TO CHOOSE FIBER:
+  • You need maximum raw throughput
+  • Team has Express.js background
+  • Simple microservices or API gateways
+  • You don't need net/http compatibility
+
+WHEN NOT TO CHOOSE FIBER:
+  • You need net/http-compatible middleware ecosystem (e.g., prometheus handlers)
+  • Strict standard-library-only policy
+  • You rely heavily on http.Handler adapters
+
+─────────────────────────────────────────────────────────────────────────────────
+[10] FILE UPLOAD & STATIC FILES
+─────────────────────────────────────────────────────────────────────────────────
+
+SINGLE FILE UPLOAD:
+  app.Post("/upload", func(c *fiber.Ctx) error {
+      file, err := c.FormFile("avatar")
+      if err != nil {
+          return fiber.ErrBadRequest
+      }
+
+      // Validate type
+      if file.Header.Get("Content-Type") != "image/jpeg" {
+          return fiber.NewError(400, "only jpeg allowed")
+      }
+
+      // Save to disk
+      savePath := "./uploads/" + file.Filename
+      if err := c.SaveFile(file, savePath); err != nil {
+          return fiber.ErrInternalServerError
+      }
+
+      return c.JSON(fiber.Map{"path": savePath})
+  })
+
+MULTIPLE FILE UPLOAD:
+  app.Post("/upload-multi", func(c *fiber.Ctx) error {
+      form, err := c.MultipartForm()
+      if err != nil {
+          return fiber.ErrBadRequest
+      }
+      files := form.File["documents"] // field name
+
+      for _, file := range files {
+          if err := c.SaveFile(file, "./uploads/"+file.Filename); err != nil {
+              return err
+          }
+      }
+      return c.JSON(fiber.Map{"count": len(files)})
+  })
+
+STATIC FILE SERVING:
+  // Serve entire directory
+  app.Static("/", "./public")
+
+  // Custom config
+  app.Static("/assets", "./static", fiber.Static{
+      Compress:  true,
+      ByteRange: true,
+      Browse:    false,
+      MaxAge:    3600, // 1 hour cache
+  })
+
+─────────────────────────────────────────────────────────────────────────────────
+[11] COOKIES & SESSIONS
+─────────────────────────────────────────────────────────────────────────────────
+
+COOKIES:
+  // Set cookie
+  app.Get("/set-cookie", func(c *fiber.Ctx) error {
+      c.Cookie(&fiber.Cookie{
+          Name:     "session_token",
+          Value:    "abc123",
+          Expires:  time.Now().Add(24 * time.Hour),
+          HTTPOnly: true,
+          Secure:   true,
+          SameSite: "Strict",
+      })
+      return c.SendString("cookie set")
+  })
+
+  // Read cookie
+  app.Get("/read-cookie", func(c *fiber.Ctx) error {
+      token := c.Cookies("session_token")
+      return c.SendString("token: " + token)
+  })
+
+  // Clear cookie
+  app.Get("/clear-cookie", func(c *fiber.Ctx) error {
+      c.ClearCookie("session_token")
+      return c.SendString("cleared")
+  })
+
+─────────────────────────────────────────────────────────────────────────────────
+
+SESSIONS (gofiber/fiber/v2/middleware/session):
+  import "github.com/gofiber/fiber/v2/middleware/session"
+
+  store := session.New(session.Config{
+      Expiration: 24 * time.Hour,
+      // Default storage is in-memory; for Redis use:
+      // Storage: redisStorage,
+  })
+
+  app.Get("/login", func(c *fiber.Ctx) error {
+      sess, err := store.Get(c)
+      if err != nil {
+          return err
+      }
+      sess.Set("userID", "42")
+      return sess.Save()
+  })
+
+  app.Get("/profile", func(c *fiber.Ctx) error {
+      sess, err := store.Get(c)
+      if err != nil {
+          return err
+      }
+      userID := sess.Get("userID")
+      if userID == nil {
+          return fiber.ErrUnauthorized
+      }
+      return c.JSON(fiber.Map{"userID": userID})
+  })
+
+─────────────────────────────────────────────────────────────────────────────────
+[12] WEBSOCKETS
+─────────────────────────────────────────────────────────────────────────────────
+
+  go get github.com/gofiber/websocket/v2
+
+  import "github.com/gofiber/websocket/v2"
+
+  app.Use("/ws", func(c *fiber.Ctx) error {
+      if websocket.IsWebSocketUpgrade(c) {
+          return c.Next()
+      }
+      return fiber.ErrUpgradeRequired
+  })
+
+  app.Get("/ws/:id", websocket.New(func(c *websocket.Conn) {
+      // This runs in its own goroutine (blocking)
+      var (
+          mt  int
+          msg []byte
+          err error
+      )
+      for {
+          if mt, msg, err = c.ReadMessage(); err != nil {
+              break // client disconnected
+          }
+          log.Printf("recv: %s", msg)
+
+          if err = c.WriteMessage(mt, msg); err != nil { // echo back
+              break
+          }
+      }
+  }))
+
+─────────────────────────────────────────────────────────────────────────────────
+[13] DATABASE INTEGRATION (GORM + FIBER)
+─────────────────────────────────────────────────────────────────────────────────
+
+  go get gorm.io/gorm
+  go get gorm.io/driver/postgres
+
+─────────────────────────────────────────────────────────────────────────────────
+
+SETUP DB + PASS VIA LOCALS OR CLOSURE:
+
+  // config/db.go
+  package config
+
+  import (
+      "gorm.io/driver/postgres"
+      "gorm.io/gorm"
+  )
+
+  func ConnectDB(dsn string) (*gorm.DB, error) {
+      return gorm.Open(postgres.Open(dsn), &gorm.Config{})
+  }
+
+─────────────────────────────────────────────────────────────────────────────────
+
+  // main.go — inject DB into handlers via closure
+  db, err := config.ConnectDB(os.Getenv("DATABASE_URL"))
+  if err != nil {
+      log.Fatal("DB connect failed:", err)
+  }
+
+  h := handlers.NewUserHandler(db)
+
+  app.Get("/users",     h.GetAll)
+  app.Post("/users",    h.Create)
+  app.Get("/users/:id", h.GetByID)
+
+─────────────────────────────────────────────────────────────────────────────────
+
+  // handlers/user.go
+  type UserHandler struct {
+      db *gorm.DB
+  }
+
+  func NewUserHandler(db *gorm.DB) *UserHandler {
+      return &UserHandler{db: db}
+  }
+
+  func (h *UserHandler) GetAll(c *fiber.Ctx) error {
+      var users []models.User
+      if err := h.db.WithContext(c.UserContext()).Find(&users).Error; err != nil {
+          return fiber.ErrInternalServerError
+      }
+      return c.JSON(users)
+  }
+
+  func (h *UserHandler) Create(c *fiber.Ctx) error {
+      var req models.User
+      if err := c.BodyParser(&req); err != nil {
+          return fiber.ErrBadRequest
+      }
+      if err := h.db.WithContext(c.UserContext()).Create(&req).Error; err != nil {
+          return fiber.ErrInternalServerError
+      }
+      return c.Status(201).JSON(req)
+  }
+
+─────────────────────────────────────────────────────────────────────────────────
+[14] TESTING FIBER APPS
+─────────────────────────────────────────────────────────────────────────────────
+
+Fiber provides app.Test() — no real HTTP server needed.
+Uses net/http/httptest internally.
+
+  // handlers/user_test.go
+  package handlers_test
+
+  import (
+      "io"
+      "net/http/httptest"
+      "strings"
+      "testing"
+
+      "github.com/gofiber/fiber/v2"
+  )
+
+  func setupApp() *fiber.App {
+      app := fiber.New()
+      app.Get("/ping", func(c *fiber.Ctx) error {
+          return c.SendString("pong")
+      })
+      app.Post("/users", func(c *fiber.Ctx) error {
+          return c.Status(201).SendString("created")
+      })
+      return app
+  }
+
+  func TestGetPing(t *testing.T) {
+      app := setupApp()
+
+      req := httptest.NewRequest("GET", "/ping", nil)
+      resp, err := app.Test(req, -1) // -1 = no timeout
+      if err != nil {
+          t.Fatal(err)
+      }
+      if resp.StatusCode != 200 {
+          t.Errorf("expected 200, got %d", resp.StatusCode)
+      }
+      body, _ := io.ReadAll(resp.Body)
+      if string(body) != "pong" {
+          t.Errorf("expected pong, got %s", body)
+      }
+  }
+
+  func TestCreateUser(t *testing.T) {
+      app := setupApp()
+
+      body := strings.NewReader(`{"name":"Aditya","email":"a@b.com"}`)
+      req  := httptest.NewRequest("POST", "/users", body)
+      req.Header.Set("Content-Type", "application/json")
+
+      resp, err := app.Test(req)
+      if err != nil {
+          t.Fatal(err)
+      }
+      if resp.StatusCode != 201 {
+          t.Errorf("expected 201, got %d", resp.StatusCode)
+      }
+  }
+
+─────────────────────────────────────────────────────────────────────────────────
+
+TABLE-DRIVEN TESTS:
+  tests := []struct {
+      name           string
+      method         string
+      url            string
+      body           string
+      expectedStatus int
+  }{
+      {"get ping", "GET", "/ping", "", 200},
+      {"post user ok", "POST", "/users", `{"name":"A"}`, 201},
+      {"post user bad body", "POST", "/users", `{bad}`, 400},
+  }
+
+  for _, tt := range tests {
+      t.Run(tt.name, func(t *testing.T) {
+          var bodyReader io.Reader
+          if tt.body != "" {
+              bodyReader = strings.NewReader(tt.body)
+          }
+          req := httptest.NewRequest(tt.method, tt.url, bodyReader)
+          if tt.body != "" {
+              req.Header.Set("Content-Type", "application/json")
+          }
+          resp, _ := app.Test(req)
+          if resp.StatusCode != tt.expectedStatus {
+              t.Errorf("expected %d, got %d", tt.expectedStatus, resp.StatusCode)
+          }
+      })
+  }
+
+─────────────────────────────────────────────────────────────────────────────────
+[15] PERFORMANCE INTERNALS (fasthttp, zero-alloc)
+─────────────────────────────────────────────────────────────────────────────────
+
+WHY IS FIBER FAST?
+
+1. FASTHTTP ENGINE (not net/http):
+   • Keeps connections alive and reuses them aggressively
+   • Reads headers into a pre-allocated buffer, not a new map per request
+   • net/http allocates a new http.Request + http.ResponseWriter per req
+   • fasthttp reuses a RequestCtx from a sync.Pool
+
+2. *fiber.Ctx IS POOLED:
+   • After your handler returns, ctx is reset and returned to sync.Pool
+   • This is why you cannot hold onto ctx after the handler completes
+   • Zero garbage per request if you don't allocate yourself
+
+3. ZERO-COPY BODY READS:
+   • c.Body() returns a slice into the raw buffer — no copy
+   • Modifying the returned slice corrupts the buffer — never do it
+
+4. RADIX TREE ROUTING:
+   • O(log n) route matching vs O(n) linear scan
+   • Same as Gin/Echo routers
+
+5. ZERO ALLOCATION JSON (with sonic):
+   • Swap encoding/json for sonic (bytedance) for 3-4x faster JSON
+
+BENCHMARK (approx, varies by hardware):
+  Framework   Req/sec     Allocs/req
+  Fiber       ~200k+      ~0 (ctx pooled)
+  Gin         ~150k       ~2
+  Echo        ~145k       ~2
+  net/http    ~120k       ~4+
+
+─────────────────────────────────────────────────────────────────────────────────
+
+PROFILING A FIBER APP:
+  import _ "net/http/pprof"
+  import "net/http"
+
+  // In main, start pprof on separate port:
+  go func() {
+      log.Println(http.ListenAndServe(":6060", nil))
+  }()
+
+  // Then: go tool pprof http://localhost:6060/debug/pprof/profile?seconds=30
+
+─────────────────────────────────────────────────────────────────────────────────
+[16] PRODUCTION BEST PRACTICES
+─────────────────────────────────────────────────────────────────────────────────
+
+1. ALWAYS USE recover.New() MIDDLEWARE:
+   app.Use(recover.New()) // first middleware — catch panics
+
+2. ALWAYS SET TIMEOUTS:
+   app := fiber.New(fiber.Config{
+       ReadTimeout:  5 * time.Second,
+       WriteTimeout: 10 * time.Second,
+       IdleTimeout:  120 * time.Second,
+   })
+
+3. GRACEFUL SHUTDOWN:
+   quit := make(chan os.Signal, 1)
+   signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+   go func() {
+       if err := app.Listen(":3000"); err != nil {
+           log.Fatal(err)
+       }
+   }()
+   <-quit
+   log.Println("Shutting down...")
+   if err := app.Shutdown(); err != nil {
+       log.Fatal("Shutdown error:", err)
+   }
+
+4. USE c.UserContext() FOR ALL DB/EXTERNAL CALLS:
+   // Propagates cancellation properly
+   result, err := db.FindUser(c.UserContext(), id)
+
+5. STRUCTURED LOGGING WITH slog / zap:
+   // Pair with requestid middleware
+   requestID := c.GetRespHeader(fiber.HeaderXRequestID)
+   slog.InfoContext(c.UserContext(), "request", "id", requestID)
+
+6. VALIDATE REQUEST BODIES:
+   go get github.com/go-playground/validator/v10
+
+   var req CreateUserReq
+   if err := c.BodyParser(&req); err != nil {
+       return fiber.ErrBadRequest
+   }
+   validate := validator.New()
+   if err := validate.Struct(&req); err != nil {
+       return c.Status(422).JSON(fiber.Map{"error": err.Error()})
+   }
+
+7. NEVER RETURN INTERNAL ERRORS TO CLIENT:
+   // Log internally, return generic message
+   log.Error("db error", "err", err)
+   return fiber.ErrInternalServerError // "Internal Server Error"
+
+8. USE ENVIRONMENT VARIABLES FOR CONFIG:
+   go get github.com/joho/godotenv
+
+─────────────────────────────────────────────────────────────────────────────────
+[17] INTERVIEW QUESTIONS & ANSWERS — MID-LEVEL
+─────────────────────────────────────────────────────────────────────────────────
+
+Q1: What is Fiber and what HTTP engine does it use?
+A:  Fiber is a Go web framework inspired by Express.js. It is built on
+    fasthttp (not net/http), which gives it much higher throughput and
+    lower allocations per request compared to frameworks like Gin or Echo
+    that use the standard library.
+
+─────────────────────────────────────────────────────────────────────────────────
+
+Q2: Why can't you pass *fiber.Ctx to a goroutine?
+A:  Because *fiber.Ctx is pooled. After the handler function returns,
+    Fiber resets and returns the ctx to a sync.Pool for reuse. If a
+    goroutine holds a reference, it is now accessing a stale or recycled
+    ctx — causing data races or panics. You must copy any data you need
+    before spawning a goroutine.
+
+    Correct pattern:
+      body := make([]byte, len(c.Body()))
+      copy(body, c.Body())
+      go process(body)
+
+─────────────────────────────────────────────────────────────────────────────────
+
+Q3: How do you share data between middleware and a handler in Fiber?
+A:  Using c.Locals(key, value) in middleware and c.Locals(key) in the
+    handler. Locals is a per-request key-value store scoped to that
+    request's *fiber.Ctx.
+
+    Middleware:
+      c.Locals("userID", "42")
+      return c.Next()
+    Handler:
+      userID := c.Locals("userID").(string)
+
+─────────────────────────────────────────────────────────────────────────────────
+
+Q4: How does routing work in Fiber? What algorithm?
+A:  Fiber uses a radix tree (trie) for route matching, giving O(log n)
+    time complexity. Routes are registered at startup; at request time
+    the tree is traversed to find the matching handler. Named params,
+    wildcards, and optional params are all stored in the tree.
+
+─────────────────────────────────────────────────────────────────────────────────
+
+Q5: What does c.Next() do in middleware?
+A:  It passes control to the next middleware or route handler in the
+    chain. If Next() is not called, the chain stops — the handler never
+    runs. Code after c.Next() executes after the handler returns, allowing
+    post-processing (logging response time, modifying headers, etc.).
+
+─────────────────────────────────────────────────────────────────────────────────
+
+Q6: How do you handle errors globally in Fiber?
+A:  By setting a custom ErrorHandler in fiber.Config. Any error returned
+    from a handler or middleware flows to this function. You can use
+    errors.As to check for *fiber.Error to get the HTTP status code,
+    or cast to domain-specific error types for structured responses.
+
+─────────────────────────────────────────────────────────────────────────────────
+
+Q7: How do you test a Fiber app without starting a real server?
+A:  Using app.Test(req, timeout) which accepts an *http.Request and
+    returns an *http.Response. This uses an in-memory pipe — no port
+    binding needed, making tests fast and suitable for CI.
+
+─────────────────────────────────────────────────────────────────────────────────
+
+Q8: What is fiber.Map?
+A:  It is a type alias for map[string]interface{}, provided for
+    convenience when returning JSON responses:
+      return c.JSON(fiber.Map{"ok": true, "data": user})
+
+─────────────────────────────────────────────────────────────────────────────────
+
+Q9: How do you configure CORS in Fiber?
+A:  Using the built-in cors middleware:
+      app.Use(cors.New(cors.Config{
+          AllowOrigins: "https://example.com",
+          AllowMethods: "GET,POST,PUT,DELETE",
+          AllowHeaders: "Content-Type,Authorization",
+      }))
+
+─────────────────────────────────────────────────────────────────────────────────
+
+Q10: Difference between app.Use() and app.Get()?
+A:  app.Use() matches all HTTP methods and is used for middleware or
+    catch-all routes. It can match prefixes: app.Use("/api") matches
+    /api, /api/users, /api/v1/anything.
+    app.Get() only matches GET requests on the exact path (or pattern).
+
+─────────────────────────────────────────────────────────────────────────────────
+[18] INTERVIEW QUESTIONS & ANSWERS — SENIOR LEVEL
+─────────────────────────────────────────────────────────────────────────────────
+
+Q1: Explain the internal architecture of Fiber's context pooling.
+A:  Fiber maintains a sync.Pool of *fiber.Ctx objects. On each incoming
+    request, a ctx is acquired from the pool, populated with request data
+    from fasthttp's RequestCtx, and handed to the handler chain.
+    After the handler returns and the response is flushed, the ctx fields
+    are zeroed out (Reset()) and the ctx is returned to the pool.
+
+    This eliminates GC pressure per request — allocations drop to near
+    zero. The implication for developers: ctx lifetime is strictly bound
+    to handler execution. Any async usage requires extracting data first
+    or using c.Context() / c.UserContext() for cancellation propagation.
+
+─────────────────────────────────────────────────────────────────────────────────
+
+Q2: How would you implement a distributed rate limiter in Fiber?
+A:  The built-in limiter uses in-memory storage (not suitable for
+    multiple replicas). For distributed rate limiting:
+
+    1. Use Redis as the storage backend with the fiber-storage/redis adapter:
+         go get github.com/gofiber/storage/redis/v3
+
+    2. Configure the limiter to use Redis:
+         store := redis.New(redis.Config{
+             Host: "localhost", Port: 6379,
+         })
+         app.Use(limiter.New(limiter.Config{
+             Max:        100,
+             Expiration: 1 * time.Minute,
+             Storage:    store,
+             KeyGenerator: func(c *fiber.Ctx) string {
+                 return c.IP()
+             },
+         }))
+
+    3. Alternatively, implement sliding window with ZADD/ZCOUNT in a
+       custom middleware for more precise rate limiting than fixed windows.
+
+─────────────────────────────────────────────────────────────────────────────────
+
+Q3: How does Fiber's fasthttp differ from net/http in terms of
+    connection handling?
+A:  • net/http spawns a new goroutine per connection (or per request
+      with HTTP/2). This is simple but creates goroutine overhead.
+    • fasthttp uses a worker pool (configurable via Concurrency in
+      fiber.Config). Connections are handled by a fixed pool of goroutines
+      that process requests serially within each connection. This reduces
+      goroutine creation overhead but means blocking operations in handlers
+      can starve the pool.
+    • net/http uses standard Go maps for headers (map[string][]string)
+      causing allocations. fasthttp uses pre-allocated byte slices and
+      header structures, enabling zero-allocation header parsing.
+
+─────────────────────────────────────────────────────────────────────────────────
+
+Q4: What are the trade-offs of using Fiber vs Gin in a microservice?
+A:
+    FIBER PROS:
+      • Higher raw throughput due to fasthttp
+      • Near-zero allocations per request
+      • Built-in WebSocket support
+
+    FIBER CONS:
+      • Not net/http compatible — cannot use http.Handler middleware
+        (Prometheus default handler, go-chi middlewares, etc.)
+      • Requires adapter layers for net/http ecosystems
+      • fasthttp has subtle behavioral differences (e.g., no http.Client
+        integration, different header casing rules)
+      • Context lifecycle pitfalls (pooling) require more care
+
+    GIN PROS:
+      • Full net/http compatibility
+      • Larger middleware ecosystem (any http.Handler wraps easily)
+      • Mature, battle-tested at scale
+
+    GIN CONS:
+      • Higher allocations, lower peak throughput than Fiber
+
+    DECISION RULE:
+      Use Fiber for new, high-throughput services with no net/http
+      middleware dependencies. Use Gin/Echo for services needing rich
+      observability integrations or within an existing net/http ecosystem.
+
+─────────────────────────────────────────────────────────────────────────────────
+
+Q5: How would you implement a request tracing middleware for distributed
+    systems in Fiber?
+A:
+    import (
+        "github.com/gofiber/fiber/v2"
+        "github.com/gofiber/fiber/v2/middleware/requestid"
+        "go.opentelemetry.io/otel"
+        "go.opentelemetry.io/otel/propagation"
+    )
+
+    func TracingMiddleware(c *fiber.Ctx) error {
+        // Extract trace context from incoming headers (W3C TraceContext)
+        propagator := otel.GetTextMapPropagator()
+        carrier := propagation.HeaderCarrier{}
+        c.Request().Header.VisitAll(func(k, v []byte) {
+            carrier.Set(string(k), string(v))
+        })
+        ctx := propagator.Extract(c.UserContext(), carrier)
+
+        // Start span
+        tracer := otel.Tracer("fiber")
+        ctx, span := tracer.Start(ctx, c.Method()+" "+c.Path())
+        defer span.End()
+
+        // Propagate to downstream calls
+        c.SetUserContext(ctx)
+        return c.Next()
+    }
+
+    // Usage
+    app.Use(requestid.New())
+    app.Use(TracingMiddleware)
+
+─────────────────────────────────────────────────────────────────────────────────
+
+Q6: How do you gracefully drain in-flight requests on SIGTERM in Fiber?
+A:
+    func main() {
+        app := fiber.New()
+        // ... routes ...
+
+        // Start server in goroutine
+        go func() {
+            if err := app.Listen(":3000"); err != nil {
+                log.Panic(err)
+            }
+        }()
+
+        // Wait for interrupt
+        quit := make(chan os.Signal, 1)
+        signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+        <-quit
+
+        log.Println("Gracefully shutting down...")
+        // app.Shutdown waits for active connections to finish
+        if err := app.Shutdown(); err != nil {
+            log.Fatal("Server forced to shutdown:", err)
+        }
+        // Run any cleanup (close DB, flush logs)
+        log.Println("Cleanup complete.")
+    }
+
+    Note: app.ShutdownWithTimeout(duration) is available to force
+    shutdown after a deadline if connections don't close.
+
+─────────────────────────────────────────────────────────────────────────────────
+
+Q7: How would you implement idempotency keys for POST requests in Fiber?
+A:  Idempotency ensures repeated POST requests with the same key produce
+    the same result without duplicate side effects.
+
+    Middleware approach:
+      func IdempotencyMiddleware(store storage.Storage) fiber.Handler {
+          return func(c *fiber.Ctx) error {
+              key := c.Get("Idempotency-Key")
+              if key == "" {
+                  return c.Next() // skip if no key
+              }
+
+              // Check if we've seen this key
+              cached, err := store.Get(key)
+              if err == nil && cached != nil {
+                  // Return cached response
+                  c.Set("X-Idempotent-Replayed", "true")
+                  return c.Status(200).Send(cached)
+              }
+
+              // Capture response
+              err = c.Next()
+              if err != nil {
+                  return err
+              }
+
+              // Cache response body for 24h
+              body := c.Response().Body()
+              _ = store.Set(key, body, 24*time.Hour)
+              return nil
+          }
+      }
+
+─────────────────────────────────────────────────────────────────────────────────
+
+Q8: Describe how you would structure a large Fiber application for
+    maintainability.
+A:
+    STRUCTURE:
+      cmd/server/main.go         → entry point, wire deps, start
+      internal/
+        config/config.go         → env config struct
+        db/db.go                 → DB setup + migrations
+        handlers/
+          user_handler.go        → handler struct + methods
+          product_handler.go
+        middleware/
+          auth.go
+          ratelimit.go
+        models/
+          user.go                → domain models
+        repository/
+          user_repo.go           → DB access layer (interface + impl)
+        service/
+          user_service.go        → business logic
+        router/
+          router.go              → all route registrations
+
+    KEY PATTERNS:
+      • Repository pattern for DB layer (interface + implementation)
+        — makes unit testing with mock repos trivial
+      • Handler receives service, service receives repo
+        — dependency injection via constructors
+      • Centralized error types in internal/errors package
+      • All DB calls use c.UserContext() for cancellation
+
+─────────────────────────────────────────────────────────────────────────────────
+
+QUICK REFERENCE — COMMON FIBER METHODS
+─────────────────────────────────────────────────────────────────────────────────
+
+REQUEST:
+  c.Method()              // "GET"
+  c.Path()                // "/users/42"
+  c.IP()                  // client IP
+  c.Get("header")         // request header
+  c.Params("id")          // route param
+  c.ParamsInt("id")       // route param as int
+  c.Query("key")          // query string
+  c.QueryInt("key", def)  // query string as int
+  c.QueryParser(&struct)  // bind query to struct
+  c.Body()                // raw body []byte
+  c.BodyParser(&struct)   // bind body to struct
+  c.FormValue("field")    // form field
+  c.FormFile("field")     // uploaded file
+  c.Cookies("name")       // cookie value
+  c.Locals("key")         // per-request storage (get)
+  c.Locals("key", val)    // per-request storage (set)
+  c.UserContext()         // context.Context
+
+RESPONSE:
+  c.Send([]byte)          // raw bytes
+  c.SendString("text")    // plain text
+  c.JSON(v)               // JSON
+  c.XML(v)                // XML
+  c.Status(code)          // set status (chainable)
+  c.Set("header", "val")  // response header
+  c.Cookie(&fiber.Cookie) // set cookie
+  c.ClearCookie("name")   // clear cookie
+  c.Redirect(url)         // 302 redirect
+  c.Redirect(url, 301)    // permanent redirect
+  c.Download(filepath)    // file download
+  c.Render(template, data)// render template
+
+CONTROL:
+  c.Next()                // next middleware/handler
+  fiber.NewError(code, msg) // create HTTP error
+
+─────────────────────────────────────────────────────────────────────────────────

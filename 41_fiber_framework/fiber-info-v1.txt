@@ -1,0 +1,361 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 📦 Golang FIBER FRAMEWORK
+════════════════════════════════════════════════════════════════════════════════════
+1. INTRODUCTION TO FIBER
+========================
+Fiber is an Express.js-inspired web framework for Go, built on top of Fasthttp (the fastest HTTP engine for Go).
+- Designed for maximum performance with near-zero memory allocations.
+- Extremely fast (often 2-10x faster than net/http based frameworks like Gin/Echo).
+- Familiar API for developers coming from Node.js/Express.
+- Current version: v3.x (released Feb 2026).
+- Minimum Go version: 1.25+.
+
+Key strengths:
+- High throughput (70k-110k+ req/sec in benchmarks).
+- Lightweight and minimalist.
+- Built-in support for routing, middleware, static files, etc.
+- Context is reused across requests for performance (zero-allocation design).
+
+Official Site: https://docs.gofiber.io/
+GitHub: https://github.com/gofiber/fiber
+
+2. STEP-BY-STEP SETUP
+=====================
+
+Step 1: Install Go (1.25 or higher)
+------------------------------------
+- Download from https://go.dev/dl/
+- Verify: go version
+
+Step 2: Create a new Go project
+-------------------------------
+mkdir my-fiber-app
+cd my-fiber-app
+go mod init my-fiber-app
+
+Step 3: Install Fiber v3
+------------------------
+go get github.com/gofiber/fiber/v3
+
+Step 4: Create main.go (or server.go)
+--------------------------------------
+package main
+
+import "github.com/gofiber/fiber/v3"
+
+func main() {
+    app := fiber.New()
+
+    app.Get("/", func(c fiber.Ctx) error {
+        return c.SendString("Hello, World!")
+    })
+
+    app.Listen(":3000")
+}
+
+Step 5: Run the app
+-------------------
+go run main.go
+
+Step 6: Test
+------------
+Open browser: http://localhost:3000
+You should see "Hello, World!"
+
+3. IMPORTANT ZERO-ALLOCATION DESIGN (MUST KNOW)
+===============================================
+Fiber reuses context values across requests for performance.
+- Values from c.Params(), c.Query(), c.Body(), etc. are NOT safe to store outside the handler.
+- They will be overwritten on the next request.
+
+Correct usage:
+func handler(c fiber.Ctx) error {
+    result := c.Params("foo")  // only valid inside this handler
+    // ... use immediately
+    return nil
+}
+
+To persist data outside handler:
+func handler(c fiber.Ctx) error {
+    result := c.Params("foo")
+    buffer := make([]byte, len(result))
+    copy(buffer, result)
+    resultCopy := string(buffer)  // now safe forever
+    // store resultCopy
+    return nil
+}
+
+OR enable Immutable mode (performance cost):
+app := fiber.New(fiber.Config{
+    Immutable: true,
+})
+
+Use c.App().GetString() or utils.CopyString() when needed.
+
+4. ROUTING (Step-by-Step)
+=========================
+Basic structure:
+app.Method("/path", handler)
+
+Supported methods: Get, Post, Put, Delete, Patch, Head, Options, etc.
+
+Example - Simple routes:
+app.Get("/", func(c fiber.Ctx) error {
+    return c.SendString("Home")
+})
+
+app.Post("/users", func(c fiber.Ctx) error {
+    return c.SendString("User created")
+})
+
+Route parameters:
+app.Get("/users/:id", func(c fiber.Ctx) error {
+    id := c.Params("id")
+    return c.SendString("User ID: " + id)
+})
+
+Optional parameters:
+app.Get("/users/:id?", func(c fiber.Ctx) error {
+    if c.Params("id") != "" {
+        return c.SendString("User: " + c.Params("id"))
+    }
+    return c.SendString("All users")
+})
+
+Wildcards (*):
+app.Get("/api/*", func(c fiber.Ctx) error {
+    return c.SendString("API path: " + c.Params("*"))
+})
+
+Route groups (for modular apps):
+api := app.Group("/api")
+api.Get("/users", getUsersHandler)
+
+5. CONTEXT (fiber.Ctx) - Core Methods
+=====================================
+- c.Params(key)          -> route param
+- c.Query(key)           -> query string
+- c.Body()               -> raw body
+- c.SendString(str)
+- c.JSON(data)
+- c.Status(code).SendString(...)
+- c.Redirect(url)
+- c.Set("Header", "value")
+- c.Cookie(...)          -> set/get cookies
+
+v3 new generic helpers:
+id := fiber.Params[int](c, "id", 0)        // default 0
+name := fiber.Query[string](c, "name", "")
+
+Unified binding (v3):
+err := c.Bind().All(&userStruct)   // binds Params + Query + Body + Headers + Cookies
+
+6. MIDDLEWARE
+=============
+Global middleware:
+app.Use(func(c fiber.Ctx) error {
+    // do something before
+    err := c.Next()   // call next handler
+    // do something after
+    return err
+})
+
+Popular built-in (import "github.com/gofiber/fiber/v3/middleware/...")
+- static.New("./public")
+- logger.New()
+- recover.New()
+- cors.New()
+- compress.New()
+
+Example - Static files:
+import "github.com/gofiber/fiber/v3/middleware/static"
+app.Use("/", static.New("./public"))
+
+7. ERROR HANDLING
+=================
+- Return error from handler -> Fiber auto sends 500
+- Use recover middleware for panics
+- Custom error handler:
+app.Use(func(c fiber.Ctx) error {
+    if err := c.Next(); err != nil {
+        return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+    }
+    return nil
+})
+
+8. CONFIG (fiber.New)
+=====================
+app := fiber.New(fiber.Config{
+    ServerHeader:      "Fiber",
+    AppName:           "My App",
+    Immutable:         false,   // default
+    DisableStartupMessage: true,
+    EnablePrintRoutes: true,
+})
+
+9. LISTENING (v3 changes)
+=========================
+app.Listen(":3000")                              // simple
+app.Listen(":3000", fiber.ListenConfig{
+    DisableStartupMessage: true,
+    EnablePrefork:         true,   // multi-core
+})
+
+Unix socket example:
+app.Listen("app.sock", fiber.ListenConfig{
+    ListenerNetwork: fiber.NetworkUnix,
+    UnixSocketFileMode: 0770,
+})
+
+10. LIFECYCLE HOOKS (v3)
+========================
+app.Hooks().OnPreShutdown(func() error { ... })
+app.Hooks().OnPostShutdown(func() error { ... })
+app.Hooks().OnRoute(func(route fiber.Route) { ... })
+
+11. EXAMPLES
+============
+
+Example 1: Basic JSON API
+-------------------------
+package main
+
+import "github.com/gofiber/fiber/v3"
+
+type User struct {
+    ID   int    `json:"id"`
+    Name string `json:"name"`
+}
+
+func main() {
+    app := fiber.New()
+
+    app.Get("/users/:id", func(c fiber.Ctx) error {
+        id := fiber.Params[int](c, "id", 0)
+        user := User{ID: id, Name: "John Doe"}
+        return c.JSON(user)
+    })
+
+    app.Post("/users", func(c fiber.Ctx) error {
+        var user User
+        if err := c.Bind().Body(&user); err != nil {
+            return c.Status(400).SendString(err.Error())
+        }
+        // save user...
+        return c.Status(201).JSON(user)
+    })
+
+    app.Listen(":3000")
+}
+
+Example 2: Full CRUD (simplified in-memory)
+--------------------------------------------
+var users = make(map[int]User)
+
+app.Get("/users", func(c fiber.Ctx) error {
+    return c.JSON(users)
+})
+
+app.Post("/users", func(c fiber.Ctx) error {
+    var u User
+    c.Bind().Body(&u)
+    users[u.ID] = u
+    return c.Status(201).JSON(u)
+})
+
+app.Put("/users/:id", func(c fiber.Ctx) error {
+    id := fiber.Params[int](c, "id", 0)
+    var u User
+    c.Bind().Body(&u)
+    users[id] = u
+    return c.JSON(u)
+})
+
+app.Delete("/users/:id", func(c fiber.Ctx) error {
+    id := fiber.Params[int](c, "id", 0)
+    delete(users, id)
+    return c.SendStatus(204)
+})
+
+Example 3: Middleware Chain + Group
+-----------------------------------
+auth := func(c fiber.Ctx) error {
+    if c.Get("Authorization") == "" {
+        return c.Status(401).SendString("Unauthorized")
+    }
+    return c.Next()
+}
+
+api := app.Group("/api").Use(auth)
+api.Get("/protected", func(c fiber.Ctx) error {
+    return c.SendString("Protected data")
+})
+
+12. MIGRATION FROM v2 TO v3 (IMPORTANT FOR SENIOR DEVS)
+=======================================================
+- Use fiber migrate CLI tool: fiber migrate --to v3.0.0
+- Replace BodyParser/ParamsInt/etc. with c.Bind()
+- Update Listen() to use ListenConfig where needed
+- Use new generic helpers: fiber.Params[T], fiber.Query[T]
+- Middleware imports updated
+- app.Static() removed → use static middleware
+- Stricter prefix matching
+
+13. PERFORMANCE TIPS
+====================
+- Keep handlers lightweight.
+- Never store c.* values without copying.
+- Use Prefork mode for multi-core.
+- Enable compression middleware.
+- Use fasthttp features when needed.
+
+================================================================================
+INTERVIEW QUESTIONS & ANSWERS (MID TO SENIOR DEVELOPER LEVEL)
+================================================================================
+
+Q1 (Mid): What is Fiber and why would you choose it over Gin or Echo?
+A1: Fiber is an Express-inspired framework built on Fasthttp. Choose Fiber when you need maximum raw performance (benchmarks often show 2-3x higher throughput than Gin). It has zero-allocation design and familiar routing syntax. Gin is more feature-rich with validation; Echo is balanced. Use Fiber for high-throughput APIs/microservices.
+
+Q2 (Mid): Explain Fiber's zero-allocation design and its implications.
+A2: fiber.Ctx values (Params, Query, Body etc.) are reused from a pool across requests. This eliminates allocations but means you must NOT store references outside the handler unless you copy them (using copy() or Immutable: true). Violating this causes data corruption across requests.
+
+Q3 (Mid-Senior): How does routing work in Fiber? Explain parameters, wildcards, and groups.
+A3: Routes are defined with app.Get/Post/etc. Parameters use :name, optional with :name?, wildcard with *. Groups (app.Group("/api")) allow prefixing and shared middleware. v3 added custom route constraints for early validation.
+
+Q4 (Senior): What changed in Fiber v3? How do you migrate a large v2 app?
+A4: Major changes: Go 1.25+ required, unified c.Bind() binding, lifecycle hooks, generic helpers (fiber.Params[T]), Context implements context.Context, new ListenConfig, extractors package, stricter prefix matching. Use official CLI migrator first, then manually update binding and hooks. Test heavily for zero-allocation changes.
+
+Q5 (Senior): How would you implement authentication middleware in Fiber?
+A5: Create a middleware func that checks Authorization header/JWT, calls c.Next() on success, or returns error. Attach with app.Use("/protected", authMiddleware). For groups: api := app.Group("/api").Use(authMiddleware). Use extractors package for reusable header/cookie logic.
+
+Q6 (Mid-Senior): How do you handle errors globally in Fiber?
+A6: Use app.Use() with a middleware that checks if c.Next() returned error, then c.Status(500).JSON(...). Also add recover.New() middleware for panics. For custom error responses, implement fiber.ErrorHandler in Config.
+
+Q7 (Senior): Explain how Fiber achieves better performance than net/http.
+A7: Built directly on Fasthttp (not net/http), uses zero-allocation context pool, optimized routing, fewer allocations in middleware, supports prefork. Result: lower latency and higher RPS, especially under load.
+
+Q8 (Senior): How do you serve static files and what middleware would you use for production?
+A8: app.Use("/", static.New("./public", static.Config{...})). For production: combine with compress.New(), cache control via headers, and CDN. Use filesystem middleware for embedded assets.
+
+Q9 (Mid-Senior): What is c.Bind() in v3 and why is it better than old parsers?
+A9: Unified binding method that parses in fixed order: URI params → Query → Body → Headers → Cookies. Supports struct tags for defaults/validation, multiple formats (JSON, form, CBOR). Cleaner and more consistent than separate BodyParser/ParamsInt calls.
+
+Q10 (Senior): How would you design a large-scale Fiber application (modularity, testing)?
+A10: Use route groups + separate handler files. Dependency injection via structs. Middleware for logging/auth/metrics. Tests: use fiber.Test() or httptest. For microservices: separate modules, gRPC for internal comms. Monitor with pprof + Fiber's built-in metrics middleware.
+
+Q11 (Senior): Describe a scenario where you would enable Immutable: true and the trade-offs.
+A11: When you need to store request data (e.g., user ID) in goroutine or cache for background processing. Trade-off: extra allocations → lower performance. Use only when necessary and prefer manual copy() otherwise.
+
+Q12 (Mid): How do you set and read cookies in Fiber?
+A12: c.Cookie(&fiber.Cookie{Name: "session", Value: "..."}). Read with c.Cookies("session"). Use signed cookies for security in production.
+
+Q13 (Senior): What are lifecycle hooks in v3 and when would you use them?
+A13: OnPreStartupMessage, OnPreShutdown, OnPostShutdown, OnRoute, etc. Use for custom startup banners, graceful shutdown logic (closing DB connections), or dynamic route registration.
+
+Q14 (Mid-Senior): How do you handle file uploads in Fiber?
+A14: file, err := c.FormFile("file"). Then file.Save("./uploads/..."). For multiple files use c.MultipartForm().
+
+Q15 (Senior): Compare Fiber's performance and features with Chi (router only). When would you choose pure Chi instead?
+A15: Fiber is full framework (middleware, context, etc.) with Fasthttp. Chi is lightweight router on net/http. Choose Chi for maximum control/minimalism or when you already have heavy middleware stack. Fiber wins for speed and developer experience in most web API cases.
+
+================================================================================
