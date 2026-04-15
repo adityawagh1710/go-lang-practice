@@ -1,0 +1,1533 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 🚀 Go Lang GENERICS higher order functions
+════════════════════════════════════════════════════════════════════════════════════
+INDEX
+------
+  [1]  Functions as first-class citizens in Go
+  [2]  Function types — declaring, storing, passing
+  [3]  Closures — mechanics and captured variables
+  [4]  Closure gotchas — loop variable capture
+  [5]  Higher-order functions — Accept & Return functions
+  [6]  Partial application and currying
+  [7]  Function composition
+  [8]  Map, Filter, Reduce (generic versions)
+  [9]  Memoization / caching with closures
+  [10] Middleware pattern (HTTP + generic)
+  [11] Options pattern (functional options)
+  [12] Pipeline pattern
+  [13] Iterator / lazy sequence pattern
+  [14] Decorator / wrapper pattern
+  [15] Stateful closures — counters, generators, once
+  [16] Error handling in functional chains
+  [17] Java functional interfaces vs Go function types comparison table
+  [18] Interview Q&A — Medium Level
+  [19] Interview Q&A — Senior Level
+
+================================================================================
+[1] FUNCTIONS AS FIRST-CLASS CITIZENS IN GO
+================================================================================
+
+In Go, functions are FIRST-CLASS VALUES. This means:
+  - A function can be assigned to a variable
+  - A function can be passed as an argument to another function
+  - A function can be returned from another function
+  - A function can be stored in a data structure (slice, map, struct field)
+  - A function can be compared to nil (but NOT to another function)
+
+This is the foundation of all functional patterns in Go.
+
+  // All of these are valid Go:
+  add := func(a, b int) int { return a + b }   // assigned to variable
+  result := apply(add, 3, 4)                   // passed as argument
+  doubler := makeMultiplier(2)                 // returned from function
+  ops := []func(int) int{double, square}       // stored in a slice
+  handlers := map[string]func(int){            // stored in a map
+      "print": fmt.Println,
+  }
+
+Go is NOT a purely functional language:
+  - No immutable data by default
+  - No tail-call optimization
+  - No built-in currying syntax
+  - No lazy evaluation
+  But it has all the building blocks: closures, first-class functions, and
+  (since 1.18) generics that make functional patterns concise and type-safe.
+
+
+================================================================================
+[2] FUNCTION TYPES — DECLARING, STORING, PASSING
+================================================================================
+
+---- Function type declarations ----
+  // Inline function type (anonymous)
+  var fn func(int, int) int
+
+  // Named function type
+  type Predicate[T any] func(T) bool
+  type Transform[T, U any] func(T) U
+  type Reducer[T, A any] func(A, T) A
+  type Handler func(http.ResponseWriter, *http.Request)
+  type Middleware func(Handler) Handler
+
+  // Function type with no args/returns
+  type Action func()
+  type Effect func() error
+
+---- Assigning and calling ----
+  var add func(int, int) int
+  add = func(a, b int) int { return a + b }
+  fmt.Println(add(3, 4))   // 7
+
+  // Named function assigned to func variable
+  func multiply(a, b int) int { return a * b }
+  var op func(int, int) int = multiply
+  fmt.Println(op(3, 4))   // 12
+
+---- Storing functions in structs ----
+  type EventHandler struct {
+      OnSuccess func(result string)
+      OnError   func(err error)
+      OnRetry   func(attempt int)
+  }
+
+  h := EventHandler{
+      OnSuccess: func(r string) { fmt.Println("Success:", r) },
+      OnError:   func(e error)  { fmt.Println("Error:", e) },
+      OnRetry:   func(n int)    { fmt.Printf("Retry #%d\n", n) },
+  }
+  h.OnSuccess("data loaded")
+
+---- Storing functions in maps (dispatch table) ----
+  type Command func(args []string) error
+
+  commands := map[string]Command{
+      "help":    cmdHelp,
+      "version": cmdVersion,
+      "run":     cmdRun,
+  }
+
+  // Dispatch — replaces large switch/if chains
+  if cmd, ok := commands[input]; ok {
+      if err := cmd(args); err != nil {
+          fmt.Println("error:", err)
+      }
+  } else {
+      fmt.Println("unknown command:", input)
+  }
+
+---- nil check — functions can be nil ----
+  var fn func(int) int
+  if fn != nil {
+      fn(42)
+  }
+  // Calling a nil function panics — always guard optional callbacks
+
+
+================================================================================
+[3] CLOSURES — MECHANICS AND CAPTURED VARIABLES
+================================================================================
+
+A closure is a function that CAPTURES variables from its enclosing scope.
+The captured variables are SHARED — not copied. The closure holds a reference
+to the variable, not the value at the time of capture.
+
+---- Basic closure ----
+  func makeAdder(x int) func(int) int {
+      // x is captured from makeAdder's scope
+      return func(y int) int {
+          return x + y   // x lives as long as the returned func does
+      }
+  }
+
+  add5 := makeAdder(5)
+  add10 := makeAdder(10)
+  fmt.Println(add5(3))    // 8   — x=5 is captured in add5
+  fmt.Println(add10(3))   // 13  — x=10 is captured in add10
+  // add5 and add10 are independent — each has its own captured x
+
+---- Closure captures a REFERENCE, not a copy ----
+  func makeCounter() func() int {
+      count := 0                    // lives on the heap (escaped via closure)
+      return func() int {
+          count++                   // modifies the captured variable
+          return count
+      }
+  }
+
+  counter := makeCounter()
+  fmt.Println(counter())   // 1
+  fmt.Println(counter())   // 2
+  fmt.Println(counter())   // 3
+
+  // A fresh counter — independent state
+  counter2 := makeCounter()
+  fmt.Println(counter2())  // 1  — own count, starts fresh
+
+---- Multiple closures sharing the same variable ----
+  func makeIncrDecr() (func(), func(), func() int) {
+      n := 0
+      inc := func() { n++ }
+      dec := func() { n-- }
+      get := func() int { return n }
+      return inc, dec, get
+  }
+
+  inc, dec, get := makeIncrDecr()
+  inc(); inc(); inc()   // n = 3
+  dec()                 // n = 2
+  fmt.Println(get())    // 2
+  // inc, dec, get ALL share the same n — this is intentional shared state
+
+---- Variable escape to heap ----
+  // When a variable is captured by a closure, the Go compiler moves it
+  // from the stack to the HEAP (heap allocation). This has a small cost.
+  // Use `go build -gcflags="-m"` to see escape analysis:
+  //   ./main.go:5:2: moved to heap: count
+
+
+================================================================================
+[4] CLOSURE GOTCHAS — LOOP VARIABLE CAPTURE
+================================================================================
+
+THE most common Go closure bug. Critical to understand.
+
+---- THE BUG: all closures capture the same loop variable ----
+  // Pre Go 1.22: loop variable i is ONE variable, mutated each iteration
+  funcs := make([]func(), 5)
+  for i := 0; i < 5; i++ {
+      funcs[i] = func() {
+          fmt.Println(i)   // captures the variable i, not the VALUE of i
+      }
+  }
+  // By the time funcs are called, i = 5
+  for _, f := range funcs {
+      f()   // prints: 5 5 5 5 5  ← BUG
+  }
+
+  // Same problem with range:
+  names := []string{"Alice", "Bob", "Charlie"}
+  var greets []func()
+  for _, name := range names {
+      greets = append(greets, func() {
+          fmt.Println(name)  // captures name variable, not its current value
+      })
+  }
+  // All print "Charlie" (pre Go 1.22)
+
+---- FIX 1: shadow the loop variable (classic) ----
+  for i := 0; i < 5; i++ {
+      i := i   // new variable i shadows the outer i — each closure gets its own
+      funcs[i] = func() { fmt.Println(i) }
+  }
+  // Now prints: 0 1 2 3 4
+
+  for _, name := range names {
+      name := name   // shadow — each closure captures its own name copy
+      greets = append(greets, func() { fmt.Println(name) })
+  }
+
+---- FIX 2: pass as argument ----
+  for i := 0; i < 5; i++ {
+      funcs[i] = func(i int) func() {   // i is a parameter — value copy
+          return func() { fmt.Println(i) }
+      }(i)   // immediately invoked with current i
+  }
+
+---- Go 1.22+ fix: loop variable semantics changed ----
+  // Go 1.22 changed the semantics: each iteration of a for loop creates
+  // a NEW variable. The bug no longer exists in Go 1.22+.
+  // go.mod: go 1.22
+  for i := 0; i < 5; i++ {
+      funcs[i] = func() { fmt.Println(i) }
+  }
+  // Now correctly prints: 0 1 2 3 4  (in Go 1.22+)
+
+  // BUT: be aware when working on codebases with go 1.21 or earlier!
+  // The fix is backwards-incompatible — code that relied on the old
+  // (buggy) behavior would break. Always check go.mod version.
+
+---- Goroutine closure bug (amplified) ----
+  // Extra dangerous with goroutines — race condition + wrong value
+  for i := 0; i < 3; i++ {
+      go func() {
+          fmt.Println(i)   // RACE: i may be 3 before goroutine runs
+      }()
+  }
+
+  // Fix: pass as argument
+  for i := 0; i < 3; i++ {
+      go func(i int) {
+          fmt.Println(i)
+      }(i)
+  }
+
+
+================================================================================
+[5] HIGHER-ORDER FUNCTIONS — ACCEPT & RETURN FUNCTIONS
+================================================================================
+
+A higher-order function either:
+  a) Takes a function as an argument, or
+  b) Returns a function, or
+  c) Both
+
+---- Accept a function (callbacks / strategies) ----
+  // Execute with retry logic — strategy injected
+  func Retry(attempts int, fn func() error) error {
+      var err error
+      for i := 0; i < attempts; i++ {
+          if err = fn(); err == nil {
+              return nil
+          }
+          fmt.Printf("attempt %d failed: %v\n", i+1, err)
+      }
+      return fmt.Errorf("all %d attempts failed: %w", attempts, err)
+  }
+
+  err := Retry(3, func() error {
+      return callExternalAPI()
+  })
+
+  // Sort with custom comparator
+  people := []Person{{"Alice", 30}, {"Bob", 25}}
+  slices.SortFunc(people, func(a, b Person) int {
+      return cmp.Compare(a.Age, b.Age)
+  })
+
+  // Execute with timing
+  func Timed(label string, fn func()) {
+      start := time.Now()
+      fn()
+      fmt.Printf("%s took %v\n", label, time.Since(start))
+  }
+
+  Timed("data load", func() {
+      loadFromDB()
+  })
+
+---- Return a function (factories / generators) ----
+  // Multiplier factory
+  func makeMultiplier(factor int) func(int) int {
+      return func(n int) int { return n * factor }
+  }
+
+  double := makeMultiplier(2)
+  triple := makeMultiplier(3)
+  fmt.Println(double(5))   // 10
+  fmt.Println(triple(5))   // 15
+
+  // Validator factory
+  func minLength(min int) func(string) bool {
+      return func(s string) bool { return len(s) >= min }
+  }
+
+  func maxLength(max int) func(string) bool {
+      return func(s string) bool { return len(s) <= max }
+  }
+
+  isValidPassword := func(s string) bool {
+      return minLength(8)(s) && maxLength(64)(s)
+  }
+
+  // Rate limiter factory
+  func NewRateLimiter(rate int) func() bool {
+      tokens := rate
+      ticker := time.NewTicker(time.Second)
+      go func() {
+          for range ticker.C {
+              tokens = rate   // refill every second
+          }
+      }()
+      return func() bool {
+          if tokens <= 0 { return false }
+          tokens--
+          return true
+      }
+  }
+
+  allow := NewRateLimiter(10)   // 10 requests/second
+  if allow() {
+      processRequest()
+  }
+
+---- Accept AND return a function ----
+  // Wrap a function with logging
+  func WithLogging(fn func(int) int, label string) func(int) int {
+      return func(n int) int {
+          fmt.Printf("[%s] input: %d\n", label, n)
+          result := fn(n)
+          fmt.Printf("[%s] output: %d\n", label, result)
+          return result
+      }
+  }
+
+  square := func(n int) int { return n * n }
+  loggedSquare := WithLogging(square, "square")
+  loggedSquare(5)
+  // [square] input: 5
+  // [square] output: 25
+
+
+================================================================================
+[6] PARTIAL APPLICATION AND CURRYING
+================================================================================
+
+Go has no built-in syntax for currying, but closures make it straightforward.
+
+---- Partial application: fix some args, leave others open ----
+  // Full function
+  func add(a, b int) int { return a + b }
+
+  // Partial application — fix a=10
+  func partial(f func(int, int) int, a int) func(int) int {
+      return func(b int) int { return f(a, b) }
+  }
+
+  add10 := partial(add, 10)
+  fmt.Println(add10(5))    // 15
+  fmt.Println(add10(20))   // 30
+
+  // Generic partial application
+  func Partial[A, B, C any](f func(A, B) C, a A) func(B) C {
+      return func(b B) C { return f(a, b) }
+  }
+
+  multiply := func(a, b int) int { return a * b }
+  double := Partial(multiply, 2)
+  triple := Partial(multiply, 3)
+  fmt.Println(double(7))   // 14
+  fmt.Println(triple(7))   // 21
+
+---- Currying: transform f(a, b) → f(a)(b) ----
+  // Manual curry
+  func curriedAdd(a int) func(int) int {
+      return func(b int) int { return a + b }
+  }
+
+  add5 := curriedAdd(5)
+  fmt.Println(add5(3))            // 8
+  fmt.Println(curriedAdd(10)(3))  // 13  — inline call
+
+  // Generic curry for 2-arg functions
+  func Curry[A, B, C any](f func(A, B) C) func(A) func(B) C {
+      return func(a A) func(B) C {
+          return func(b B) C {
+              return f(a, b)
+          }
+      }
+  }
+
+  curriedMultiply := Curry(func(a, b int) int { return a * b })
+  times3 := curriedMultiply(3)
+  fmt.Println(times3(7))   // 21
+
+---- Real-world: partial application for HTTP handlers ----
+  // Handler that needs a DB connection — inject via partial
+  func userHandler(db *sql.DB) http.HandlerFunc {
+      return func(w http.ResponseWriter, r *http.Request) {
+          id := r.URL.Query().Get("id")
+          user, err := db.QueryRow("SELECT * FROM users WHERE id=?", id)
+          // ...
+      }
+  }
+
+  // db is partially applied — handler only takes (w, r)
+  http.HandleFunc("/user", userHandler(db))
+
+
+================================================================================
+[7] FUNCTION COMPOSITION
+================================================================================
+
+Composing functions means chaining them so the output of one is the input
+of the next. This builds complex behavior from simple, testable pieces.
+
+---- Manual composition ----
+  trim := strings.TrimSpace
+  toLower := strings.ToLower
+  // compose: first trim, then toLower
+  normalize := func(s string) string {
+      return toLower(trim(s))
+  }
+  fmt.Println(normalize("  Hello World  "))   // "hello world"
+
+---- Generic compose (two functions) ----
+  func Compose[A, B, C any](f func(B) C, g func(A) B) func(A) C {
+      return func(a A) C {
+          return f(g(a))   // f(g(a)) — right to left, like math
+      }
+  }
+
+  double := func(n int) int { return n * 2 }
+  addOne := func(n int) int { return n + 1 }
+
+  // doubleAfterAddOne = double(addOne(x))
+  doubleAfterAddOne := Compose(double, addOne)
+  fmt.Println(doubleAfterAddOne(4))   // (4+1)*2 = 10
+
+  // Pipeline order (left to right) — often more readable
+  func Pipe[A, B, C any](g func(A) B, f func(B) C) func(A) C {
+      return func(a A) C {
+          return f(g(a))   // g first, then f
+      }
+  }
+
+  addOneThenDouble := Pipe(addOne, double)
+  fmt.Println(addOneThenDouble(4))   // (4+1)*2 = 10
+
+---- Variadic string transformer composition ----
+  type StringTransform func(string) string
+
+  func ComposeStrings(fns ...StringTransform) StringTransform {
+      return func(s string) string {
+          for _, fn := range fns {
+              s = fn(s)
+          }
+          return s
+      }
+  }
+
+  normalize := ComposeStrings(
+      strings.TrimSpace,
+      strings.ToLower,
+      func(s string) string { return strings.ReplaceAll(s, " ", "_") },
+  )
+
+  fmt.Println(normalize("  Hello World  "))   // "hello_world"
+
+---- Generic variadic pipeline (same type in/out) ----
+  func Pipeline[T any](fns ...func(T) T) func(T) T {
+      return func(v T) T {
+          for _, fn := range fns {
+              v = fn(v)
+          }
+          return v
+      }
+  }
+
+  processInt := Pipeline(
+      func(n int) int { return n * 2 },
+      func(n int) int { return n + 10 },
+      func(n int) int { return n / 2 },
+  )
+  fmt.Println(processInt(5))   // ((5*2)+10)/2 = 10
+
+
+================================================================================
+[8] MAP, FILTER, REDUCE (GENERIC VERSIONS)
+================================================================================
+
+These are the three fundamental higher-order functions of functional programming.
+Go 1.18+ allows fully type-safe generic implementations.
+
+---- Map: transform each element ----
+  func Map[T, U any](slice []T, fn func(T) U) []U {
+      result := make([]U, len(slice))
+      for i, v := range slice {
+          result[i] = fn(v)
+      }
+      return result
+  }
+
+  nums := []int{1, 2, 3, 4, 5}
+
+  // int → int
+  doubled := Map(nums, func(n int) int { return n * 2 })
+  // [2 4 6 8 10]
+
+  // int → string
+  strs := Map(nums, func(n int) string { return fmt.Sprintf("#%d", n) })
+  // ["#1" "#2" "#3" "#4" "#5"]
+
+  // Struct → field
+  type User struct{ Name string; Age int }
+  users := []User{{"Alice", 30}, {"Bob", 25}}
+  names := Map(users, func(u User) string { return u.Name })
+  // ["Alice" "Bob"]
+
+  ages := Map(users, func(u User) int { return u.Age })
+  // [30 25]
+
+---- Filter: keep elements matching predicate ----
+  func Filter[T any](slice []T, pred func(T) bool) []T {
+      result := make([]T, 0)
+      for _, v := range slice {
+          if pred(v) {
+              result = append(result, v)
+          }
+      }
+      return result
+  }
+
+  evens := Filter(nums, func(n int) bool { return n%2 == 0 })
+  // [2 4]
+
+  adults := Filter(users, func(u User) bool { return u.Age >= 18 })
+
+  // Reject (inverse of filter)
+  func Reject[T any](slice []T, pred func(T) bool) []T {
+      return Filter(slice, func(v T) bool { return !pred(v) })
+  }
+
+---- Reduce: fold to a single value ----
+  func Reduce[T, A any](slice []T, init A, fn func(A, T) A) A {
+      acc := init
+      for _, v := range slice {
+          acc = fn(acc, v)
+      }
+      return acc
+  }
+
+  sum := Reduce(nums, 0, func(acc, n int) int { return acc + n })
+  // 15
+
+  product := Reduce(nums, 1, func(acc, n int) int { return acc * n })
+  // 120
+
+  // Reduce to build a map (group by parity)
+  grouped := Reduce(nums, map[string][]int{}, func(acc map[string][]int, n int) map[string][]int {
+      key := "odd"
+      if n%2 == 0 { key = "even" }
+      acc[key] = append(acc[key], n)
+      return acc
+  })
+  // map[even:[2 4] odd:[1 3 5]]
+
+  // Reduce: build CSV from structs
+  csv := Reduce(users, "", func(acc string, u User) string {
+      if acc != "" { acc += "\n" }
+      return acc + fmt.Sprintf("%s,%d", u.Name, u.Age)
+  })
+
+---- ForEach — side effects ----
+  func ForEach[T any](slice []T, fn func(T)) {
+      for _, v := range slice {
+          fn(v)
+      }
+  }
+
+  ForEach(users, func(u User) {
+      fmt.Printf("User: %s, Age: %d\n", u.Name, u.Age)
+  })
+
+---- Chained pipeline ----
+  // Select names of adult users, sorted
+  result := Map(
+      Filter(users, func(u User) bool { return u.Age >= 18 }),
+      func(u User) string { return u.Name },
+  )
+  slices.Sort(result)
+
+
+================================================================================
+[9] MEMOIZATION / CACHING WITH CLOSURES
+================================================================================
+
+Memoization caches function results for known inputs. The cache lives in
+the closure — the outer function creates it once, the inner function uses it.
+
+---- Simple memoize (single int arg) ----
+  func memoize(fn func(int) int) func(int) int {
+      cache := make(map[int]int)
+      return func(n int) int {
+          if v, ok := cache[n]; ok {
+              return v
+          }
+          result := fn(n)
+          cache[n] = result
+          return result
+      }
+  }
+
+  // Fibonacci without memoization: O(2^n)
+  var fib func(int) int
+  fib = func(n int) int {
+      if n <= 1 { return n }
+      return fib(n-1) + fib(n-2)
+  }
+
+  // Memoized: O(n)
+  fib = memoize(func(n int) int {
+      if n <= 1 { return n }
+      return fib(n-1) + fib(n-2)   // fib now calls memoized version
+  })
+
+  fmt.Println(fib(40))   // fast — computed once per n
+
+---- Generic memoize ----
+  func Memoize[K comparable, V any](fn func(K) V) func(K) V {
+      cache := make(map[K]V)
+      return func(k K) V {
+          if v, ok := cache[k]; ok {
+              return v
+          }
+          result := fn(k)
+          cache[k] = result
+          return result
+      }
+  }
+
+  expensiveOp := Memoize(func(id int) string {
+      time.Sleep(100 * time.Millisecond)   // simulate DB call
+      return fmt.Sprintf("result-%d", id)
+  })
+
+  expensiveOp(1)   // 100ms
+  expensiveOp(1)   // instant — cache hit
+  expensiveOp(2)   // 100ms — cache miss
+
+---- Thread-safe memoize ----
+  func MemoizeSafe[K comparable, V any](fn func(K) V) func(K) V {
+      var mu sync.RWMutex
+      cache := make(map[K]V)
+      return func(k K) V {
+          mu.RLock()
+          if v, ok := cache[k]; ok {
+              mu.RUnlock()
+              return v
+          }
+          mu.RUnlock()
+
+          mu.Lock()
+          defer mu.Unlock()
+          // Double-check after acquiring write lock
+          if v, ok := cache[k]; ok { return v }
+          result := fn(k)
+          cache[k] = result
+          return result
+      }
+  }
+
+---- sync.Once as a single-value memoize ----
+  func NewOnce[T any](fn func() T) func() T {
+      var once sync.Once
+      var result T
+      return func() T {
+          once.Do(func() { result = fn() })
+          return result
+      }
+  }
+
+  getConfig := NewOnce(func() *Config {
+      return loadConfigFromFile("config.yaml")   // runs exactly once
+  })
+
+  cfg1 := getConfig()   // loads file
+  cfg2 := getConfig()   // returns cached, no file read
+
+
+================================================================================
+[10] MIDDLEWARE PATTERN
+================================================================================
+
+Middleware wraps a function/handler with additional behavior.
+The core pattern: a function that takes a handler and returns a handler.
+
+---- HTTP Middleware ----
+  type Handler func(http.ResponseWriter, *http.Request)
+  type Middleware func(Handler) Handler
+
+  // Logging middleware
+  func WithLogging(next Handler) Handler {
+      return func(w http.ResponseWriter, r *http.Request) {
+          start := time.Now()
+          fmt.Printf("→ %s %s\n", r.Method, r.URL.Path)
+          next(w, r)
+          fmt.Printf("← %s %s (%v)\n", r.Method, r.URL.Path, time.Since(start))
+      }
+  }
+
+  // Auth middleware
+  func WithAuth(next Handler) Handler {
+      return func(w http.ResponseWriter, r *http.Request) {
+          token := r.Header.Get("Authorization")
+          if token == "" {
+              http.Error(w, "unauthorized", http.StatusUnauthorized)
+              return
+          }
+          next(w, r)
+      }
+  }
+
+  // Recovery middleware
+  func WithRecovery(next Handler) Handler {
+      return func(w http.ResponseWriter, r *http.Request) {
+          defer func() {
+              if rec := recover(); rec != nil {
+                  http.Error(w, "internal server error", 500)
+              }
+          }()
+          next(w, r)
+      }
+  }
+
+  // Chain multiple middleware
+  func Chain(h Handler, middlewares ...Middleware) Handler {
+      // Apply in reverse so the first middleware is outermost
+      for i := len(middlewares) - 1; i >= 0; i-- {
+          h = middlewares[i](h)
+      }
+      return h
+  }
+
+  // Usage
+  myHandler := func(w http.ResponseWriter, r *http.Request) {
+      w.Write([]byte("hello"))
+  }
+
+  wrapped := Chain(myHandler, WithRecovery, WithLogging, WithAuth)
+  http.HandleFunc("/api", wrapped)
+  // Request flows: Recovery → Logging → Auth → myHandler
+
+---- Generic middleware (for any function type) ----
+  func WithTiming[T any](label string, fn func(T) T) func(T) T {
+      return func(input T) T {
+          start := time.Now()
+          result := fn(input)
+          fmt.Printf("%s: %v\n", label, time.Since(start))
+          return result
+      }
+  }
+
+  process := WithTiming("processData", func(data []int) []int {
+      // heavy computation
+      return data
+  })
+
+---- Middleware chain builder ----
+  type Middleware2[T any] func(func(T) error) func(T) error
+
+  func ApplyMiddleware[T any](
+      handler func(T) error,
+      middlewares ...Middleware2[T],
+  ) func(T) error {
+      for i := len(middlewares) - 1; i >= 0; i-- {
+          handler = middlewares[i](handler)
+      }
+      return handler
+  }
+
+
+================================================================================
+[11] OPTIONS PATTERN (FUNCTIONAL OPTIONS)
+================================================================================
+
+The functional options pattern is one of Go's most widely used patterns.
+It solves: how to provide optional configuration without brittle constructors
+or config structs with many fields that may be zero-valued by accident.
+
+---- The pattern ----
+  type Server struct {
+      host    string
+      port    int
+      timeout time.Duration
+      maxConn int
+      tls     bool
+  }
+
+  // Option is a function that modifies Server
+  type Option func(*Server)
+
+  // Option constructors
+  func WithHost(host string) Option {
+      return func(s *Server) { s.host = host }
+  }
+
+  func WithPort(port int) Option {
+      return func(s *Server) { s.port = port }
+  }
+
+  func WithTimeout(d time.Duration) Option {
+      return func(s *Server) { s.timeout = d }
+  }
+
+  func WithMaxConn(n int) Option {
+      return func(s *Server) { s.maxConn = n }
+  }
+
+  func WithTLS() Option {
+      return func(s *Server) { s.tls = true }
+  }
+
+  // Constructor applies defaults then options
+  func NewServer(opts ...Option) *Server {
+      // Start with sensible defaults
+      s := &Server{
+          host:    "0.0.0.0",
+          port:    8080,
+          timeout: 30 * time.Second,
+          maxConn: 100,
+      }
+      // Apply each option — each is a closure that modifies s
+      for _, opt := range opts {
+          opt(s)
+      }
+      return s
+  }
+
+  // Usage — only specify what you want to change
+  srv := NewServer(
+      WithHost("localhost"),
+      WithPort(9090),
+      WithTLS(),
+  )
+
+  // Minimal — all defaults
+  srv2 := NewServer()
+
+  // Very readable and extensible — adding new options never breaks callers
+
+---- Options with validation ----
+  type OptionErr func(*Server) error
+
+  func WithPortValidated(port int) OptionErr {
+      return func(s *Server) error {
+          if port < 1 || port > 65535 {
+              return fmt.Errorf("invalid port: %d", port)
+          }
+          s.port = port
+          return nil
+      }
+  }
+
+  func NewServerSafe(opts ...OptionErr) (*Server, error) {
+      s := &Server{host: "0.0.0.0", port: 8080}
+      for _, opt := range opts {
+          if err := opt(s); err != nil {
+              return nil, err
+          }
+      }
+      return s, nil
+  }
+
+
+================================================================================
+[12] PIPELINE PATTERN
+================================================================================
+
+A pipeline chains processing steps where each step transforms data.
+Different from [7]'s composition in that steps can handle errors and
+be composed at runtime.
+
+---- Type-safe pipeline with error propagation ----
+  type Step[T any] func(T) (T, error)
+
+  func NewPipeline[T any](steps ...Step[T]) Step[T] {
+      return func(input T) (T, error) {
+          current := input
+          for _, step := range steps {
+              result, err := step(current)
+              if err != nil {
+                  return current, fmt.Errorf("pipeline step failed: %w", err)
+              }
+              current = result
+          }
+          return current, nil
+      }
+  }
+
+  // String processing pipeline
+  validate := func(s string) (string, error) {
+      if len(s) == 0 { return s, errors.New("empty string") }
+      return s, nil
+  }
+  normalize := func(s string) (string, error) {
+      return strings.TrimSpace(strings.ToLower(s)), nil
+  }
+  sanitize := func(s string) (string, error) {
+      cleaned := strings.Map(func(r rune) rune {
+          if unicode.IsLetter(r) || unicode.IsSpace(r) { return r }
+          return -1   // drop character
+      }, s)
+      return cleaned, nil
+  }
+
+  process := NewPipeline(validate, normalize, sanitize)
+  result, err := process("  Hello, World! 123  ")
+  // "hello world", nil
+
+---- Channel-based pipeline (concurrent) ----
+  func generate(nums ...int) <-chan int {
+      out := make(chan int)
+      go func() {
+          defer close(out)
+          for _, n := range nums { out <- n }
+      }()
+      return out
+  }
+
+  func square(in <-chan int) <-chan int {
+      out := make(chan int)
+      go func() {
+          defer close(out)
+          for n := range in { out <- n * n }
+      }()
+      return out
+  }
+
+  func filter(in <-chan int, pred func(int) bool) <-chan int {
+      out := make(chan int)
+      go func() {
+          defer close(out)
+          for n := range in {
+              if pred(n) { out <- n }
+          }
+      }()
+      return out
+  }
+
+  // Compose pipeline
+  nums := generate(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+  squares := square(nums)
+  evens := filter(squares, func(n int) bool { return n%2 == 0 })
+
+  for v := range evens {
+      fmt.Println(v)   // 4 16 36 64 100
+  }
+
+
+================================================================================
+[13] ITERATOR / LAZY SEQUENCE PATTERN
+================================================================================
+
+Go 1.23 introduced range-over-function (iter.Seq). Before that, closures
+were used to build lazy iterators.
+
+---- Closure-based iterator (pre 1.23) ----
+  // Returns a function that yields next value on each call
+  func Counter(start, step int) func() (int, bool) {
+      n := start
+      return func() (int, bool) {
+          val := n
+          n += step
+          return val, true   // second return can signal exhaustion
+      }
+  }
+
+  next := Counter(0, 2)
+  for i := 0; i < 5; i++ {
+      v, _ := next()
+      fmt.Println(v)   // 0 2 4 6 8
+  }
+
+---- Fibonacci iterator ----
+  func Fibonacci() func() int {
+      a, b := 0, 1
+      return func() int {
+          v := a
+          a, b = b, a+b
+          return v
+      }
+  }
+
+  fib := Fibonacci()
+  for i := 0; i < 10; i++ {
+      fmt.Print(fib(), " ")   // 0 1 1 2 3 5 8 13 21 34
+  }
+
+---- Go 1.23 range-over-function (iter.Seq) ----
+  import "iter"
+
+  // iter.Seq[V] is func(yield func(V) bool)
+  func IntsFrom(start int) iter.Seq[int] {
+      return func(yield func(int) bool) {
+          for n := start; ; n++ {
+              if !yield(n) { return }   // yield returns false when loop breaks
+          }
+      }
+  }
+
+  func Take[V any](seq iter.Seq[V], n int) iter.Seq[V] {
+      return func(yield func(V) bool) {
+          count := 0
+          for v := range seq {
+              if count >= n { return }
+              if !yield(v) { return }
+              count++
+          }
+      }
+  }
+
+  // Usage with range
+  for n := range Take(IntsFrom(1), 5) {
+      fmt.Println(n)   // 1 2 3 4 5
+  }
+
+
+================================================================================
+[14] DECORATOR / WRAPPER PATTERN
+================================================================================
+
+Extend function behavior without modifying the original function.
+
+---- Retry decorator ----
+  func WithRetry(attempts int, delay time.Duration, fn func() error) func() error {
+      return func() error {
+          var err error
+          for i := 0; i < attempts; i++ {
+              if err = fn(); err == nil { return nil }
+              if i < attempts-1 { time.Sleep(delay) }
+          }
+          return fmt.Errorf("after %d attempts: %w", attempts, err)
+      }
+  }
+
+  fetchData := WithRetry(3, time.Second, func() error {
+      return callHTTP("https://api.example.com/data")
+  })
+  err := fetchData()
+
+---- Circuit breaker decorator ----
+  type CircuitState int
+  const (
+      Closed CircuitState = iota   // normal, allow requests
+      Open                         // failing, reject requests
+  )
+
+  func WithCircuitBreaker(threshold int, fn func() error) func() error {
+      failures := 0
+      state := Closed
+      return func() error {
+          if state == Open {
+              return errors.New("circuit open — too many failures")
+          }
+          err := fn()
+          if err != nil {
+              failures++
+              if failures >= threshold {
+                  state = Open
+                  fmt.Println("circuit breaker opened")
+              }
+              return err
+          }
+          failures = 0   // reset on success
+          return nil
+      }
+  }
+
+---- Timeout decorator ----
+  func WithTimeout(d time.Duration, fn func() error) func() error {
+      return func() error {
+          done := make(chan error, 1)
+          go func() { done <- fn() }()
+          select {
+          case err := <-done:
+              return err
+          case <-time.After(d):
+              return fmt.Errorf("timeout after %v", d)
+          }
+      }
+  }
+
+---- Composing decorators ----
+  call := func() error { return callExternalService() }
+
+  // Stack decorators: retry inside circuit breaker, with timeout
+  resilient := WithCircuitBreaker(5,
+      WithRetry(3, time.Second,
+          WithTimeout(5*time.Second, call),
+      )(),
+  )
+  // Note: decorators compose naturally because they all have func() error type
+
+
+================================================================================
+[15] STATEFUL CLOSURES — COUNTERS, GENERATORS, ONCE
+================================================================================
+
+---- ID generator ----
+  func NewIDGenerator(prefix string) func() string {
+      var mu sync.Mutex
+      id := 0
+      return func() string {
+          mu.Lock()
+          defer mu.Unlock()
+          id++
+          return fmt.Sprintf("%s-%04d", prefix, id)
+      }
+  }
+
+  nextUserID := NewIDGenerator("user")
+  nextOrderID := NewIDGenerator("order")
+
+  fmt.Println(nextUserID())    // user-0001
+  fmt.Println(nextUserID())    // user-0002
+  fmt.Println(nextOrderID())   // order-0001
+
+---- Accumulator ----
+  func NewAccumulator() (func(int), func() int, func()) {
+      var mu sync.Mutex
+      total := 0
+      add  := func(n int) { mu.Lock(); total += n; mu.Unlock() }
+      get  := func() int  { mu.Lock(); defer mu.Unlock(); return total }
+      reset := func()     { mu.Lock(); total = 0; mu.Unlock() }
+      return add, get, reset
+  }
+
+  add, get, reset := NewAccumulator()
+  add(10); add(20); add(30)
+  fmt.Println(get())   // 60
+  reset()
+  fmt.Println(get())   // 0
+
+---- Once: run something exactly once ----
+  // sync.Once is idiomatic, but closures work for simpler cases:
+  func RunOnce(fn func()) func() {
+      var once sync.Once
+      return func() {
+          once.Do(fn)
+      }
+  }
+
+  initDB := RunOnce(func() {
+      fmt.Println("connecting to DB...")
+      // expensive one-time setup
+  })
+
+  initDB()   // "connecting to DB..."
+  initDB()   // no-op
+  initDB()   // no-op
+
+---- Event callback with unsubscribe ----
+  func NewEventEmitter() (subscribe func(func()), emit func(), unsubscribe func(func())) {
+      var mu sync.RWMutex
+      var handlers []func()
+
+      subscribe = func(fn func()) {
+          mu.Lock()
+          handlers = append(handlers, fn)
+          mu.Unlock()
+      }
+
+      emit = func() {
+          mu.RLock()
+          hs := make([]func(), len(handlers))
+          copy(hs, handlers)
+          mu.RUnlock()
+          for _, h := range hs { h() }
+      }
+
+      return subscribe, emit, nil   // unsubscribe left as exercise
+  }
+
+
+================================================================================
+[16] ERROR HANDLING IN FUNCTIONAL CHAINS
+================================================================================
+
+Pure functional chaining breaks when errors can occur. These patterns
+handle errors gracefully in function pipelines.
+
+---- Result type for chaining ----
+  type Result[T any] struct {
+      value T
+      err   error
+  }
+
+  func OK[T any](v T) Result[T]       { return Result[T]{value: v} }
+  func Fail[T any](e error) Result[T] { return Result[T]{err: e} }
+
+  func (r Result[T]) Map(fn func(T) T) Result[T] {
+      if r.err != nil { return r }   // propagate error, skip fn
+      return OK(fn(r.value))
+  }
+
+  func (r Result[T]) MapErr(fn func(T) (T, error)) Result[T] {
+      if r.err != nil { return r }
+      v, err := fn(r.value)
+      if err != nil { return Fail[T](err) }
+      return OK(v)
+  }
+
+  func (r Result[T]) Unwrap() (T, error) {
+      return r.value, r.err
+  }
+
+  // Usage: chain transforms, errors short-circuit
+  val, err := OK("  Hello, World! ")
+      .Map(strings.TrimSpace).
+      Map(strings.ToLower).
+      MapErr(func(s string) (string, error) {
+          if len(s) == 0 { return s, errors.New("empty") }
+          return s, nil
+      }).
+      Unwrap()
+  // "hello, world!", nil
+
+---- Functional error handling without Result type ----
+  // Pass error through a chain with early exit
+  func Chain2(fns ...func(string) (string, error)) func(string) (string, error) {
+      return func(input string) (string, error) {
+          var err error
+          current := input
+          for _, fn := range fns {
+              current, err = fn(current)
+              if err != nil { return current, err }
+          }
+          return current, nil
+      }
+  }
+
+  process := Chain2(
+      func(s string) (string, error) { return strings.TrimSpace(s), nil },
+      func(s string) (string, error) {
+          if len(s) == 0 { return s, errors.New("empty after trim") }
+          return s, nil
+      },
+      func(s string) (string, error) { return strings.ToUpper(s), nil },
+  )
+
+  result, err := process("  hello  ")   // "HELLO", nil
+  result, err  = process("   ")         // "", "empty after trim"
+
+
+================================================================================
+[17] JAVA FUNCTIONAL INTERFACES vs GO FUNCTION TYPES
+================================================================================
+
+  +----------------------+---------------------------+-----------------------------+
+  | Java                 | Go equivalent             | Notes                       |
+  +----------------------+---------------------------+-----------------------------+
+  | Function<T,R>        | func(T) R                 | Transform / mapper          |
+  | Consumer<T>          | func(T)                   | Side effect, no return      |
+  | Supplier<T>          | func() T                  | Factory / generator         |
+  | Predicate<T>         | func(T) bool              | Test / filter               |
+  | BiFunction<T,U,R>    | func(T, U) R              | Two-arg transform           |
+  | BiConsumer<T,U>      | func(T, U)                | Two-arg side effect         |
+  | BiPredicate<T,U>     | func(T, U) bool           | Two-arg test                |
+  | UnaryOperator<T>     | func(T) T                 | Same in/out type            |
+  | BinaryOperator<T>    | func(T, T) T              | Combine two values of T     |
+  | Runnable             | func()                    | No args, no return          |
+  | Callable<T>          | func() (T, error)         | Go idiom: return value+err  |
+  | Comparator<T>        | func(T, T) int            | Returns -1/0/+1             |
+  | Stream.map()         | Map[T,U]([]T, func(T) U)  | Generic Map function        |
+  | Stream.filter()      | Filter[T]([]T, func(T) bool) | Generic Filter           |
+  | Stream.reduce()      | Reduce[T,A]([]T, A, fn)   | Generic Reduce              |
+  | Optional<T>          | (T, bool) or Result[T]    | Go multi-return or Result   |
+  | CompletableFuture<T> | chan T + goroutine         | Go concurrency model        |
+  +----------------------+---------------------------+-----------------------------+
+
+  Key differences:
+  - Java requires @FunctionalInterface annotation and named types for SAM
+  - Go function types are structural — any func with same signature is compatible
+  - Java lambdas can throw checked exceptions; Go uses (T, error) returns
+  - Java streams are lazy by default; Go functional patterns are eager
+  - Go has no method references (.method) — use func literals or closures
+
+
+================================================================================
+[18] INTERVIEW Q&A — MEDIUM LEVEL
+================================================================================
+
+Q1: What is a closure in Go and what does "capture" mean?
+----------------------------------------------------------
+A: A closure is a function literal that references variables from its
+   surrounding scope. "Capturing" means the closure holds a reference to
+   those outer variables — not a copy. The captured variables live on the heap
+   (escaped from the stack) for as long as the closure exists. This means
+   a closure can read and MODIFY the outer variable, and multiple closures
+   can share the same captured variable. Classic example: makeCounter() returns
+   a func that increments and reads `count` — each call to the returned func
+   mutates the same `count` variable captured at creation time.
+
+Q2: Explain the loop variable capture bug and how to fix it.
+------------------------------------------------------------
+A: Before Go 1.22, all iterations of a for loop shared ONE loop variable.
+   Closures created inside the loop all captured the same variable, so by
+   the time they executed, the variable held its final (post-loop) value.
+   Classic bug:
+     for i := 0; i < 3; i++ {
+         go func() { fmt.Println(i) }()   // all print 3
+     }
+   Fix 1 — shadow: add `i := i` inside the loop to create a new variable.
+   Fix 2 — argument: pass i as a function parameter.
+   Go 1.22+ changed the semantics: each iteration creates a fresh variable,
+   so the bug is gone for code specifying go 1.22 in go.mod.
+
+Q3: What is a higher-order function? Give two Go examples.
+----------------------------------------------------------
+A: A higher-order function either accepts a function as an argument or returns
+   a function (or both). Examples:
+   1. slices.SortFunc(people, func(a, b Person) int { ... }) — accepts a
+      comparator function.
+   2. makeMultiplier(factor int) func(int) int — returns a closure that
+      multiplies by the captured factor.
+   The pattern enables separation of concerns: the algorithm (sort, retry,
+   middleware) is separated from the behavior (comparison, error logic, auth).
+
+Q4: What is the functional options pattern and why is it preferred over config structs?
+---------------------------------------------------------------------------------------
+A: The functional options pattern uses variadic `func(*T)` options in a
+   constructor. Each option is a closure that sets one field on the target.
+   Advantages over a config struct:
+   1. Defaults are clear — set in the constructor before applying options.
+   2. Adding new options is backwards-compatible — existing callers don't break.
+   3. Options can have validation logic inside the closure.
+   4. The call site is readable: NewServer(WithPort(9090), WithTLS()).
+   Config structs require callers to know all zero-value semantics and make it
+   hard to distinguish "not set" from "set to zero".
+
+Q5: How does memoization work and how do closures enable it?
+------------------------------------------------------------
+A: Memoization caches function results by input. Closures enable it by giving
+   the wrapper function a private cache variable that persists across calls.
+   The outer function (memoize) creates a map, the returned inner function
+   checks the map on every call, returning cached results or computing and
+   storing new ones. The cache is encapsulated — callers can't see or mutate it.
+   Key consideration: memoized functions must be pure (same input always gives
+   same output) and the cache must be bounded to avoid memory leaks in long-running
+   services.
+
+Q6: What is function composition and how do Compose and Pipe differ?
+--------------------------------------------------------------------
+A: Composition chains functions so the output of one feeds the input of the
+   next. Compose(f, g) returns f(g(x)) — right-to-left, mathematical order.
+   Pipe(g, f) returns f(g(x)) — left-to-right, the order you read it.
+   Pipe is usually more readable: Pipe(trim, toLower, sanitize) reads as
+   "trim, then toLower, then sanitize". Use the variadic Pipeline[T] helper
+   when all steps share the same type, and reserve Compose for explicit
+   two-function mathematical composition.
+
+
+================================================================================
+[19] INTERVIEW Q&A — SENIOR LEVEL
+================================================================================
+
+Q1: How do closures interact with the Go heap and garbage collector?
+--------------------------------------------------------------------
+A: When the Go compiler detects that a variable is captured by a closure and
+   the closure escapes the stack (e.g., returned from a function), the compiler
+   performs ESCAPE ANALYSIS and allocates the variable on the HEAP instead of
+   the stack. The closure holds a pointer to the heap-allocated variable.
+   The GC treats this as a live reference — the variable won't be collected as
+   long as the closure is reachable. This is correct behavior but has implications:
+   1. Heap allocation is slower than stack allocation (~10–20 ns).
+   2. More heap allocations increase GC pressure.
+   3. In tight loops, avoid creating closures that capture variables unless
+      necessary. Verify with: `go build -gcflags="-m" ./...` and look for
+      "moved to heap". In high-performance code, prefer passing values explicitly
+      over capturing them in closures on hot paths.
+
+Q2: Design a generic, composable middleware system in Go.
+---------------------------------------------------------
+A:
+  // The key insight: middleware has type func(H) H for any handler type H.
+  // For maximum flexibility, parameterize over the handler type.
+
+  type MiddlewareFn[H any] func(H) H
+
+  func ComposeMiddleware[H any](middlewares ...MiddlewareFn[H]) MiddlewareFn[H] {
+      return func(handler H) H {
+          // Apply in reverse so first middleware is outermost
+          for i := len(middlewares) - 1; i >= 0; i-- {
+              handler = middlewares[i](handler)
+          }
+          return handler
+      }
+  }
+
+  // Concrete HTTP example:
+  type HTTPHandler func(http.ResponseWriter, *http.Request)
+  type HTTPMiddleware = MiddlewareFn[HTTPHandler]
+
+  // Concrete function-pipeline example:
+  type IntPipe func(int) int
+  type IntMiddleware = MiddlewareFn[IntPipe]
+
+  withLogging := func(fn IntPipe) IntPipe {
+      return func(n int) int {
+          fmt.Printf("in: %d\n", n)
+          result := fn(n)
+          fmt.Printf("out: %d\n", result)
+          return result
+      }
+  }
+
+  pipeline := ComposeMiddleware(withLogging)(func(n int) int { return n * 2 })
+  pipeline(5)   // in: 5 / out: 10
+
+Q3: What are the trade-offs between functional patterns and imperative Go code?
+-------------------------------------------------------------------------------
+A: Functional patterns (Map/Filter/Reduce, closures, composition) offer:
+   + Higher abstraction and reusability
+   + Easier to test individual steps in isolation
+   + Composable and declarative — intent is clear
+   + Separation of concerns (algorithm vs behavior)
+   Costs in Go:
+   - Each Map/Filter creates a new slice allocation — imperative for loops
+     with pre-allocated slices are more cache-friendly and GC-friendly
+   - Closures that capture heap variables add GC pressure
+   - Stack traces through anonymous functions are harder to read
+   - Go's standard library is largely imperative; heavy FP style can feel
+     non-idiomatic to other Go developers on the team
+   Rule: use functional patterns when they genuinely improve readability and
+   maintainability (middleware, options, pipelines, callbacks). Use imperative
+   loops for hot paths and performance-critical code. Profile before abstracting.
+
+Q4: How would you implement a type-safe event system with closures and generics?
+---------------------------------------------------------------------------------
+A:
+  type EventBus[T any] struct {
+      mu       sync.RWMutex
+      handlers []func(T)
+  }
+
+  func (eb *EventBus[T]) Subscribe(fn func(T)) (unsubscribe func()) {
+      eb.mu.Lock()
+      eb.handlers = append(eb.handlers, fn)
+      idx := len(eb.handlers) - 1
+      eb.mu.Unlock()
+
+      return func() {
+          eb.mu.Lock()
+          defer eb.mu.Unlock()
+          // Replace with last element and shrink
+          eb.handlers[idx] = eb.handlers[len(eb.handlers)-1]
+          eb.handlers = eb.handlers[:len(eb.handlers)-1]
+      }
+  }
+
+  func (eb *EventBus[T]) Publish(event T) {
+      eb.mu.RLock()
+      hs := make([]func(T), len(eb.handlers))
+      copy(hs, eb.handlers)
+      eb.mu.RUnlock()
+      for _, h := range hs { h(event) }
+  }
+
+  // Usage
+  bus := &EventBus[string]{}
+  unsub := bus.Subscribe(func(msg string) { fmt.Println("got:", msg) })
+  bus.Publish("hello")   // got: hello
+  unsub()
+  bus.Publish("world")   // nothing — unsubscribed
+
+  // The unsubscribe function is a closure that captures idx and eb.
+
+Q5: Explain how the functional options pattern compares to the Builder pattern.
+-------------------------------------------------------------------------------
+A: Both solve optional configuration, but they differ in structure and idiom:
+
+  Builder pattern (Java-style, uncommon in Go):
+    cfg := NewBuilder().SetHost("localhost").SetPort(8080).Build()
+  - Requires a separate Builder type with method chaining
+  - Build() must validate the complete configuration
+  - Two types: Builder and the final struct
+
+  Functional options pattern (idiomatic Go):
+    srv := NewServer(WithHost("localhost"), WithPort(8080))
+  - Single type (Server) + option functions
+  - Options are validated individually as they apply
+  - Variadic args — zero boilerplate for callers using defaults
+  - Options can be stored, composed, or conditionally applied:
+      opts := []Option{WithHost(host)}
+      if debug { opts = append(opts, WithDebug()) }
+      srv := NewServer(opts...)
+  - This composability is the key advantage: option slices are just values
+    that can be built programmatically, passed around, and merged.
+
+  In Go, functional options are the standard; Builder is rare and used mainly
+  when the construction process itself has complex sequential steps (e.g.,
+  building a query where WHERE clauses depend on prior state).
+
+================================================================================

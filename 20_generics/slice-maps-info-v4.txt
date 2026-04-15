@@ -1,0 +1,1014 @@
+════════════════════════════════════════════════════════════════════════════════════
+# 🚀 Go Lang GENERICS slices maps  
+════════════════════════════════════════════════════════════════════════════════════
+INDEX
+------
+  [1]  Overview & Package Import
+  [2]  slices Package — Full Reference
+  [3]  slices.Sort, SortFunc, SortStableFunc
+  [4]  slices.Contains, ContainsFunc
+  [5]  slices.Index, IndexFunc
+  [6]  slices.Max, Min, MaxFunc, MinFunc
+  [7]  slices.Reverse, Clip, Grow, Compact
+  [8]  slices.Equal, EqualFunc
+  [9]  slices.BinarySearch, BinarySearchFunc
+  [10] slices.Insert, Delete, Replace
+  [11] maps Package — Full Reference
+  [12] maps.Keys, Values
+  [13] maps.Clone, Copy, DeleteFunc
+  [14] maps.Equal, EqualFunc
+  [15] cmp Package (Go 1.21) — cmp.Compare, cmp.Ordered
+  [16] Combining slices + maps in real workflows
+  [17] Java Streams vs Go slices/maps Package Table
+  [18] Interview Q&A — Medium Level
+  [19] Interview Q&A — Senior Level
+
+================================================================================
+[1] OVERVIEW & PACKAGE IMPORT
+================================================================================
+
+Go 1.21 (August 2023) introduced STABLE generic standard library packages:
+
+  Package         | Purpose
+  ----------------+------------------------------------------
+  slices          | Generic algorithms over slices
+  maps            | Generic algorithms over maps
+  cmp             | Comparison helpers (cmp.Ordered, cmp.Compare)
+
+Before Go 1.21:
+  - slices and maps were in golang.org/x/exp (experimental, unstable API)
+  - Developers wrote their own Contains, Keys, etc. every project
+  - After 1.21: they are in the standard library, stable, and idiomatic
+
+Imports:
+  import (
+      "slices"
+      "maps"
+      "cmp"
+  )
+
+NOTE: These are package names — not types. All functions are generic.
+      You never instantiate them; the compiler infers type args from arguments.
+
+Go version check:
+  // go.mod must have: go 1.21 or higher
+  // go version
+  // go mod edit -go=1.21
+
+
+================================================================================
+[2] slices PACKAGE — FULL REFERENCE (OVERVIEW)
+================================================================================
+
+All functions in the slices package work on []E where E is a type parameter.
+
+  Function                  | Description
+  --------------------------+-----------------------------------------------
+  slices.Sort               | Sort in ascending order (needs cmp.Ordered)
+  slices.SortFunc           | Sort with custom comparator func(a,b E) int
+  slices.SortStableFunc     | Stable sort with custom comparator
+  slices.IsSorted           | Check if slice is sorted
+  slices.IsSortedFunc       | Check with custom comparator
+  slices.Contains           | Check if element exists (needs comparable)
+  slices.ContainsFunc       | Check with predicate func(E) bool
+  slices.Index              | First index of element (-1 if not found)
+  slices.IndexFunc          | First index matching predicate
+  slices.Max                | Maximum element (needs cmp.Ordered)
+  slices.Min                | Minimum element
+  slices.MaxFunc            | Max with custom comparator
+  slices.MinFunc            | Min with custom comparator
+  slices.Equal              | Deep equality check (comparable elements)
+  slices.EqualFunc          | Equality with custom comparator
+  slices.Reverse            | Reverse in place
+  slices.Clip               | Remove excess capacity (s[:len:len])
+  slices.Grow               | Ensure capacity for n more elements
+  slices.Compact            | Remove consecutive duplicates
+  slices.CompactFunc        | Remove with custom equality func
+  slices.BinarySearch       | Binary search, returns (index, found)
+  slices.BinarySearchFunc   | Binary search with custom comparator
+  slices.Insert             | Insert elements at index
+  slices.Delete             | Delete elements [i, j)
+  slices.Replace            | Replace [i, j) with new elements
+  slices.Concat             | Concatenate multiple slices into new slice
+  slices.Collect            | Collect from iter.Seq into slice (Go 1.23+)
+
+
+================================================================================
+[3] slices.Sort, SortFunc, SortStableFunc
+================================================================================
+
+---- slices.Sort ----
+Signature:  func Sort[S ~[]E, E cmp.Ordered](x S)
+  - Sorts in ascending order
+  - Modifies the slice IN PLACE (no new slice returned)
+  - E must satisfy cmp.Ordered: ~int | ~float64 | ~string | ... (all ordered types)
+
+  nums := []int{5, 2, 8, 1, 9, 3}
+  slices.Sort(nums)
+  fmt.Println(nums)   // [1 2 3 5 8 9]
+
+  strs := []string{"banana", "apple", "cherry"}
+  slices.Sort(strs)
+  fmt.Println(strs)   // [apple banana cherry]
+
+  floats := []float64{3.14, 1.41, 2.71}
+  slices.Sort(floats)
+  fmt.Println(floats)  // [1.41 2.71 3.14]
+
+  // Custom named type — works because underlying type is int
+  type Priority int
+  priorities := []Priority{3, 1, 2}
+  slices.Sort(priorities)   // [1 2 3]
+
+---- slices.SortFunc ----
+Signature:  func SortFunc[S ~[]E, E any](x S, cmp func(a, b E) int)
+  - Sort with a custom comparator
+  - comparator returns: negative (a < b), 0 (a == b), positive (a > b)
+  - Use cmp.Compare for built-in ordered types inside custom comparators
+
+  // Sort structs by field
+  type Person struct {
+      Name string
+      Age  int
+  }
+
+  people := []Person{
+      {"Charlie", 30},
+      {"Alice", 25},
+      {"Bob", 35},
+  }
+
+  // Sort by Age ascending
+  slices.SortFunc(people, func(a, b Person) int {
+      return cmp.Compare(a.Age, b.Age)
+  })
+  // [{Alice 25} {Charlie 30} {Bob 35}]
+
+  // Sort by Name descending
+  slices.SortFunc(people, func(a, b Person) int {
+      return cmp.Compare(b.Name, a.Name)   // note: b before a = descending
+  })
+
+  // Multi-field sort: first by Age, then by Name
+  slices.SortFunc(people, func(a, b Person) int {
+      if n := cmp.Compare(a.Age, b.Age); n != 0 {
+          return n
+      }
+      return cmp.Compare(a.Name, b.Name)
+  })
+
+---- slices.SortStableFunc ----
+  - Same as SortFunc but STABLE: equal elements keep their original order
+  - Use when relative order of equal elements matters
+
+  slices.SortStableFunc(people, func(a, b Person) int {
+      return cmp.Compare(a.Age, b.Age)
+  })
+
+---- Sort Descending ----
+  // Option 1: reverse comparator
+  slices.SortFunc(nums, func(a, b int) int {
+      return cmp.Compare(b, a)   // b, a reversed
+  })
+
+  // Option 2: sort then reverse
+  slices.Sort(nums)
+  slices.Reverse(nums)
+
+---- Check if sorted ----
+  slices.IsSorted([]int{1, 2, 3, 4})    // true
+  slices.IsSorted([]int{1, 3, 2, 4})    // false
+
+  slices.IsSortedFunc(people, func(a, b Person) int {
+      return cmp.Compare(a.Age, b.Age)
+  })
+
+
+================================================================================
+[4] slices.Contains, ContainsFunc
+================================================================================
+
+---- slices.Contains ----
+Signature:  func Contains[S ~[]E, E comparable](s S, v E) bool
+
+  slices.Contains([]int{1, 2, 3}, 2)          // true
+  slices.Contains([]int{1, 2, 3}, 9)          // false
+  slices.Contains([]string{"go", "rust"}, "go") // true
+
+  // Works with structs if all fields are comparable
+  type Point struct{ X, Y int }
+  pts := []Point{{1, 2}, {3, 4}}
+  slices.Contains(pts, Point{3, 4})   // true
+
+---- slices.ContainsFunc ----
+Signature:  func ContainsFunc[S ~[]E, E any](s S, f func(E) bool) bool
+  - Use when you need partial matching or non-comparable types
+
+  people := []Person{{"Alice", 25}, {"Bob", 30}}
+
+  // Does anyone have age > 28?
+  slices.ContainsFunc(people, func(p Person) bool {
+      return p.Age > 28
+  })   // true
+
+  // Does the name "Ali" appear as a prefix?
+  slices.ContainsFunc([]string{"Alice", "Bob"}, func(s string) bool {
+      return strings.HasPrefix(s, "Ali")
+  })   // true
+
+
+================================================================================
+[5] slices.Index, IndexFunc
+================================================================================
+
+---- slices.Index ----
+Signature:  func Index[S ~[]E, E comparable](s S, v E) int
+  - Returns first index of v, or -1 if not found
+
+  idx := slices.Index([]string{"a", "b", "c"}, "b")   // 1
+  idx  = slices.Index([]int{10, 20, 30}, 99)           // -1
+
+---- slices.IndexFunc ----
+Signature:  func IndexFunc[S ~[]E, E any](s S, f func(E) bool) int
+
+  type User struct{ ID int; Name string }
+  users := []User{{1, "Alice"}, {2, "Bob"}, {3, "Charlie"}}
+
+  // Find index of user with ID = 2
+  idx := slices.IndexFunc(users, func(u User) bool {
+      return u.ID == 2
+  })
+  // idx = 1
+
+  if idx >= 0 {
+      fmt.Println(users[idx].Name)   // Bob
+  }
+
+  // Pattern: find element, not just index
+  func FindUser(users []User, id int) (User, bool) {
+      idx := slices.IndexFunc(users, func(u User) bool { return u.ID == id })
+      if idx < 0 {
+          return User{}, false
+      }
+      return users[idx], true
+  }
+
+
+================================================================================
+[6] slices.Max, Min, MaxFunc, MinFunc
+================================================================================
+
+---- slices.Max, slices.Min ----
+Signature:  func Max[S ~[]E, E cmp.Ordered](x S) E
+            func Min[S ~[]E, E cmp.Ordered](x S) E
+  - Panics on empty slice
+
+  slices.Max([]int{3, 1, 4, 1, 5, 9})   // 9
+  slices.Min([]int{3, 1, 4, 1, 5, 9})   // 1
+  slices.Max([]string{"banana", "apple", "cherry"})  // "cherry"
+
+  // Safe version pattern:
+  func SafeMax[E cmp.Ordered](s []E) (E, bool) {
+      var zero E
+      if len(s) == 0 { return zero, false }
+      return slices.Max(s), true
+  }
+
+---- slices.MaxFunc, slices.MinFunc ----
+Signature:  func MaxFunc[S ~[]E, E any](x S, cmp func(a, b E) int) E
+
+  people := []Person{{"Alice", 25}, {"Bob", 35}, {"Charlie", 20}}
+
+  oldest := slices.MaxFunc(people, func(a, b Person) int {
+      return cmp.Compare(a.Age, b.Age)
+  })
+  // {Bob 35}
+
+  youngest := slices.MinFunc(people, func(a, b Person) int {
+      return cmp.Compare(a.Age, b.Age)
+  })
+  // {Charlie 20}
+
+
+================================================================================
+[7] slices.Reverse, Clip, Grow, Compact
+================================================================================
+
+---- slices.Reverse ----
+Signature:  func Reverse[S ~[]E, E any](s S)
+  - Reverses IN PLACE
+
+  s := []int{1, 2, 3, 4, 5}
+  slices.Reverse(s)
+  fmt.Println(s)   // [5 4 3 2 1]
+
+  // Reverse a string slice
+  words := []string{"hello", "world"}
+  slices.Reverse(words)   // ["world", "hello"]
+
+---- slices.Compact ----
+Signature:  func Compact[S ~[]E, E comparable](s S) S
+  - Removes consecutive duplicates (like Unix `uniq`)
+  - Returns a new slice (does NOT modify original)
+  - For all duplicates: sort first, then Compact
+
+  s := []int{1, 1, 2, 3, 3, 3, 4, 4, 5}
+  result := slices.Compact(s)
+  fmt.Println(result)   // [1 2 3 4 5]
+
+  // Deduplicate all: sort + compact
+  s = []int{3, 1, 4, 1, 5, 9, 2, 6, 5}
+  slices.Sort(s)
+  s = slices.Compact(s)
+  // [1 2 3 4 5 6 9]
+
+  // CompactFunc — for custom equality
+  strs := []string{"Hello", "hello", "WORLD", "world"}
+  result = slices.CompactFunc(strs, strings.EqualFold)
+  // ["Hello", "WORLD"]  — keeps first of each case-insensitive group
+
+---- slices.Clip ----
+Signature:  func Clip[S ~[]E, E any](s S) S
+  - Returns s[:len(s):len(s)] — removes excess capacity
+  - Important when returning sub-slices to prevent memory leaks
+
+  big := make([]int, 3, 100)
+  big[0], big[1], big[2] = 1, 2, 3
+  fmt.Println(cap(big))              // 100
+  clipped := slices.Clip(big)
+  fmt.Println(cap(clipped))          // 3
+
+---- slices.Grow ----
+Signature:  func Grow[S ~[]E, E any](s S, n int) S
+  - Ensures s has capacity for at least n more elements
+  - Returns new slice if reallocation needed
+
+  s := make([]int, 0, 2)
+  s = slices.Grow(s, 100)   // now cap >= 102, no repeated reallocs
+
+
+================================================================================
+[8] slices.Equal, EqualFunc
+================================================================================
+
+---- slices.Equal ----
+Signature:  func Equal[S ~[]E, E comparable](s1, s2 S) bool
+  - Element-wise equality, also checks length
+
+  slices.Equal([]int{1, 2, 3}, []int{1, 2, 3})   // true
+  slices.Equal([]int{1, 2, 3}, []int{1, 2, 4})   // false
+  slices.Equal([]int{1, 2}, []int{1, 2, 3})       // false
+
+  // Replaces the old reflect.DeepEqual for slices (faster, type-safe)
+
+---- slices.EqualFunc ----
+Signature:  func EqualFunc[S1 ~[]E1, S2 ~[]E2, E1, E2 any](
+                s1 S1, s2 S2, eq func(E1, E2) bool) bool
+
+  // Compare []int with []float64
+  slices.EqualFunc([]int{1, 2, 3}, []float64{1.0, 2.0, 3.0},
+      func(i int, f float64) bool { return float64(i) == f },
+  )   // true
+
+  // Case-insensitive string comparison
+  slices.EqualFunc([]string{"Hello"}, []string{"hello"},
+      strings.EqualFold,
+  )   // true
+
+
+================================================================================
+[9] slices.BinarySearch, BinarySearchFunc
+================================================================================
+
+---- slices.BinarySearch ----
+Signature:  func BinarySearch[S ~[]E, E cmp.Ordered](x S, target E) (int, bool)
+  - Slice MUST be sorted
+  - Returns (index, found): index where target is/would be, and bool
+
+  s := []int{1, 3, 5, 7, 9, 11}
+  i, found := slices.BinarySearch(s, 7)     // (3, true)
+  i, found  = slices.BinarySearch(s, 6)     // (3, false) — insertion point
+  i, found  = slices.BinarySearch(s, 0)     // (0, false)
+  i, found  = slices.BinarySearch(s, 12)    // (6, false)
+
+  // Pattern: sorted insert maintaining order
+  func SortedInsert[E cmp.Ordered](s []E, v E) []E {
+      i, _ := slices.BinarySearch(s, v)
+      return slices.Insert(s, i, v)
+  }
+
+---- slices.BinarySearchFunc ----
+  type Event struct{ Time int; Name string }
+  events := []Event{{1, "start"}, {5, "middle"}, {9, "end"}}
+
+  // Sorted by Time — search for Time=5
+  i, found := slices.BinarySearchFunc(events, 5, func(e Event, target int) int {
+      return cmp.Compare(e.Time, target)
+  })
+  // (1, true)
+
+
+================================================================================
+[10] slices.Insert, Delete, Replace, Concat
+================================================================================
+
+---- slices.Insert ----
+Signature:  func Insert[S ~[]E, E any](s S, i int, v ...E) S
+
+  s := []int{1, 2, 4, 5}
+  s = slices.Insert(s, 2, 3)          // [1 2 3 4 5] — insert at index 2
+  s = slices.Insert(s, 0, -1, 0)      // [-1 0 1 2 3 4 5] — insert multiple
+
+---- slices.Delete ----
+Signature:  func Delete[S ~[]E, E any](s S, i, j int) S
+  - Deletes elements s[i:j]
+
+  s := []int{1, 2, 3, 4, 5}
+  s = slices.Delete(s, 1, 3)   // [1 4 5] — removes index 1 and 2
+
+---- slices.Replace ----
+Signature:  func Replace[S ~[]E, E any](s S, i, j int, v ...E) S
+  - Replace s[i:j] with v...
+
+  s := []int{1, 2, 3, 4, 5}
+  s = slices.Replace(s, 1, 3, 20, 30, 40)   // [1 20 30 40 4 5]
+
+---- slices.Concat ----
+Signature:  func Concat[S ~[]E, E any](slices ...S) S
+  - Concatenates multiple slices into a new one
+
+  result := slices.Concat([]int{1, 2}, []int{3, 4}, []int{5})
+  // [1 2 3 4 5]
+
+
+================================================================================
+[11] maps PACKAGE — FULL REFERENCE (OVERVIEW)
+================================================================================
+
+  Function              | Description
+  ----------------------+--------------------------------------------------
+  maps.Keys             | Returns all keys as a slice (order not guaranteed)
+  maps.Values           | Returns all values as a slice (order not guaranteed)
+  maps.Clone            | Shallow copy of a map
+  maps.Copy             | Copy entries from src into dst (overwrites)
+  maps.DeleteFunc       | Delete entries matching a predicate
+  maps.Equal            | Compare two maps for equality
+  maps.EqualFunc        | Compare with custom value-equality function
+  maps.Collect          | Build map from iter.Seq2 (Go 1.23+)
+  maps.All              | Iterate map as iter.Seq2 (Go 1.23+)
+  maps.Insert           | Insert key-value pairs from iter.Seq2 (Go 1.23+)
+
+
+================================================================================
+[12] maps.Keys, Values
+================================================================================
+
+---- maps.Keys ----
+Signature:  func Keys[Map ~map[K]V, K comparable, V any](m Map) []K
+  - Returns all keys in UNSPECIFIED ORDER (maps are unordered in Go)
+  - Each call may return keys in a different order
+
+  m := map[string]int{"alice": 1, "bob": 2, "charlie": 3}
+  keys := maps.Keys(m)
+  fmt.Println(keys)   // e.g., [alice charlie bob] — ORDER NOT GUARANTEED
+
+  // If you need sorted keys:
+  keys = maps.Keys(m)
+  slices.Sort(keys)
+  fmt.Println(keys)   // [alice bob charlie]
+
+  // Iterate map in sorted key order:
+  for _, k := range keys {
+      fmt.Printf("%s: %d\n", k, m[k])
+  }
+
+  // Works with any map type:
+  counts := map[int]string{1: "one", 2: "two", 3: "three"}
+  intKeys := maps.Keys(counts)
+  slices.Sort(intKeys)
+  // [1 2 3]
+
+---- maps.Values ----
+Signature:  func Values[Map ~map[K]V, K comparable, V any](m Map) []V
+
+  m := map[string]int{"a": 10, "b": 20, "c": 30}
+  vals := maps.Values(m)
+  slices.Sort(vals)
+  fmt.Println(vals)   // [10 20 30]
+
+  // Sum all values
+  total := 0
+  for _, v := range maps.Values(m) {
+      total += v
+  }
+
+  // Find max value in a map
+  vals = maps.Values(m)
+  maxVal := slices.Max(vals)   // 30
+
+  // Get all unique values (deduplicate):
+  vals = maps.Values(m)
+  slices.Sort(vals)
+  vals = slices.Compact(vals)
+
+---- Combined Keys+Values pattern: sorted map iteration ----
+  func SortedPairs[K cmp.Ordered, V any](m map[K]V) []struct{ K K; V V } {
+      keys := maps.Keys(m)
+      slices.Sort(keys)
+      pairs := make([]struct{ K K; V V }, len(keys))
+      for i, k := range keys {
+          pairs[i] = struct{ K K; V V }{k, m[k]}
+      }
+      return pairs
+  }
+
+  for _, p := range SortedPairs(map[string]int{"b": 2, "a": 1, "c": 3}) {
+      fmt.Printf("%s=%d\n", p.K, p.V)
+  }
+  // a=1  b=2  c=3
+
+
+================================================================================
+[13] maps.Clone, Copy, DeleteFunc
+================================================================================
+
+---- maps.Clone ----
+Signature:  func Clone[M ~map[K]V, K comparable, V any](m M) M
+  - Returns a SHALLOW copy — values are NOT deep-copied
+  - Useful to avoid mutating original map
+
+  original := map[string]int{"a": 1, "b": 2}
+  copy := maps.Clone(original)
+  copy["c"] = 3
+
+  fmt.Println(original)   // map[a:1 b:2]  — unaffected
+  fmt.Println(copy)       // map[a:1 b:2 c:3]
+
+  // Shallow copy caveat:
+  type Config struct{ Tags []string }
+  m := map[string]Config{"dev": {Tags: []string{"debug"}}}
+  cloned := maps.Clone(m)
+  cloned["dev"].Tags = append(cloned["dev"].Tags, "verbose")
+  // WARNING: modifying slice in value DOES affect original if Config has pointer semantics
+  // For deep copy of pointer-containing values, clone manually
+
+---- maps.Copy ----
+Signature:  func Copy[M1 ~map[K]V, M2 ~map[K]V, K comparable, V any](dst M1, src M2)
+  - Copies all key-value pairs from src into dst
+  - Overwrites existing keys in dst
+
+  defaults := map[string]string{"host": "localhost", "port": "8080"}
+  overrides := map[string]string{"port": "9090", "debug": "true"}
+
+  result := maps.Clone(defaults)
+  maps.Copy(result, overrides)
+  // map[debug:true host:localhost port:9090]
+
+  // Pattern: config merging
+  func MergeConfig(base, overrides map[string]string) map[string]string {
+      merged := maps.Clone(base)
+      maps.Copy(merged, overrides)
+      return merged
+  }
+
+---- maps.DeleteFunc ----
+Signature:  func DeleteFunc[M ~map[K]V, K comparable, V any](m M, del func(K, V) bool)
+  - Deletes all entries where del(k, v) returns true
+  - Modifies map IN PLACE
+
+  scores := map[string]int{
+      "Alice":   95,
+      "Bob":     40,
+      "Charlie": 55,
+      "Dave":    30,
+  }
+
+  // Remove all with score < 50
+  maps.DeleteFunc(scores, func(name string, score int) bool {
+      return score < 50
+  })
+  fmt.Println(scores)   // map[Alice:95 Charlie:55]
+
+  // Remove entries with empty values
+  config := map[string]string{"host": "localhost", "token": "", "port": "8080"}
+  maps.DeleteFunc(config, func(k, v string) bool {
+      return v == ""
+  })
+  // map[host:localhost port:8080]
+
+
+================================================================================
+[14] maps.Equal, EqualFunc
+================================================================================
+
+---- maps.Equal ----
+Signature:  func Equal[M1, M2 ~map[K]V, K, V comparable](m1 M1, m2 M2) bool
+
+  maps.Equal(
+      map[string]int{"a": 1, "b": 2},
+      map[string]int{"b": 2, "a": 1},
+  )   // true — order doesn't matter
+
+  maps.Equal(
+      map[string]int{"a": 1},
+      map[string]int{"a": 2},
+  )   // false
+
+  // Replaces reflect.DeepEqual for maps — faster and type-safe
+
+---- maps.EqualFunc ----
+Signature:  func EqualFunc[M1 ~map[K]V1, M2 ~map[K]V2, K comparable, V1, V2 any](
+                m1 M1, m2 M2, eq func(V1, V2) bool) bool
+
+  // Compare map values with case-insensitive string comparison
+  maps.EqualFunc(
+      map[int]string{1: "Hello"},
+      map[int]string{1: "hello"},
+      strings.EqualFold,
+  )   // true
+
+
+================================================================================
+[15] cmp PACKAGE (Go 1.21)
+================================================================================
+
+  Package cmp provides ordered comparison utilities.
+
+  import "cmp"
+
+---- cmp.Ordered (constraint) ----
+  type Ordered interface {
+      ~int | ~int8 | ~int16 | ~int32 | ~int64 |
+      ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr |
+      ~float32 | ~float64 | ~string
+  }
+
+  // Use in your own generic functions:
+  func Clamp[T cmp.Ordered](val, min, max T) T {
+      if val < min { return min }
+      if val > max { return max }
+      return val
+  }
+  Clamp(15, 0, 10)     // 10
+  Clamp(-5, 0, 10)     // 0
+  Clamp(5, 0, 10)      // 5
+
+---- cmp.Compare ----
+Signature:  func Compare[T Ordered](x, y T) int
+  - Returns -1 (x < y), 0 (x == y), +1 (x > y)
+  - Core building block for SortFunc comparators
+
+  cmp.Compare(1, 2)       // -1
+  cmp.Compare(2, 2)       // 0
+  cmp.Compare(3, 2)       // 1
+  cmp.Compare("a", "b")   // -1
+
+  // Chained comparator pattern:
+  slices.SortFunc(people, func(a, b Person) int {
+      if d := cmp.Compare(a.LastName, b.LastName); d != 0 { return d }
+      if d := cmp.Compare(a.FirstName, b.FirstName); d != 0 { return d }
+      return cmp.Compare(a.Age, b.Age)
+  })
+
+---- cmp.Or ----
+Signature:  func Or[T comparable](vals ...T) T   (Go 1.22+)
+  - Returns first non-zero value (like ?? in other languages)
+
+  name := cmp.Or(os.Getenv("APP_NAME"), "default-app")
+  port := cmp.Or(os.Getenv("PORT"), "8080")
+  // Returns env var if set, otherwise the fallback
+
+
+================================================================================
+[16] COMBINING slices + maps IN REAL WORKFLOWS
+================================================================================
+
+---- Word frequency count + top N words ----
+  func TopN(text string, n int) []string {
+      words := strings.Fields(strings.ToLower(text))
+
+      // Count frequencies
+      freq := make(map[string]int)
+      for _, w := range words {
+          freq[w]++
+      }
+
+      // Get unique words
+      uniqueWords := maps.Keys(freq)
+
+      // Sort by frequency descending, then alphabetically
+      slices.SortFunc(uniqueWords, func(a, b string) int {
+          if d := cmp.Compare(freq[b], freq[a]); d != 0 { return d }   // freq desc
+          return cmp.Compare(a, b)                                        // alpha asc
+      })
+
+      // Return top N
+      return uniqueWords[:min(n, len(uniqueWords))]
+  }
+
+---- Group by field ----
+  // Group people by age bucket
+  func GroupBy[K comparable, V any](items []V, key func(V) K) map[K][]V {
+      result := make(map[K][]V)
+      for _, item := range items {
+          k := key(item)
+          result[k] = append(result[k], item)
+      }
+      return result
+  }
+
+  people := []Person{{"Alice", 25}, {"Bob", 25}, {"Charlie", 30}}
+  byAge := GroupBy(people, func(p Person) int { return p.Age })
+  // map[25:[{Alice 25} {Bob 25}] 30:[{Charlie 30}]]
+
+  // Print in sorted age order
+  ages := maps.Keys(byAge)
+  slices.Sort(ages)
+  for _, age := range ages {
+      fmt.Printf("Age %d: %v\n", age, byAge[age])
+  }
+
+---- Invert a map ----
+  func Invert[K, V comparable](m map[K]V) map[V]K {
+      result := make(map[V]K, len(m))
+      for k, v := range m {
+          result[v] = k
+      }
+      return result
+  }
+
+  codes := map[string]int{"one": 1, "two": 2, "three": 3}
+  names := Invert(codes)   // map[1:one 2:two 3:three]
+
+---- Filter map to new map ----
+  func FilterMap[K comparable, V any](m map[K]V, pred func(K, V) bool) map[K]V {
+      result := make(map[K]V)
+      for k, v := range m {
+          if pred(k, v) {
+              result[k] = v
+          }
+      }
+      return result
+  }
+
+  scores := map[string]int{"Alice": 95, "Bob": 40, "Charlie": 75}
+  passing := FilterMap(scores, func(name string, score int) bool {
+      return score >= 60
+  })
+  // map[Alice:95 Charlie:75]
+
+---- Deduplication pipeline ----
+  // Deduplicate a slice maintaining order
+  func Deduplicate[T comparable](s []T) []T {
+      seen := make(map[T]struct{}, len(s))
+      result := make([]T, 0, len(s))
+      for _, v := range s {
+          if _, ok := seen[v]; !ok {
+              seen[v] = struct{}{}
+              result = append(result, v)
+          }
+      }
+      return result
+  }
+
+  Deduplicate([]int{3, 1, 4, 1, 5, 9, 2, 6, 5, 3})
+  // [3 1 4 5 9 2 6]  — order preserved, no sort needed
+
+
+================================================================================
+[17] JAVA STREAMS vs GO slices/maps PACKAGE TABLE
+================================================================================
+
+  +---------------------------+-----------------------------+---------------------------+
+  | Operation                 | Java Streams                | Go (slices/maps)          |
+  +---------------------------+-----------------------------+---------------------------+
+  | Sort                      | stream.sorted()             | slices.Sort()             |
+  | Sort with comparator      | stream.sorted(Comparator)   | slices.SortFunc()         |
+  | Stable sort               | Collections.sort (stable)   | slices.SortStableFunc()   |
+  | Contains / AnyMatch       | stream.anyMatch(pred)       | slices.ContainsFunc()     |
+  | Find index                | IntStream.range.filter      | slices.IndexFunc()        |
+  | Max                       | stream.max(Comparator)      | slices.MaxFunc()          |
+  | Min                       | stream.min(Comparator)      | slices.MinFunc()          |
+  | Reverse                   | Collections.reverse()       | slices.Reverse()          |
+  | Binary search             | Collections.binarySearch()  | slices.BinarySearch()     |
+  | Deep equality             | Arrays.equals()             | slices.Equal()            |
+  | Map keys                  | map.keySet()                | maps.Keys()               |
+  | Map values                | map.values()                | maps.Values()             |
+  | Clone map                 | new HashMap<>(original)     | maps.Clone()              |
+  | Merge maps                | map.putAll()                | maps.Copy()               |
+  | Remove by predicate       | entrySet.removeIf()         | maps.DeleteFunc()         |
+  | Map equality              | map1.equals(map2)           | maps.Equal()              |
+  | Deduplicate               | stream.distinct()           | sort + slices.Compact()   |
+  | Map (transform)           | stream.map()                | custom Map[T,U] fn        |
+  | Filter                    | stream.filter()             | custom Filter[T] fn       |
+  | Reduce                    | stream.reduce()             | custom Reduce[T,A] fn     |
+  | GroupBy                   | Collectors.groupingBy()     | custom GroupBy[K,V] fn    |
+  | Compare                   | Comparator.compare()        | cmp.Compare()             |
+  | Null-coalescing           | Optional.orElse()           | cmp.Or() (Go 1.22+)       |
+  +---------------------------+-----------------------------+---------------------------+
+
+  Key Go philosophy difference:
+  - Java Streams are lazy (pulled) pipelines; Go slices ops are eager (immediate)
+  - Java has built-in map/filter/reduce; Go keeps these as patterns / third-party
+  - Go prioritizes explicitness over fluent chaining
+
+
+================================================================================
+[18] INTERVIEW Q&A — MEDIUM LEVEL
+================================================================================
+
+Q1: What Go version introduced the stable slices and maps packages?
+--------------------------------------------------------------------
+A: Go 1.21 (August 2023). Before that, they existed as experimental packages
+   under golang.org/x/exp/slices and golang.org/x/exp/maps, but the API was
+   not guaranteed stable. Go 1.21 promoted them to the standard library.
+
+Q2: Why does maps.Keys return elements in a non-deterministic order?
+---------------------------------------------------------------------
+A: Go maps are hash maps with intentionally randomized iteration order (this
+   was hardened in Go 1.0 to prevent developers from depending on undefined
+   behavior). maps.Keys simply ranges over the map, so the order of returned
+   keys varies across calls and program runs. Always sort with slices.Sort if
+   you need a deterministic order.
+
+Q3: What is the signature of slices.SortFunc and what does the comparator return?
+---------------------------------------------------------------------------------
+A: func SortFunc[S ~[]E, E any](x S, cmp func(a, b E) int)
+   The comparator returns an int:
+   - Negative: a should come before b
+   - Zero: a and b are equal
+   - Positive: a should come after b
+   This is the standard Unix/C comparator convention, same as Java's
+   Comparator.compare(). Use cmp.Compare(a.Field, b.Field) internally.
+
+Q4: What is the difference between slices.Compact and deduplication?
+---------------------------------------------------------------------
+A: slices.Compact only removes CONSECUTIVE duplicates — like Unix `uniq`.
+   If the slice is unsorted, non-adjacent duplicates are preserved.
+   For full deduplication, you must first sort: slices.Sort(s); s = slices.Compact(s).
+   If order must be preserved, use a map[T]struct{} seen-set instead.
+
+Q5: How would you find the map key with the maximum value using standard library functions?
+------------------------------------------------------------------------------------------
+A:
+  scores := map[string]int{"Alice": 95, "Bob": 40, "Charlie": 75}
+
+  keys := maps.Keys(scores)
+  slices.SortFunc(keys, func(a, b string) int {
+      return cmp.Compare(scores[b], scores[a])   // descending by value
+  })
+  winner := keys[0]   // "Alice"
+
+  // Or using MaxFunc on keys:
+  winner = slices.MaxFunc(keys, func(a, b string) int {
+      return cmp.Compare(scores[a], scores[b])
+  })
+
+Q6: What constraint does slices.Sort require and why?
+------------------------------------------------------
+A: slices.Sort requires E to satisfy cmp.Ordered — a union of all numeric
+   types and ~string. This is because Sort needs to compare elements with
+   < and >. If your element type is a struct or doesn't satisfy cmp.Ordered,
+   you must use slices.SortFunc with a custom comparator. This is an intentional
+   design: Sort is a convenience for simple cases; SortFunc handles the rest.
+
+Q7: What does maps.Copy do, and how is it different from maps.Clone?
+--------------------------------------------------------------------
+A: maps.Clone creates a new map and copies all entries from the source into it.
+   maps.Copy(dst, src) copies entries from src INTO an existing dst map,
+   overwriting any duplicate keys. Clone is for creating an independent copy;
+   Copy is for merging one map into another. Typical pattern:
+     merged := maps.Clone(base)
+     maps.Copy(merged, overrides)
+
+
+================================================================================
+[19] INTERVIEW Q&A — SENIOR LEVEL
+================================================================================
+
+Q1: The ~[]E syntax in slices package signatures — what does it mean and why is it used?
+----------------------------------------------------------------------------------------
+A: The ~[]E constraint means "any type whose underlying type is []E", not just
+   []E itself. This means if you define:
+     type UserList []User
+   then functions like slices.Sort, slices.Contains etc. still work on UserList
+   without converting to []User first. Without the ~, only the exact type []E
+   would work. This is idiomatic Go generics: always use ~ in constraints for
+   slice and map types so user-defined named types work transparently.
+
+Q2: How would you implement a type-safe sorted set backed by a slice?
+---------------------------------------------------------------------
+A:
+  type SortedSet[T cmp.Ordered] struct {
+      data []T
+  }
+
+  func (s *SortedSet[T]) Add(v T) {
+      i, found := slices.BinarySearch(s.data, v)
+      if !found {
+          s.data = slices.Insert(s.data, i, v)
+      }
+  }
+
+  func (s *SortedSet[T]) Contains(v T) bool {
+      _, found := slices.BinarySearch(s.data, v)
+      return found
+  }
+
+  func (s *SortedSet[T]) Remove(v T) {
+      i, found := slices.BinarySearch(s.data, v)
+      if found {
+          s.data = slices.Delete(s.data, i, i+1)
+      }
+  }
+
+  func (s *SortedSet[T]) Slice() []T { return slices.Clone(s.data) }
+
+  // O(log n) lookup, O(n) insert — fine for small sets
+  // For large sets: use map[T]struct{} (O(1) ops)
+
+Q3: What are the performance characteristics of maps.Keys followed by slices.Sort?
+-----------------------------------------------------------------------------------
+A: maps.Keys is O(n) — one allocation + one map range pass.
+   slices.Sort uses pdqsort (pattern-defeating quicksort), an introsort variant,
+   which is O(n log n) average and worst case, O(n) for nearly-sorted data.
+   Combined: O(n log n). For repeated sorted iteration, consider caching the
+   sorted keys or using a sorted data structure. maps.Keys + slices.Sort is the
+   idiomatic Go answer for sorted map iteration in most production code.
+
+Q4: Explain a subtle memory issue with slices.Delete and how to mitigate it.
+-----------------------------------------------------------------------------
+A: slices.Delete(s, i, j) shifts elements left but does NOT zero out the
+   tail elements. If the slice holds pointers or interfaces, the removed
+   positions still hold references — preventing GC. Example:
+     s := []*MyStruct{a, b, c, d}
+     s = slices.Delete(s, 1, 2)   // removes b, but s[3] still points to d
+
+   Fix — zero out the freed slots:
+     s = slices.Delete(s, i, j)
+     // Clear references for GC
+     for k := len(s); k < len(s)+(j-i); k++ {
+         s[:cap(s)][k] = nil
+     }
+
+   The Go team is aware; a slices.DeleteGC variant has been discussed.
+   In practice, use slices.Delete freely for value types (int, string);
+   be careful with pointer slices in long-lived data structures.
+
+Q5: How would you design a generic event bus using maps and slices?
+------------------------------------------------------------------
+A:
+  type EventBus[T any] struct {
+      mu          sync.RWMutex
+      subscribers map[string][]func(T)
+  }
+
+  func NewEventBus[T any]() *EventBus[T] {
+      return &EventBus[T]{subscribers: make(map[string][]func(T))}
+  }
+
+  func (eb *EventBus[T]) Subscribe(topic string, fn func(T)) {
+      eb.mu.Lock()
+      defer eb.mu.Unlock()
+      eb.subscribers[topic] = append(eb.subscribers[topic], fn)
+  }
+
+  func (eb *EventBus[T]) Publish(topic string, event T) {
+      eb.mu.RLock()
+      handlers := slices.Clone(eb.subscribers[topic])  // clone to avoid holding lock
+      eb.mu.RUnlock()
+      for _, h := range handlers {
+          h(event)
+      }
+  }
+
+  func (eb *EventBus[T]) Unsubscribe(topic string, fn func(T)) {
+      eb.mu.Lock()
+      defer eb.mu.Unlock()
+      subs := eb.subscribers[topic]
+      // Remove by function pointer identity — NOTE: func comparison not possible in Go
+      // Typical solution: return a cancel func from Subscribe instead
+  }
+
+  // Usage
+  bus := NewEventBus[string]()
+  bus.Subscribe("user.login", func(name string) { fmt.Println("Login:", name) })
+  bus.Publish("user.login", "Aditya")
+
+Q6: When would you prefer reflect.DeepEqual over slices.Equal / maps.Equal?
+---------------------------------------------------------------------------
+A: slices.Equal and maps.Equal are strongly preferred for:
+   - Better performance (no reflection overhead)
+   - Compile-time type safety
+   - Nil vs empty slice is treated consistently (slices.Equal(nil, []int{}) = true)
+
+   Use reflect.DeepEqual only when:
+   - You are comparing deeply nested structs with pointer fields
+   - You don't know the types at compile time (test helpers, serializers)
+   - You need to compare arbitrary interface{} values
+
+   A notable difference: reflect.DeepEqual([]int(nil), []int{}) = FALSE, while
+   slices.Equal(nil, []int{}) = TRUE. This often causes subtle test failures when
+   migrating from reflect.DeepEqual to slices.Equal.
+
+================================================================================
